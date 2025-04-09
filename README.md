@@ -1,7 +1,8 @@
 Here’s a detailed step-by-step guide with all the necessary YAML and configurations to set up OLTP to Kafka to ClickHouse streaming using Debezium, Kafka, and ClickHouse Sink Connector in your Kubernetes cluster.
 # Documentation reference
 
-Configure the Kafka client for authenticating to Google Cloud : https://cloud.google.com/managed-service-for-apache-kafka/docs/authentication-kafka#configure-kafka-client
+Configure the Kafka client for authenticating to Google Cloud:  [Link](https://cloud.google.com/managed-service-for-apache-kafka/docs/authentication-kafka#configure-kafka-client) <br>
+
 
 # Step 1: Deploy Kafka Connect with Debezium
 
@@ -65,6 +66,22 @@ To capture all tables in the database instead of specifying a single table, use:
 
 or remove this line entirely, as Debezium will default to capturing all tables in the database.
 
+**Get all connector plugin class available in kafka connect**
+
+```bash
+curl -s http://localhost:8083/connector-plugins | jq -r '.[]'
+
+# You will get the list of all plugins available
+io.confluent.connect.jdbc.JdbcSinkConnector
+io.confluent.connect.jdbc.JdbcSourceConnector
+io.debezium.connector.postgresql.PostgresConnector
+org.apache.kafka.connect.mirror.MirrorCheckpointConnector
+org.apache.kafka.connect.mirror.MirrorHeartbeatConnector
+org.apache.kafka.connect.mirror.MirrorSourceConnector
+
+```
+
+
 **Deploy the connector:**
 ```bash
 # To create the connector use POST call
@@ -100,6 +117,8 @@ This connector will pull data from Kafka and insert it into ClickHouse.
 
 Run the following SQL in ClickHouse:
 ```bash
+# refer to sql-queries for atual table
+
 CREATE DATABASE sbx;
 CREATE TABLE sbx.wms (
     id Int64,
@@ -115,7 +134,7 @@ Create **clickhouse-sink.json**
 
 Deploy the connector:
 ```bash
-curl -X POST http://cp-connect:8083/connectors -H "Content-Type: application/json" -d @clickhouse-sink.json
+curl -X POST http://cp-connect:8083/connectors -H "Content-Type: application/json" -d @clickhouse/clickhouse-sink.json
 ```
 
 
@@ -139,31 +158,11 @@ kubectl exec -it <kafka-pod-name> -n dev -- kafka-console-consumer.sh --topic po
 clickhouse-client --host clickhouse --query "SELECT * FROM your_db.your_table;"
 ```
 
-
-https://cloud.google.com/managed-service-for-apache-kafka/docs/authentication-kafka#gcloud
-
-
-"table.exclude.list": "public.payload_storage,public.storage_audit,public.webhook_invocation_event,public.webhook_invocation,public.ccs_schema_migration,public.iot_schema_migration,public.yms_schema_migration,public.tasks_schema_migration,public.assets_schema_migration,public.cincout_schema_migration,public.storage_schema_migration,public.webhooks_schema_migration,public.analytics_schema_migration,public.breakbulk_schema_migration,public.webhook_registry", 
-
-
-
-
-curl -s http://localhost:8083/connector-plugins | jq -r '.[]'
-
-io.confluent.connect.jdbc.JdbcSinkConnector
-io.confluent.connect.jdbc.JdbcSourceConnector
-io.debezium.connector.postgresql.PostgresConnector
-org.apache.kafka.connect.mirror.MirrorCheckpointConnector
-org.apache.kafka.connect.mirror.MirrorHeartbeatConnector
-org.apache.kafka.connect.mirror.MirrorSourceConnector
-
-
+# Check number of threads
+```bash
 SELECT
     name,
     value
 FROM system.settings
 WHERE name = 'max_threads'
-
-SHOW TABLES FROM system
-
-
+```
