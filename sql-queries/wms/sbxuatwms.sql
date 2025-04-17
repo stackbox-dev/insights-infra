@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_dockdoor_position
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor_position
 (
     id UUID,
     whId Int64,
@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_dockdoor_position
     active Bool
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (id);
+ORDER BY (dockdoorId);
 
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_bin_dockdoor
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_dockdoor
 (
     id UUID,
     whId Int64,
@@ -21,14 +21,14 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_bin_dockdoor
     active Bool,
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
-    usage LowCardinality(String),
-    dockHandlingUnit String,
+    usage LowCardinality(String) DEFAULT 0,
+    dockHandlingUnit String DEFAULT 0,
     multiTrip Bool
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (whId, binId, dockdoorId);
 
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_dockdoor
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor
 (
     id UUID,
     whId Int64,
@@ -40,17 +40,17 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_dockdoor
     allowInbound Bool,
     allowOutbound Bool,
     allowReturns Bool,
-    incompatibleVehicleTypes Array(String),
+    incompatibleVehicleTypes String,
     status LowCardinality(String),
-    incompatibleLoadTypes Array(String)
+    incompatibleLoadTypes String
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (whId, code);
 
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_bin
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin
 (
     id UUID,
-    whId Int8,
+    whId Int64,
     code String,
     description String,
     binTypeId UUID,
@@ -64,23 +64,23 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_bin
     putawayPosition Int32,
     status LowCardinality(String),
     rank Int32,
-    aisle String,
-    bay String,
-    level String,
-    position String,
-    depth String,
-    maxSkuCount Int32,
-    maxSkuBatchCount Int32,
-    attrs JSON
+    aisle String DEFAULT 0,
+    bay String DEFAULT 0,
+    level String DEFAULT 0,
+    position String DEFAULT 0,
+    depth String DEFAULT 0,
+    maxSkuCount Int32 DEFAULT 0,
+    maxSkuBatchCount Int32 DEFAULT 0,
+    attrs String
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (id);
+ORDER BY (whId, code);
 
 
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_bin_type
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_type
 (
     id UUID,
-    whId Int8,
+    whId Int64,
     code LowCardinality(String),
     description String,
     maxVolumeInCC Float64,
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_bin_type
     active Bool,
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
-    palletCapacity Int32,
+    palletCapacity Int32 DEFAULT 0,
     storageHUType LowCardinality(String) DEFAULT 'NONE',
     auxiliaryBin Bool,
     huMultiSku Bool,
@@ -98,10 +98,10 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_bin_type
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (whId, code);
 
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_zone
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_zone
 (
     id UUID,
-    whId Int8,
+    whId Int64,
     code LowCardinality(String),
     description String,
     face LowCardinality(String),
@@ -110,15 +110,14 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_zone
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
     peripheral Bool,
-    surveillanceConfig String
+    surveillanceConfig String DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (id);
+ORDER BY (whId, code);
 
-
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_area_sloc
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area_sloc
 (
-    whId Int8,
+    whId Int64,
     id UUID,
     areaCode LowCardinality(String),
     quality LowCardinality(String),
@@ -127,7 +126,7 @@ CREATE TABLE IF NOT EXISTS sbxuatwms.storage_area_sloc
     clientQuality LowCardinality(String),
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
-    deactivatedAt DateTime64(3, 'UTC'),
+    deactivatedAt DateTime64(3, 'UTC') DEFAULT 0,
     inventoryVisible Bool,
     erpToWMS Bool
 )
@@ -135,25 +134,25 @@ ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (whId, areaCode, quality);
 
 
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_area
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area
 (
     id UUID,
-    whId Int8,
+    whId Int64,
     code LowCardinality(String),
     description String,
     type LowCardinality(String),
     active Bool,
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
-    rollingDays Int32
+    rollingDays Int32 DEFAULT 0,
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (id);
+ORDER BY (whId, code);
 
-CREATE TABLE IF NOT EXISTS sbxuatwms.storage_position
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_position
 (
     id UUID,
-    whId Int8,
+    whId Int64,
     storageId UUID,
     x1 Float64,
     x2 Float64,

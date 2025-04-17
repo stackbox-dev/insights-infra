@@ -7,7 +7,7 @@
       "database.dbname": "postgres",
       "database.server.name": "postgres",
       "plugin.name": "pgoutput",
-      "table.exclude.list": "public.payload_storage,public.storage_audit,public.webhook_invocation_event,public.webhook_invocation,public.webhook_registry,public\\..*_schema_migration", 
+      "table.include.list": "public.storage_dockdoor_position, public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position", 
       "database.history.kafka.bootstrap.servers": "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092",
       "database.history.kafka.topic": "schema-changes.postgres",
       "transforms": "unwrap",

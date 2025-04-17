@@ -263,8 +263,8 @@ containerSecurityContext:
 auth:
   username: default
   password: ""
-  existingSecret: ""
-  existingSecretKey: ""
+  existingSecret: "clickhouse-admin"
+  existingSecretKey: "password"
 ## @param logLevel Logging level
 ##
 logLevel: information
