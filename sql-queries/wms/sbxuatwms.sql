@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor_position
     active Bool
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (dockdoorId);
+ORDER BY (id);
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_dockdoor
 (
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_dockdoor
     multiTrip Bool
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, binId, dockdoorId);
+ORDER BY (id);
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor
 (
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor
     incompatibleLoadTypes String
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, code);
+ORDER BY (id);
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin
 (
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin
     attrs String
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, code);
+ORDER BY (id);
 
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_type
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_type
     useDerivedPalletBestFit Bool
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, code);
+ORDER BY (id);
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_zone
 (
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_zone
     surveillanceConfig String DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, code);
+ORDER BY (id);
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area_sloc
 (
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area_sloc
     erpToWMS Bool
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, areaCode, quality);
+ORDER BY (id);
 
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area
     rollingDays Int32 DEFAULT 0,
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, code);
+ORDER BY (id);
 
 CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_position
 (
@@ -163,4 +163,4 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_position
     active Bool
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (storageId);
+ORDER BY (id);

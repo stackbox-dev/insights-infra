@@ -92,16 +92,32 @@ Create a publication for the tables you want to monitor:
 
 CREATE PUBLICATION dbz_publication
 FOR TABLE 
-public.storage_dockdoor_position, 
+public.storage_dockdoor_position,
 public.storage_bin_dockdoor,
 public.storage_dockdoor,
 public.storage_bin,
 public.storage_bin_type,
-public.storage_bin_zone,
-public.storage_bin_sloc,
-public.storage_bin_area,
+public.storage_zone,
+public.storage_area_sloc,
+public.storage_area,
 public.storage_position;
 ```
+
+Adding tables to an Existing PostgreSQL Publication
+
+To add more tables to your existing dbz_publication, you can use the ALTER PUBLICATION command:
+
+```sql
+ALTER PUBLICATION dbz_publication 
+ADD TABLE public.new_table_name1, public.new_table_name2;
+```
+Replace `new_table_name1` and `new_table_name2` with the actual names of the tables you want to add.
+
+How to Remove Tables from Publication
+```sql
+ALTER PUBLICATION dbz_publication DROP TABLE public.table_name;
+```
+Replace `table_name` with the actual names of the tables you want to drop from publication.
 
 Verify the replication slots and publications:
 
