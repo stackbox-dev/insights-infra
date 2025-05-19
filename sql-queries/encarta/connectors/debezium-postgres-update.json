@@ -1,22 +1,20 @@
 {
-    "name": "postgres-source",
-    "config": {
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
       "database.hostname": "192.168.16.8",
       "database.port": "5432",
       "database.user": "debezium",
       "database.password": "bkPmW4GP1Xwl9R0FtiR5",
-      "database.dbname": "postgres",
+      "database.dbname": "encarta",
       "database.server.name": "postgres",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.storage_dockdoor_position, public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position", 
+      "table.include.list": "public.skus, public.uoms",
       "database.history.kafka.bootstrap.servers": "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092",
       "database.history.kafka.topic": "schema-changes.postgres",
       "transforms": "unwrap",
-      "topic.prefix": "sbx-uat.wms",
+      "topic.prefix": "sbx-uat.encarta",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "publication.name": "dbz_publication",
-      "slot.name": "dbz",
+      "slot.name": "dbz1",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
@@ -24,6 +22,7 @@
       "provide.transaction.metadata": true,
       "binary.handling.mode": "base64",
       "snapshot.mode": "initial",
+      "incremental.snapshot.enabled": "true",
       "snapshot.locking.mode": "shared",
       "producer.compression.type": "lz4",
       "key.converter": "io.confluent.connect.avro.AvroConverter",
@@ -37,5 +36,4 @@
       "topic.creation.default.cleanup.policy": "compact",
       "topic.creation.default.compression.type": "lz4",
       "skipped.operations": "none"
-    }
 }

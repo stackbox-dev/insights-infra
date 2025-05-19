@@ -1,6 +1,4 @@
-CREATE MATERIALIZED VIEW sbx_uat_insights.mv_storage_bin_summary
-TO sbx_uat_insights.storage_bin_summary
-AS
+INSERT INTO sbx_uat_insights.storage_bin_summary
 SELECT
     sb."whId" AS "whId",
     sb.code AS bin_code,
@@ -69,54 +67,29 @@ LEFT JOIN sbx_uat_wms.storage_dockdoor sd ON sbd."dockdoorId" = sd.id
 LEFT JOIN sbx_uat_wms.storage_dockdoor_position sdp ON sd."id" = sdp."dockdoorId";
 
 
-CREATE MATERIALIZED VIEW sbx_uat_insights.mv_inventory
-TO sbx_uat_insights.inventory
-AS
-SELECT
-    "whId",
-    "id",
-    "huId",
-    "huCode",
-    "huKind",
-    "huWeight",
-    "huOnHold",
-    "huRendered",
-    "huLockTaskId",
-    "isBinHu",
-    "areaType",
-    "areaCode",
-    "zoneFace",
-    "zoneCode",
-    "binType",
-    "binCode",
-    "binStatus",
-    "binCapacity",
-    "outerHUCode",
-    "outerHUKind",
-    "skuId",
-    "skuCode",
-    "skuName",
-    "skuInventoryType",
-    "productCode",
-    "category",
-    "categoryGroup",
-    "skuClassification",
-    "plantCode",
-    "brand",
-    "bucket",
-    "inclusionStatus",
-    "uom",
-    "batch",
-    "manufactureDate",
-    "expiryDate",
-    "price",
-    "quantLockMode",
-    "qty",
-    "qtyL0",
-    "huUpdatedAt",
-    "quantUpdatedAt",
-    "updatedAt",
-    "binTypeId",
-    "usage",
-    "huCountBlocked",
-FROM sbx_uat_wms.inventory;
+
+INSERT INTO sbx_uat_insights.sku_unit_summary
+SELECT 
+    suv.id,
+    suv.code,
+    SUM(suv.l1units) AS ibc,
+    SUM(suv.l2units) AS casecount,
+    SUM(suv.l3units) AS palletcount
+FROM
+    (SELECT 
+        su.id,
+        su.code,
+        CASE WHEN su.hierarchy='L1' THEN units ELSE 0 END AS l1units,
+        CASE WHEN su.hierarchy='L2' THEN units ELSE 0 END AS l2units,
+        CASE WHEN su.hierarchy='L3' THEN units ELSE 0 END AS l3units
+     FROM
+        (SELECT 
+            s.id,
+            s.code,
+            u.hierarchy,
+            u.units 
+         FROM sbx_uat_encarta.skus s
+         Left JOIN sbx_uat_encarta.uoms u ON s.id=u.sku_id
+        ) AS su
+    ) suv
+GROUP BY suv.id, suv.code;

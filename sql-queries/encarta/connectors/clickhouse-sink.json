@@ -1,0 +1,22 @@
+{
+    "name": "clickhouse-connect-sbx-uat-encarta",
+    "config": {
+      "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
+      "tasks.max": "1",
+      "consumer.override.max.poll.records": "5000",
+      "consumer.override.max.partition.fetch.bytes": "5242880",
+      "database": "sbx_uat_encarta",
+      "errors.retry.timeout": "60",
+      "exactlyOnce": "false",
+      "hostname": "clickhouse-headless",
+      "port": "8123",
+      "username": "default",
+      "password": "PKvnzDLrQF2cAnjVsuQy",
+      "topics": "sbx-uat.encarta.public.skus,sbx-uat.encarta.public.uoms",
+      "value.converter.schemas.enable": "false",
+      "clickhouseSettings": "",
+       "topic2TableMap": "sbx-uat.encarta.public.skus=skus, sbx-uat.encarta.public.uoms=uoms",
+      "value.converter": "io.confluent.connect.avro.AvroConverter",
+      "value.converter.schema.registry.url": "http://cp-schema-registry"
+    }
+  }

@@ -319,16 +319,17 @@ defaultConfigurationOverrides: |
             <preferServerCiphers>true</preferServerCiphers>
 
             <invalidCertificateHandler>
-                <name>RejectCertificateHandler</name>
+                <name>AcceptCertificateHandler</name>
             </invalidCertificateHandler>
         </server>
         <client>
+            <verificationMode>none</verificationMode>
             <loadDefaultCAFile>true</loadDefaultCAFile>
             <cacheSessions>true</cacheSessions>
             <disableProtocols>sslv2,sslv3</disableProtocols>
             <preferServerCiphers>true</preferServerCiphers>
             <invalidCertificateHandler>
-                <name>RejectCertificateHandler</name>
+                <name>AcceptCertificateHandler</name>
             </invalidCertificateHandler>
         </client>
     </openSSL>

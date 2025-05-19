@@ -92,15 +92,9 @@ Create a publication for the tables you want to monitor:
 
 CREATE PUBLICATION dbz_publication
 FOR TABLE 
-public.storage_dockdoor_position,
-public.storage_bin_dockdoor,
-public.storage_dockdoor,
-public.storage_bin,
-public.storage_bin_type,
-public.storage_zone,
-public.storage_area_sloc,
-public.storage_area,
-public.storage_position;
+public.table_name1,
+public.table_name2,
+public.table_name3;
 ```
 
 Adding tables to an Existing PostgreSQL Publication
@@ -144,23 +138,26 @@ DROP PUBLICATION dbz_publication;
 
    Or remove this line entirely to capture all tables by default.
 
-3. Deploy the connector:
+3. Deploy the connector using sample config:
 
    ```bash
-   curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @kafka/debezium-postgres.json
+   # this is just a example command to add connector
+   curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @kafka/samples/debezium-postgres.json
    ```
 
    To update the connector:
 
    ```bash
+    # this is just a example command to update connector
    curl -X PUT http://localhost:8083/connectors/postgres-source/config \
         -H "Content-Type: application/json" \
-        -d @kafka/debezium-postgres-update.json
+        -d @kafka/samples/debezium-postgres-update.json
    ```
 
    To delete the connector:
 
    ```bash
+   # this is just a example command to delete connector
    curl -X DELETE http://localhost:8083/connectors/postgres-source
    ```
 ---
@@ -214,13 +211,13 @@ Create all required tables using SQL queries given in `sql-queries` folder.
 3. Deploy the connector:
 
    ```bash
-   curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @clickhouse/clickhouse-sink.json
+   curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @clickhouse/samples/clickhouse-sink.json
    ```
 
    To update the connector:
 
    ```bash
-   curl -X PUT http://localhost:8083/connectors/clickhouse-connect/config \
+   curl -X PUT http://localhost:8083/connectors/samples/clickhouse-connect/config \
         -H "Content-Type: application/json" \
         -d @clickhouse/clickhouse-sink-update.json
    ```
@@ -371,4 +368,6 @@ Once the database is added, you can start creating dashboards, visualizations, a
 - [Denormalizing Data](https://clickhouse.com/docs/data-modeling/denormalization)
 - [Connecting Metabase to ClickHouse](https://clickhouse.com/docs/integrations/metabase)
 - [I've operated petabyte-scale ClickHouse® clusters for 5 years](https://www.tinybird.co/blog-posts/what-i-learned-operating-clickhouse)
+- [Using Materialized Views in ClickHouse](https://clickhouse.com/blog/using-materialized-views-in-clickhouse)
+- [Materialized Views and JOINs](https://clickhouse.com/docs/materialized-view/incremental-materialized-view#materialized-views-and-joins)
 ---
