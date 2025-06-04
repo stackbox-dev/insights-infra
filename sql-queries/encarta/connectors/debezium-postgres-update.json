@@ -7,7 +7,7 @@
       "database.dbname": "encarta",
       "database.server.name": "postgres",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.skus, public.uoms",
+      "table.include.list": "public.skus,public.uoms,public.products,public.sub_categories,public.categories,public.classifications,public.node_overrides,public.node_override_classifications",
       "database.history.kafka.bootstrap.servers": "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092",
       "database.history.kafka.topic": "schema-changes.postgres",
       "transforms": "unwrap",

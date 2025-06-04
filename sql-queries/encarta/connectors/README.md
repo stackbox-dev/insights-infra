@@ -11,6 +11,11 @@
         -d @sql-queries/encarta/connectors/debezium-postgres-update.json
    ```
 
+   To restart the connector:
+   ```bash
+   curl -X POST http://localhost:8083/connectors/postgres-source-sbx-uat-encarta/restart
+   ```
+
    To delete the connector:
 
    ```bash
@@ -31,6 +36,12 @@
         -H "Content-Type: application/json" \
         -d @sql-queries/encarta/connectors/clickhouse-sink-update.json
    ```
+
+   To restart the connector:
+   ```bash
+   curl -X POST http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/restart
+   ```
+
 
    To delete the connector:
 

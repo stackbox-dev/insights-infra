@@ -33,3 +33,6 @@ JOIN
 WHERE 
     p.pubname = 'dbz_publication';
 
+-- Add new tables to the existing publication
+ALTER PUBLICATION dbz_publication 
+ADD TABLE public.new_table_name1, public.new_table_name2;

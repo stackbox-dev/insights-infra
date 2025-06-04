@@ -12,10 +12,10 @@
       "port": "8123",
       "username": "default",
       "password": "PKvnzDLrQF2cAnjVsuQy",
-      "topics": "sbx-uat.encarta.public.skus,sbx-uat.encarta.public.uoms",
+      "topics": "sbx-uat.encarta.public.skus,sbx-uat.encarta.public.uoms,sbx-uat.encarta.public.products,sbx-uat.encarta.public.sub_categories,sbx-uat.encarta.public.categories,sbx-uat.encarta.public.classifications,sbx-uat.encarta.public.node_overrides,sbx-uat.encarta.public.node_override_classifications",
       "value.converter.schemas.enable": "false",
       "clickhouseSettings": "",
-       "topic2TableMap": "sbx-uat.encarta.public.skus=skus, sbx-uat.encarta.public.uoms=uoms",
+      "topic2TableMap": "sbx-uat.encarta.public.skus=skus,sbx-uat.encarta.public.uoms=uoms,sbx-uat.encarta.public.products=products,sbx-uat.encarta.public.sub_categories=sub_categories,sbx-uat.encarta.public.categories=categories,sbx-uat.encarta.public.classifications=classifications,sbx-uat.encarta.public.node_overrides=node_overrides,sbx-uat.encarta.public.node_override_classifications=node_override_classifications",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter.schema.registry.url": "http://cp-schema-registry"
     }

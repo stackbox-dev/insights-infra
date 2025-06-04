@@ -14,3 +14,13 @@ CREATE PUBLICATION dbz_publication
 FOR TABLE 
 public.skus, 
 public.uoms;
+
+
+ALTER PUBLICATION dbz_publication 
+ADD TABLE 
+public.products, 
+public.sub_categories,
+public.categories,
+public.classifications,
+public.node_overrides,
+public.node_override_classifications;

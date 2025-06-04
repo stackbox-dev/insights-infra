@@ -172,7 +172,7 @@ ClickHouse will store the data streamed from Kafka.
 2. Use Helm to deploy ClickHouse:
 
    ```bash
-   helm show values oci://registry-1.docker.io/bitnamicharts/clickhouse --version 8.0.10 > clickhouse/helm/values1.yaml
+   helm show values oci://registry-1.docker.io/bitnamicharts/clickhouse --version 8.0.10 > clickhouse/helm/values.yaml
 
    helm install clickhouse oci://registry-1.docker.io/bitnamicharts/clickhouse -f clickhouse/helm/values.yaml --version 8.0.10 -n kafka
 

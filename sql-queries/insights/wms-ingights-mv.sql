@@ -57,7 +57,9 @@ SELECT
     sd."incompatibleVehicleTypes",
     sd."incompatibleLoadTypes",
     sdp.x AS dockdoor_x_coordinate,
-    sdp.y AS dockdoor_y_coordinate
+    sdp.y AS dockdoor_y_coordinate,
+    sb.status AS sb_status,
+    sbt.active AS sbt_active 
 FROM sbx_uat_wms.storage_bin AS sb
 LEFT JOIN sbx_uat_wms.storage_bin_type sbt ON sb."binTypeId" = sbt.id
 LEFT JOIN sbx_uat_wms.storage_zone sz ON sb."zoneId" = sz.id

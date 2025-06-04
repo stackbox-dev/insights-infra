@@ -55,7 +55,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_insights.storage_bin_summary
     incompatibleVehicleTypes String,
     incompatibleLoadTypes String,
     dockdoor_x_coordinate Float64,
-    dockdoor_y_coordinate Float64
+    dockdoor_y_coordinate Float64,
+    sb_status String,
+    sbt_active Bool 
 )
 ENGINE = ReplacingMergeTree()
 ORDER BY ("whId", "bin_code", "quality");

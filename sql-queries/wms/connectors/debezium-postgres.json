@@ -9,7 +9,7 @@
       "database.dbname": "postgres",
       "database.server.name": "postgres",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.storage_dockdoor_position, public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.inventory", 
+      "table.include.list": "public.storage_dockdoor_position,public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.inventory,public.storage_bin_fixed_mapping,public.pd_pick_item,public.pd_pick_drop_mapping,public.pd_drop_item,public.task,public.session,public.worker,public.handling_unit", 
       "database.history.kafka.bootstrap.servers": "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092",
       "database.history.kafka.topic": "schema-changes.postgres",
       "transforms": "unwrap",

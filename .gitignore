@@ -1,2 +1,4 @@
 .env
 local.txt
+queries.sql
+*.png
