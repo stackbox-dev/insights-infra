@@ -1,3 +1,4 @@
+--- Backfill existing data for storage bin summary
 INSERT INTO sbx_uat_insights.storage_bin_summary
 SELECT
     sb."whId" AS "whId",
@@ -55,8 +56,12 @@ SELECT
     sd."incompatibleVehicleTypes",
     sd."incompatibleLoadTypes",
     sdp.x AS dockdoor_x_coordinate,
-    sdp.y AS dockdoor_y_coordinate
+    sdp.y AS dockdoor_y_coordinate,
+    sb.status AS sb_status,
+    sbt.active AS sbt_active,
+if(sbfm.active = 'true' , 'FIXED','DYNAMIC') AS bin_mapping
 FROM sbx_uat_wms.storage_bin AS sb
+LEFT JOIN sbx_uat_wms.storage_bin_fixed_mapping sbfm on sb.id=sbfm."binId"
 LEFT JOIN sbx_uat_wms.storage_bin_type sbt ON sb."binTypeId" = sbt.id
 LEFT JOIN sbx_uat_wms.storage_zone sz ON sb."zoneId" = sz.id
 LEFT JOIN sbx_uat_wms.storage_area sa ON sz."areaId" = sa.id
@@ -67,6 +72,8 @@ LEFT JOIN sbx_uat_wms.storage_dockdoor sd ON sbd."dockdoorId" = sd.id
 LEFT JOIN sbx_uat_wms.storage_dockdoor_position sdp ON sd."id" = sdp."dockdoorId";
 
 
+
+------ Backfill existing data for SKU unit summary
 
 INSERT INTO sbx_uat_insights.sku_unit_summary
 SELECT 

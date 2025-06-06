@@ -59,8 +59,10 @@ SELECT
     sdp.x AS dockdoor_x_coordinate,
     sdp.y AS dockdoor_y_coordinate,
     sb.status AS sb_status,
-    sbt.active AS sbt_active 
+    sbt.active AS sbt_active,
+if(sbfm.active = 'true' , 'FIXED','DYNAMIC') AS bin_mapping
 FROM sbx_uat_wms.storage_bin AS sb
+LEFT JOIN sbx_uat_wms.storage_bin_fixed_mapping sbfm on sb.id=sbfm."binId"
 LEFT JOIN sbx_uat_wms.storage_bin_type sbt ON sb."binTypeId" = sbt.id
 LEFT JOIN sbx_uat_wms.storage_zone sz ON sb."zoneId" = sz.id
 LEFT JOIN sbx_uat_wms.storage_area sa ON sz."areaId" = sa.id

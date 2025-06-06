@@ -370,4 +370,5 @@ Once the database is added, you can start creating dashboards, visualizations, a
 - [I've operated petabyte-scale ClickHouse® clusters for 5 years](https://www.tinybird.co/blog-posts/what-i-learned-operating-clickhouse)
 - [Using Materialized Views in ClickHouse](https://clickhouse.com/blog/using-materialized-views-in-clickhouse)
 - [Materialized Views and JOINs](https://clickhouse.com/docs/materialized-view/incremental-materialized-view#materialized-views-and-joins)
+- [Conditional Functions](https://clickhouse.com/docs/sql-reference/functions/conditional-functions)
 ---

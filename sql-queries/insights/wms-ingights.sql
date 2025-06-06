@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS sbx_uat_insights.storage_bin_summary
     dockdoor_x_coordinate Float64,
     dockdoor_y_coordinate Float64,
     sb_status String,
-    sbt_active Bool 
+    sbt_active Bool,
+    bin_mapping String DEFAULT 'DYNAMIC',
 )
 ENGINE = ReplacingMergeTree()
 ORDER BY ("whId", "bin_code", "quality");
