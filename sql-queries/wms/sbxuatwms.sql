@@ -201,8 +201,8 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inventory
     "inclusionStatus" String,
     "uom" String,
     "batch" String DEFAULT 0,
-    "manufactureDate" Date DEFAULT 0,
-    "expiryDate" Date DEFAULT 0,
+    "manufactureDate" Date DEFAULT toDate('1970-01-01'),
+    "expiryDate" Date DEFAULT toDate('1970-01-01'),
     "price" String DEFAULT 0,
     "quantLockMode" String,
     "qty" Int32 NOT NULL,
@@ -408,7 +408,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_item
     "deactivatedBy" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "pickedQty" Int32 DEFAULT 0,
     "pickedAt" DateTime64(3, 'UTC') DEFAULT 0,
-    "pickedBy" String DEFAULT 0,
+    "pickedBy" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "movedAt" DateTime64(3, 'UTC') DEFAULT 0,
     "movedBy" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "processedAt" DateTime64(3, 'UTC') DEFAULT 0,
@@ -471,4 +471,37 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_drop_mapping (
     "createdAt" DateTime64(3, 'UTC')
 )
 ENGINE = ReplacingMergeTree(createdAt)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip
+(
+    sessionCreatedAt DateTime64(3, 'UTC'),
+    whId Int64,
+    sessionId UUID,
+    id UUID,
+    createdAt DateTime64(3, 'UTC'),
+    bbId String DEFAULT 0,
+    code String DEFAULT 0,
+    "type" LowCardinality(String),
+    "priority" Int32,
+    dockdoorId UUID DEFAULT '00000000-0000-0000-0000-000000000000',
+    dockdoorCode LowCardinality(String) DEFAULT 0,
+    vehicleId String DEFAULT 0,
+    vehicleNo String DEFAULT 0,
+    vehicleType String DEFAULT 0,
+    deliveryDate Date DEFAULT toDate('1970-01-01')
+)
+ENGINE = ReplacingMergeTree(sessionCreatedAt)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip_relation
+(
+    whId Int64,
+    id UUID,
+    sessionId UUID,
+    xdock String,
+    parentTripId UUID,
+    childTripId UUID,
+)
+ENGINE = ReplacingMergeTree()
 ORDER BY (id);

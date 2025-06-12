@@ -32,3 +32,8 @@ public.task,
 public.session,
 public.worker,
 public.handling_unit;
+
+ALTER PUBLICATION dbz_publication 
+ADD TABLE 
+public.trip,
+public.trip_relation;
