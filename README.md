@@ -371,4 +371,7 @@ Once the database is added, you can start creating dashboards, visualizations, a
 - [Using Materialized Views in ClickHouse](https://clickhouse.com/blog/using-materialized-views-in-clickhouse)
 - [Materialized Views and JOINs](https://clickhouse.com/docs/materialized-view/incremental-materialized-view#materialized-views-and-joins)
 - [Conditional Functions](https://clickhouse.com/docs/sql-reference/functions/conditional-functions)
+- [Refreshable Materialized View](https://clickhouse.com/docs/materialized-view/refreshable-materialized-view)
+- [Handling DELETE operations with ClickHouse Kafka Connect Sink](https://stackoverflow.com/questions/78458720/handling-delete-operations-with-clickhouse-kafka-connect-sink)
+- [is_deleted](https://clickhouse.com/docs/engines/table-engines/mergetree-family/replacingmergetree#is_deleted)
 ---

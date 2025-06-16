@@ -12,11 +12,14 @@
       "port": "8123",
       "username": "default",
       "password": "PKvnzDLrQF2cAnjVsuQy",
-      "topics": "sbx-uat.encarta.public.skus,sbx-uat.encarta.public.uoms,sbx-uat.encarta.public.products,sbx-uat.encarta.public.sub_categories,sbx-uat.encarta.public.categories,sbx-uat.encarta.public.classifications,sbx-uat.encarta.public.node_overrides,sbx-uat.encarta.public.node_override_classifications",
+      "topics": "sbx-uat.encarta.public.skus,sbx-uat.encarta.public.uoms,sbx-uat.encarta.public.products,sbx-uat.encarta.public.sub_categories,sbx-uat.encarta.public.categories,sbx-uat.encarta.public.classifications,sbx-uat.encarta.public.node_overrides,sbx-uat.encarta.public.node_override_classifications,sbx-uat.encarta.public.eans,sbx-uat.encarta.public.product_classifications,sbx-uat.encarta.public.product_node_overrides,sbx-uat.encarta.public.product_node_override_classifications,sbx-uat.encarta.public.category_groups,sbx-uat.encarta.public.default_values,sbx-uat.encarta.public.sub_brands,sbx-uat.encarta.public.brands",
       "value.converter.schemas.enable": "false",
       "clickhouseSettings": "",
-      "topic2TableMap": "sbx-uat.encarta.public.skus=skus,sbx-uat.encarta.public.uoms=uoms,sbx-uat.encarta.public.products=products,sbx-uat.encarta.public.sub_categories=sub_categories,sbx-uat.encarta.public.categories=categories,sbx-uat.encarta.public.classifications=classifications,sbx-uat.encarta.public.node_overrides=node_overrides,sbx-uat.encarta.public.node_override_classifications=node_override_classifications",
+      "topic2TableMap": "sbx-uat.encarta.public.skus=skus,sbx-uat.encarta.public.uoms=uoms,sbx-uat.encarta.public.products=products,sbx-uat.encarta.public.sub_categories=sub_categories,sbx-uat.encarta.public.categories=categories,sbx-uat.encarta.public.classifications=classifications,sbx-uat.encarta.public.node_overrides=node_overrides,sbx-uat.encarta.public.node_override_classifications=node_override_classifications,sbx-uat.encarta.public.eans=eans,sbx-uat.encarta.public.product_classifications=product_classifications,sbx-uat.encarta.public.product_node_overrides=product_node_overrides,sbx-uat.encarta.public.product_node_override_classifications=product_node_override_classifications,sbx-uat.encarta.public.category_groups=category_groups,sbx-uat.encarta.public.default_values=default_values,sbx-uat.encarta.public.sub_brands=sub_brands,sbx-uat.encarta.public.brands=brands",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
-      "value.converter.schema.registry.url": "http://cp-schema-registry"
+      "value.converter.schema.registry.url": "http://cp-schema-registry",
+      "errors.deadletterqueue.topic.name": "sbx-uat.encarta.clickhouse-sink-dlq",
+      "errors.tolerance": "all",
+      "errors.log.enable": "true"
     }
   }

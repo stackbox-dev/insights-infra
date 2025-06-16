@@ -37,3 +37,13 @@ ALTER PUBLICATION dbz_publication
 ADD TABLE 
 public.trip,
 public.trip_relation;
+
+ALTER PUBLICATION dbz_publication 
+ADD TABLE 
+public.inb_receive_item,
+public.ob_load_item,
+public.inb_palletization_item,
+public.inb_serialization_item,
+public.inb_qc_item_v2,
+public.ira_bin_items,
+public.ob_qa_lineitem;

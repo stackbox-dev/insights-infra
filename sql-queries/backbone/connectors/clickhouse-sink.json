@@ -1,0 +1,25 @@
+{
+    "name": "clickhouse-connect-sbx-uat-backbone",
+    "config": {
+      "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
+      "tasks.max": "1",
+      "consumer.override.max.poll.records": "5000",
+      "consumer.override.max.partition.fetch.bytes": "5242880",
+      "database": "sbx_uat_backbone",
+      "errors.retry.timeout": "60",
+      "exactlyOnce": "false",
+      "hostname": "clickhouse-headless",
+      "port": "8123",
+      "username": "default",
+      "password": "PKvnzDLrQF2cAnjVsuQy",
+      "topics": "sbx-uat.backbone.public.node,sbx-uat.backbone.public.node_closure",
+      "value.converter.schemas.enable": "false",
+      "clickhouseSettings": "",
+      "topic2TableMap": "sbx-uat.backbone.public.node=node,sbx-uat.backbone.public.node_closure=node_closure",
+      "value.converter": "io.confluent.connect.avro.AvroConverter",
+      "value.converter.schema.registry.url": "http://cp-schema-registry",
+      "errors.deadletterqueue.topic.name": "sbx-uat.wms.clickhouse-sink-dlq",
+      "errors.tolerance": "all",
+      "errors.log.enable": "true"
+  }
+}

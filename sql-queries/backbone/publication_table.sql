@@ -12,26 +12,5 @@ SELECT * FROM pg_publication;
 
 CREATE PUBLICATION dbz_publication
 FOR TABLE 
-public.skus, 
-public.uoms;
-
-
-ALTER PUBLICATION dbz_publication 
-ADD TABLE 
-public.products, 
-public.sub_categories,
-public.categories,
-public.classifications,
-public.node_overrides,
-public.node_override_classifications;
-
-ALTER PUBLICATION dbz_publication 
-ADD TABLE 
-public.eans,
-public.product_classifications,
-public.product_node_overrides,
-public.product_node_override_classifications,
-public.category_groups,
-public.default_values,
-public.sub_brands,
-public.brands;
+public.node, 
+public.node_closure;

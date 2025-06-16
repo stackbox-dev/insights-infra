@@ -7,7 +7,7 @@
       "database.dbname": "postgres",
       "database.server.name": "postgres",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.storage_dockdoor_position,public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.inventory,public.storage_bin_fixed_mapping,public.pd_pick_item,public.pd_pick_drop_mapping,public.pd_drop_item,public.task,public.session,public.worker,public.handling_unit,public.trip_relation,public.trip",
+      "table.include.list": "public.storage_dockdoor_position,public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.inventory,public.storage_bin_fixed_mapping,public.pd_pick_item,public.pd_pick_drop_mapping,public.pd_drop_item,public.task,public.session,public.worker,public.handling_unit,public.trip_relation,public.trip,public.inb_receive_item,public.ob_load_item,public.inb_palletization_item,public.inb_serialization_item,public.inb_qc_item_v2,public.ira_bin_items,public.ob_qa_lineitem",
       "database.history.kafka.bootstrap.servers": "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092",
       "database.history.kafka.topic": "schema-changes.postgres",
       "transforms": "unwrap",
@@ -21,7 +21,7 @@
       "tombstones.on.delete": true,
       "provide.transaction.metadata": true,
       "binary.handling.mode": "base64",
-      "snapshot.mode": "initial",
+      "snapshot.mode": "when_needed",
       "incremental.snapshot.enabled": "true",
       "snapshot.locking.mode": "shared",
       "producer.compression.type": "lz4",
@@ -35,5 +35,11 @@
       "topic.creation.default.partitions": 1,
       "topic.creation.default.cleanup.policy": "compact",
       "topic.creation.default.compression.type": "lz4",
-      "skipped.operations": "none"
+      "skipped.operations": "none",
+      "producer.override.metadata.max.age.ms": "20000",
+      "producer.override.request.timeout.ms": "30000",
+      "producer.override.retries": "10",
+      "producer.override.retry.backoff.ms": "1000",
+      "producer.override.delivery.timeout.ms": "120000"
+      
 }

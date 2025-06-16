@@ -180,3 +180,106 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.node_override_classifications
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_classifications (
+    "id" UUID,
+    "principal_id" Int64,
+    "product_id" UUID,
+    "type" String,
+    "value" String DEFAULT 0,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC')
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_overrides (
+    "id" UUID,
+    "principal_id" Int64,
+    "node_id" Int64,
+    "product_id" UUID,
+    "min_quantity" Int32 DEFAULT 0,
+    "max_quantity" Int32 DEFAULT 0,
+    "order_lot" Int32 DEFAULT 0,
+    "active" Bool DEFAULT False,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC')
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_override_classifications (
+    "id" UUID,
+    "principal_id" Int64,
+    "node_override_id" UUID,
+    "type" String,
+    "value" String DEFAULT 0,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC')
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.category_groups (
+    "id" UUID,
+    "principal_id" Int64,
+    "business_unit_id" UUID,
+    "code" String,
+    "name" String DEFAULT 0,
+    "description" String DEFAULT 0,
+    "active" Bool DEFAULT False,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC')
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.default_values (
+    "principal_id" Int64,
+    "node_id" Int64,
+    "sku_shelf_life" Int32 DEFAULT 0,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC'),
+    "id" UUID
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.sub_brands (
+    "id" UUID,
+    "principal_id" Int64,
+    "code" String,
+    "name" String DEFAULT 0,
+    "description" String DEFAULT 0,
+    "brand_id" UUID,
+    "active" Bool DEFAULT False,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC')
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.brands (
+    "id" UUID,
+    "principal_id" Int64,
+    "code" String,
+    "name" String DEFAULT 0,
+    "description" String DEFAULT 0,
+    "brand_owner_id" UUID,
+    "active" Bool,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC')
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
+
+CREATE TABLE IF NOT EXISTS sbx_uat_encarta.eans (
+    "id" UUID,
+    "principal_id" Int64,
+    "uom_id" UUID,
+    "code" String,
+    "created_at" DateTime64(3, 'UTC'),
+    "updated_at" DateTime64(3, 'UTC')
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id);
