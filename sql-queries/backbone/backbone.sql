@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_backbone.node
     "updatedAt" DateTime64(3, 'UTC'),
     "active" Bool,
     "hasLocations" Bool,
-    "platform" String DEFAULT 0
+    "platform" String DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -20,7 +22,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_backbone.node_closure
 (
     "parentId" Int64,
     "childId" Int64,
-    "distance" Int16
+    "distance" Int16,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree()
 ORDER BY (childId);

@@ -21,6 +21,7 @@ public.storage_zone,
 public.storage_area_sloc,
 public.storage_area,
 public.storage_position,
+public.storage_bin_fixed_mapping,
 public.inventory;
 
 ALTER PUBLICATION dbz_publication 

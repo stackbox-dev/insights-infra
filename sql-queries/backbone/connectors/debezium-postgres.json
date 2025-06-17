@@ -12,7 +12,7 @@
       "table.include.list": "public.node,public.node_closure", 
       "database.history.kafka.bootstrap.servers": "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092",
       "database.history.kafka.topic": "schema-changes.postgres",
-      "transforms": "unwrap",
+      "transforms": "unwrap,cast,renameDelete",
       "topic.prefix": "sbx-uat.backbone",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "publication.name": "dbz_publication",
@@ -23,7 +23,7 @@
       "tombstones.on.delete": true,
       "provide.transaction.metadata": true,
       "binary.handling.mode": "base64",
-       "snapshot.mode": "always",
+      "snapshot.mode": "initial",
       "incremental.snapshot.enabled": "true",
       "snapshot.locking.mode": "shared",
       "producer.compression.type": "lz4",
@@ -42,6 +42,13 @@
       "producer.override.request.timeout.ms": "30000",
       "producer.override.retries": "10",
       "producer.override.retry.backoff.ms": "1000",
-      "producer.override.delivery.timeout.ms": "120000"
+      "producer.override.delivery.timeout.ms": "120000",
+      "transforms.unwrap.drop.tombstones": "false",
+      "transforms.unwrap.delete.handling.mode": "rewrite",
+      "transforms.unwrap.add.fields": "__deleted",
+      "transforms.cast.type": "org.apache.kafka.connect.transforms.Cast$Value",
+      "transforms.cast.spec": "__deleted:boolean",
+      "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
+      "transforms.renameDelete.renames": "__deleted:is_deleted"
     }
 }

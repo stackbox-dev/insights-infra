@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor_position
     y Float64,
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
-    active Bool
+    active Bool,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -23,7 +25,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_dockdoor
     updatedAt DateTime64(3, 'UTC'),
     usage LowCardinality(String) DEFAULT 0,
     dockHandlingUnit String DEFAULT 0,
-    multiTrip Bool
+    multiTrip Bool,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -42,7 +46,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor
     allowReturns Bool,
     incompatibleVehicleTypes String,
     status LowCardinality(String),
-    incompatibleLoadTypes String
+    incompatibleLoadTypes String,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -71,7 +77,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin
     depth String DEFAULT 0,
     maxSkuCount Int32 DEFAULT 0,
     maxSkuBatchCount Int32 DEFAULT 0,
-    attrs String
+    attrs String,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -93,7 +101,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_type
     auxiliaryBin Bool,
     huMultiSku Bool,
     huMultiBatch Bool,
-    useDerivedPalletBestFit Bool
+    useDerivedPalletBestFit Bool,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -110,7 +120,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_zone
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
     peripheral Bool,
-    surveillanceConfig String DEFAULT 0
+    surveillanceConfig String DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -128,7 +140,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area_sloc
     updatedAt DateTime64(3, 'UTC'),
     deactivatedAt DateTime64(3, 'UTC') DEFAULT 0,
     inventoryVisible Bool,
-    erpToWMS Bool
+    erpToWMS Bool,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -145,6 +159,8 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
     rollingDays Int32 DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -160,7 +176,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_position
     y2 Float64,
     createdAt DateTime64(3, 'UTC'),
     updatedAt DateTime64(3, 'UTC'),
-    active Bool
+    active Bool,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -196,7 +214,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inventory
     "categoryGroup" String,
     "skuClassification" String,
     "plantCode" String DEFAULT 0,
-    "brand" String,
+    "brand" String Default 0,
     "bucket" String,
     "inclusionStatus" String,
     "uom" String,
@@ -213,6 +231,8 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inventory
     "binTypeId" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "usage" Float64 DEFAULT 0,
     "huCountBlocked" bool DEFAULT false,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now(); 
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -226,6 +246,8 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_fixed_mapping (
     "createdAt" DateTime64(3, 'UTC') DEFAULT 0,
     "updatedAt" DateTime64(3, 'UTC') DEFAULT 0,
     "mode" String,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -296,6 +318,8 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_drop_item
     "legIndex" Int32  DEFAULT 0,
     "lastLeg" Bool DEFAULT False,
     "inputDestBinId" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -321,7 +345,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.task
     "forceCompleteTaskId" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "forceCompleted" Bool DEFAULT false,
     "subKind" String DEFAULT 0,
-    "label" String DEFAULT 0
+    "label" String DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -340,7 +366,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.handling_unit
     "attrs" String,
     "createdAt" DateTime64(3, 'UTC'),
     "updatedAt" DateTime64(3, 'UTC'),
-    "lockTaskId" UUID DEFAULT '00000000-0000-0000-0000-000000000000'
+    "lockTaskId" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -360,7 +388,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.worker
     "supervisor" Bool DEFAULT false,
     "quantIdentifiers" String,
     "mheKindIds" String DEFAULT 0,
-    "eligibleZones" String DEFAULT 0
+    "eligibleZones" String DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -377,7 +407,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.session
     "active" Bool DEFAULT true,
     "state" String,
     "progress" String,
-    "autoComplete" Bool DEFAULT true
+    "autoComplete" Bool DEFAULT true,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -456,7 +488,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_item
     "huIndex" Int32 DEFAULT 0,
     "sequence" Int32 DEFAULT 0,
     "carrierHUForceClosed" Bool DEFAULT false,
-    "inputDestBinId" UUID DEFAULT '00000000-0000-0000-0000-000000000000'
+    "inputDestBinId" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -468,7 +502,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_drop_mapping (
     "taskId" UUID,
     "pickItemId" UUID,
     "dropItemId" UUID,
-    "createdAt" DateTime64(3, 'UTC')
+    "createdAt" DateTime64(3, 'UTC'),
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
@@ -489,7 +525,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip
     vehicleId String DEFAULT 0,
     vehicleNo String DEFAULT 0,
     vehicleType String DEFAULT 0,
-    deliveryDate Date DEFAULT toDate('1970-01-01')
+    deliveryDate Date DEFAULT toDate('1970-01-01'),
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(sessionCreatedAt)
 ORDER BY (id);
@@ -502,6 +540,8 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip_relation
     xdock String,
     parentTripId UUID,
     childTripId UUID,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree()
 ORDER BY (id);
@@ -540,7 +580,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_receive_item (
     "receivedHuKind" String DEFAULT 0,
     "totalHuWeight" Float64 DEFAULT 0,
     "receivedHuWeight" Float64 DEFAULT 0,
-    "subReason" String DEFAULT 0
+    "subReason" String DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
@@ -581,7 +623,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.ob_load_item (
     "repicked" bool DEFAULT false,
     "invoiceCode" String DEFAULT 0,
     "retailerId" String DEFAULT 0,
-    "retailerCode" String DEFAULT 0
+    "retailerCode" String DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
@@ -615,7 +659,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_palletization_item (
     "qtyInside" Int32 DEFAULT 0,
     "uomInside" String DEFAULT 0,
     "subReason" String DEFAULT 0,
-    "deactivatedAt" DateTime64(3, 'UTC') DEFAULT 0
+    "deactivatedAt" DateTime64(3, 'UTC') DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -648,7 +694,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_serialization_item (
     "reasonUpdatedBy" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "mode" String DEFAULT 0,
     "rejected" bool DEFAULT false,
-    "deactivatedAt" DateTime64(3, 'UTC') DEFAULT 0
+    "deactivatedAt" DateTime64(3, 'UTC') DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
@@ -689,7 +737,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_qc_item_v2 (
     "uomInside" String DEFAULT 0,
     "reason" String DEFAULT 0,
     "subReason" String DEFAULT 0,
-    "batchOverridden" String DEFAULT 0
+    "batchOverridden" String DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -727,7 +777,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.ira_bin_items (
     "updatedBy" String DEFAULT 0,
     "huSameBinBeforeIRA" String,
     "recordNo" Int32 DEFAULT 1,
-    "hlrStatus" String DEFAULT 0
+    "hlrStatus" String DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
@@ -753,7 +805,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.ob_qa_lineitem (
     "tripCode" String DEFAULT 0,
     "batch" String,
     "retailerId" String DEFAULT 0,
-    "retailerCode" String DEFAULT 0
+    "retailerCode" String DEFAULT 0,
+    "is_deleted" Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);

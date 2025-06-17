@@ -12,7 +12,7 @@
       "table.include.list": "public.skus,public.uoms,public.products,public.sub_categories,public.categories,public.classifications,public.node_overrides,public.node_override_classifications,public.eans,public.product_classifications,public.product_node_overrides,public.product_node_override_classifications,public.category_groups,public.default_values,public.sub_brands,public.brands", 
       "database.history.kafka.bootstrap.servers": "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092",
       "database.history.kafka.topic": "schema-changes.postgres",
-      "transforms": "unwrap",
+      "transforms": "unwrap,cast,renameDelete",
       "topic.prefix": "sbx-uat.encarta",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "publication.name": "dbz_publication",
@@ -23,7 +23,7 @@
       "tombstones.on.delete": true,
       "provide.transaction.metadata": true,
       "binary.handling.mode": "base64",
-      "snapshot.mode": "when_needed",
+      "snapshot.mode": "initial",
       "incremental.snapshot.enabled": "true",
       "snapshot.locking.mode": "shared",
       "producer.compression.type": "lz4",
@@ -42,6 +42,13 @@
       "producer.override.request.timeout.ms": "30000",
       "producer.override.retries": "10",
       "producer.override.retry.backoff.ms": "1000",
-      "producer.override.delivery.timeout.ms": "120000"
+      "producer.override.delivery.timeout.ms": "120000",
+      "transforms.unwrap.drop.tombstones": "false",
+      "transforms.unwrap.delete.handling.mode": "rewrite",
+      "transforms.unwrap.add.fields": "__deleted",
+      "transforms.cast.type": "org.apache.kafka.connect.transforms.Cast$Value",
+      "transforms.cast.spec": "__deleted:boolean",
+      "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
+      "transforms.renameDelete.renames": "__deleted:is_deleted"
     }
 }

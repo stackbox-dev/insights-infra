@@ -14,9 +14,10 @@
     "value.converter.schemas.enable": "false",
     "clickhouseSettings": "",
     "topic2TableMap": "sbx-uat.backbone.public.node=node,sbx-uat.backbone.public.node_closure=node_closure",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
     "value.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter.schema.registry.url": "http://cp-schema-registry",
-    "errors.deadletterqueue.topic.name": "sbx-uat.wms.clickhouse-sink-dlq",
+    "errors.deadletterqueue.topic.name": "sbx-uat.backbone.clickhouse-sink-dlq",
     "errors.tolerance": "all",
     "errors.log.enable": "true"
   }

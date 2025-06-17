@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.uoms
     "text_tag1" String DEFAULT 0,
     "text_tag2" String DEFAULT 0,
     "image" String DEFAULT 0,
-    "num_tag1" Float64 DEFAULT 0
+    "num_tag1" Float64 DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -65,7 +67,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.skus
     "updated_at" DateTime64(3, 'UTC'),
     "layers" Int32 DEFAULT 0,
     "cases_per_layer" Int32 DEFAULT 0,
-    "handling_unit_type" String DEFAULT 0
+    "handling_unit_type" String DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -96,7 +100,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.products
     "text_tag1" String DEFAULT 0,
     "text_tag2" String DEFAULT 0,
     "num_tag1" Int32 DEFAULT 0,
-    "num_tag2" Int32 DEFAULT 0
+    "num_tag2" Int32 DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -111,7 +117,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.sub_categories
     "description" String DEFAULT 0,
     "active" Nullable(Bool),
     "created_at" DateTime64(3, 'UTC') DEFAULT 0,
-    "updated_at" DateTime64(3, 'UTC') DEFAULT 0
+    "updated_at" DateTime64(3, 'UTC') DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -126,7 +134,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.categories
     "description" String DEFAULT 0,
     "active" Nullable(Bool),
     "created_at" DateTime64(3, 'UTC') DEFAULT 0,
-    "updated_at" DateTime64(3, 'UTC') DEFAULT 0
+    "updated_at" DateTime64(3, 'UTC') DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -139,7 +149,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.classifications
     "type" String,
     "value" String DEFAULT 0,
     "created_at" DateTime64(3, 'UTC') DEFAULT 0,
-    "updated_at" DateTime64(3, 'UTC') DEFAULT 0
+    "updated_at" DateTime64(3, 'UTC') DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -163,7 +175,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.node_overrides
     "l2_units" Int32 DEFAULT 0,
     "layers" Int32 DEFAULT 0,
     "cases_per_layer" Int32 DEFAULT 0,
-    "handling_unit_type" String DEFAULT 0
+    "handling_unit_type" String DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -176,7 +190,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.node_override_classifications
     "type" String,
     "value" String DEFAULT 0,
     "created_at" DateTime64(3, 'UTC') DEFAULT 0,
-    "updated_at" DateTime64(3, 'UTC') DEFAULT 0
+    "updated_at" DateTime64(3, 'UTC') DEFAULT 0,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -188,7 +204,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_classifications (
     "type" String,
     "value" String DEFAULT 0,
     "created_at" DateTime64(3, 'UTC'),
-    "updated_at" DateTime64(3, 'UTC')
+    "updated_at" DateTime64(3, 'UTC'),
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -203,7 +221,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_overrides (
     "order_lot" Int32 DEFAULT 0,
     "active" Bool DEFAULT False,
     "created_at" DateTime64(3, 'UTC'),
-    "updated_at" DateTime64(3, 'UTC')
+    "updated_at" DateTime64(3, 'UTC'),
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -215,7 +235,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_override_classifications
     "type" String,
     "value" String DEFAULT 0,
     "created_at" DateTime64(3, 'UTC'),
-    "updated_at" DateTime64(3, 'UTC')
+    "updated_at" DateTime64(3, 'UTC'),
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -229,7 +251,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.category_groups (
     "description" String DEFAULT 0,
     "active" Bool DEFAULT False,
     "created_at" DateTime64(3, 'UTC'),
-    "updated_at" DateTime64(3, 'UTC')
+    "updated_at" DateTime64(3, 'UTC'),
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -240,7 +264,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.default_values (
     "sku_shelf_life" Int32 DEFAULT 0,
     "created_at" DateTime64(3, 'UTC'),
     "updated_at" DateTime64(3, 'UTC'),
-    "id" UUID
+    "id" UUID,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -254,7 +280,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.sub_brands (
     "brand_id" UUID,
     "active" Bool DEFAULT False,
     "created_at" DateTime64(3, 'UTC'),
-    "updated_at" DateTime64(3, 'UTC')
+    "updated_at" DateTime64(3, 'UTC'),
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -268,7 +296,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.brands (
     "brand_owner_id" UUID,
     "active" Bool,
     "created_at" DateTime64(3, 'UTC'),
-    "updated_at" DateTime64(3, 'UTC')
+    "updated_at" DateTime64(3, 'UTC'),
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
@@ -279,7 +309,9 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.eans (
     "uom_id" UUID,
     "code" String,
     "created_at" DateTime64(3, 'UTC'),
-    "updated_at" DateTime64(3, 'UTC')
+    "updated_at" DateTime64(3, 'UTC'),
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
