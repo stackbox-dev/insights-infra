@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_insights.storage_bin_summary
     clientQuality LowCardinality(String),
     inventoryVisible Bool,
     erpToWMS Bool,
-    sd_code String,
+    sd_code String DEFAULT 0,
     usage LowCardinality(String) DEFAULT 0,
     multiTrip Bool,
     sd_description String,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_insights.storage_bin_summary
     bin_mapping String DEFAULT 'DYNAMIC',
 )
 ENGINE = ReplacingMergeTree()
-ORDER BY ("whId", "bin_code", "quality");
+ORDER BY ("whId", "bin_code", "quality","sd_code");
 
 CREATE TABLE IF NOT EXISTS sbx_uat_insights.inventory 
 (
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_insights.inventory
     "huWeight" Float64 DEFAULT 0,
     "huOnHold" Bool,
     "huRendered" Bool,
-    "huLockTaskId" Nullable(UUID),
+    "huLockTaskId" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "isBinHu" Bool,
     "areaType" String DEFAULT 0,
     "areaCode" String DEFAULT 0,
@@ -94,13 +94,13 @@ CREATE TABLE IF NOT EXISTS sbx_uat_insights.inventory
     "categoryGroup" String,
     "skuClassification" String,
     "plantCode" String DEFAULT 0,
-    "brand" String,
+    "brand" String Default 0,
     "bucket" String,
     "inclusionStatus" String,
     "uom" String,
     "batch" String DEFAULT 0,
-    "manufactureDate" Date DEFAULT 0,
-    "expiryDate" Date DEFAULT 0,
+    "manufactureDate" Date DEFAULT toDate('1970-01-01'),
+    "expiryDate" Date DEFAULT toDate('1970-01-01'),
     "price" String DEFAULT 0,
     "quantLockMode" String,
     "qty" Int32 NOT NULL,
@@ -108,12 +108,16 @@ CREATE TABLE IF NOT EXISTS sbx_uat_insights.inventory
     "huUpdatedAt" DateTime64(3, 'UTC') DEFAULT 0,
     "quantUpdatedAt" DateTime64(3, 'UTC') DEFAULT 0,
     "updatedAt" DateTime64(3, 'UTC') DEFAULT 0,
-    "binTypeId" Nullable(UUID),
+    "binTypeId" UUID DEFAULT '00000000-0000-0000-0000-000000000000',
     "usage" Float64 DEFAULT 0,
     "huCountBlocked" bool DEFAULT false,
+    is_deleted Bool DEFAULT 0,
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (id);
+ORDER BY (id)
+TTL deleted_at + INTERVAL 1 MINUTE DELETE
+   WHERE is_deleted = 1;
 
 CREATE TABLE IF NOT EXISTS sbx_uat_insights.pick_drop_item_summary
 (

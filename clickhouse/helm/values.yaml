@@ -818,7 +818,7 @@ tls:
 service:
   ## @param service.type ClickHouse service type
   ##
-  type: ClusterIP
+  type: LoadBalancer
   ## @param service.ports.http ClickHouse service HTTP port
   ## @param service.ports.https ClickHouse service HTTPS port
   ## @param service.ports.tcp ClickHouse service TCP port

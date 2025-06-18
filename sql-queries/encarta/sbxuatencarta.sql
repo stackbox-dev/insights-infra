@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.uoms 
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_uoms 
 (
     "id" UUID,
     "principal_id" Int64,
@@ -33,7 +33,7 @@ ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.skus 
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_skus 
 (
     "id" UUID,
     "principal_id" Int64,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.skus
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.products 
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_products 
 (
     "id" UUID,
     "principal_id" Int64,
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.products
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.sub_categories 
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_sub_categories 
 (
     "id" UUID,
     "principal_id" Int64,
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.sub_categories
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.categories 
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_categories 
 (
     "id" UUID,
     "principal_id" Int64,
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.categories
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.classifications 
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_classifications 
 (
     "id" UUID,
     "principal_id" Int64,
@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.classifications
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.node_overrides 
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_node_overrides 
 (
     "id" UUID,
     "principal_id" Int64,
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.node_overrides
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.node_override_classifications
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_node_override_classifications
 (
     "id" UUID,
     "principal_id" Int64,
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.node_override_classifications
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_classifications (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_product_classifications (
     "id" UUID,
     "principal_id" Int64,
     "product_id" UUID,
@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_classifications (
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_overrides (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_product_node_overrides (
     "id" UUID,
     "principal_id" Int64,
     "node_id" Int64,
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_overrides (
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_override_classifications (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_product_node_override_classifications (
     "id" UUID,
     "principal_id" Int64,
     "node_override_id" UUID,
@@ -242,7 +242,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.product_node_override_classifications
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.category_groups (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_category_groups (
     "id" UUID,
     "principal_id" Int64,
     "business_unit_id" UUID,
@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.category_groups (
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.default_values (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_default_values (
     "principal_id" Int64,
     "node_id" Int64,
     "sku_shelf_life" Int32 DEFAULT 0,
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.default_values (
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.sub_brands (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_sub_brands (
     "id" UUID,
     "principal_id" Int64,
     "code" String,
@@ -287,7 +287,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.sub_brands (
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.brands (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_brands (
     "id" UUID,
     "principal_id" Int64,
     "code" String,
@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_encarta.brands (
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_encarta.eans (
+CREATE TABLE IF NOT EXISTS sbx_uat.encarta_eans (
     "id" UUID,
     "principal_id" Int64,
     "uom_id" UUID,

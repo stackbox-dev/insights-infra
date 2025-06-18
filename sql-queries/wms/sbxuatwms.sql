@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor_position
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_dockdoor_position
 (
     id UUID,
     whId Int64,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor_position
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_dockdoor
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_bin_dockdoor
 (
     id UUID,
     whId Int64,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_dockdoor
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_dockdoor
 (
     id UUID,
     whId Int64,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_dockdoor
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_bin
 (
     id UUID,
     whId Int64,
@@ -85,7 +85,7 @@ ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_type
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_bin_type
 (
     id UUID,
     whId Int64,
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_type
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_zone
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_zone
 (
     id UUID,
     whId Int64,
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_zone
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area_sloc
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_area_sloc
 (
     whId Int64,
     id UUID,
@@ -148,7 +148,7 @@ ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_area
 (
     id UUID,
     whId Int64,
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_area
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_position
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_position
 (
     id UUID,
     whId Int64,
@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_position
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.inventory 
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_inventory 
 (
     "whId" Int64,
     "id" UUID,
@@ -232,12 +232,12 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inventory
     "usage" Float64 DEFAULT 0,
     "huCountBlocked" bool DEFAULT false,
     "is_deleted" Bool DEFAULT 0,
-    deleted_at DateTime DEFAULT now(); 
+    deleted_at DateTime DEFAULT now()
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_fixed_mapping (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_storage_bin_fixed_mapping (
     "id" UUID,
     "whId" Int64,
     "binId" UUID,
@@ -252,7 +252,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.storage_bin_fixed_mapping (
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_drop_item
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_pd_drop_item
 (
     "id" UUID,
     "whId" Int64,
@@ -324,7 +324,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_drop_item
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.task 
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_task 
 (
     "whId" Int64,
     "id" UUID,
@@ -352,7 +352,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.task
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.handling_unit 
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_handling_unit 
 (
     "whId" Int64,
     "id" UUID,
@@ -373,7 +373,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.handling_unit
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.worker 
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_worker 
 (
     "whId" Int64,
     "id" UUID,
@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.worker
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.session
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_session
 (
     "whId" Int64,
     "id" UUID,
@@ -415,7 +415,7 @@ ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_item
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_pd_pick_item
 (
     "id" UUID,
     "whId" Int64,
@@ -495,7 +495,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_item
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_drop_mapping (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_pd_pick_drop_mapping (
     "id" UUID,
     "whId" Int64,
     "sessionId" UUID,
@@ -509,7 +509,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.pd_pick_drop_mapping (
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_trip
 (
     sessionCreatedAt DateTime64(3, 'UTC'),
     whId Int64,
@@ -532,7 +532,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip
 ENGINE = ReplacingMergeTree(sessionCreatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip_relation
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_trip_relation
 (
     whId Int64,
     id UUID,
@@ -546,7 +546,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.trip_relation
 ENGINE = ReplacingMergeTree()
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_receive_item (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_inb_receive_item (
     "whId" Int64,
     "sessionId" UUID,
     "taskId" UUID,
@@ -588,7 +588,7 @@ ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
 
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.ob_load_item (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_ob_load_item (
     "whId" Int64,
     "id" UUID,
     "sessionId" UUID,
@@ -630,7 +630,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.ob_load_item (
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_palletization_item (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_inb_palletization_item (
     "id" UUID,
     "whId" Int64,
     "sessionId" UUID,
@@ -666,7 +666,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_palletization_item (
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_serialization_item (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_inb_serialization_item (
     "id" UUID,
     "whId" Int64,
     "sessionId" UUID,
@@ -702,7 +702,7 @@ ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id);
 
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.inb_qc_item_v2 (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_inb_qc_item_v2 (
     "id" UUID,
     "whId" Int64,
     "sessionId" UUID,
@@ -745,7 +745,7 @@ ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.ira_bin_items (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_ira_bin_items (
     "id" UUID,
     "whId" Int64,
     "sessionId" UUID,
@@ -784,7 +784,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_wms.ira_bin_items (
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_wms.ob_qa_lineitem (
+CREATE TABLE IF NOT EXISTS sbx_uat.wms_ob_qa_lineitem (
     "id" UUID,
     "whId" Int64,
     "sessionId" UUID,

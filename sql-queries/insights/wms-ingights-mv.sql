@@ -61,16 +61,16 @@ SELECT
     sb.status AS sb_status,
     sbt.active AS sbt_active,
 if(sbfm.active = 'true' , 'FIXED','DYNAMIC') AS bin_mapping
-FROM sbx_uat_wms.storage_bin AS sb
-LEFT JOIN sbx_uat_wms.storage_bin_fixed_mapping sbfm on sb.id=sbfm."binId"
-LEFT JOIN sbx_uat_wms.storage_bin_type sbt ON sb."binTypeId" = sbt.id
-LEFT JOIN sbx_uat_wms.storage_zone sz ON sb."zoneId" = sz.id
-LEFT JOIN sbx_uat_wms.storage_area sa ON sz."areaId" = sa.id
-LEFT JOIN sbx_uat_wms.storage_position ss ON ss."storageId" = sb.id
-LEFT JOIN sbx_uat_wms.storage_area_sloc sac ON sa."whId" = sac."whId" AND sa."code" = sac."areaCode"
-LEFT JOIN sbx_uat_wms.storage_bin_dockdoor sbd ON sb.id = sbd."binId"
-LEFT JOIN sbx_uat_wms.storage_dockdoor sd ON sbd."dockdoorId" = sd.id
-LEFT JOIN sbx_uat_wms.storage_dockdoor_position sdp ON sd."id" = sdp."dockdoorId";
+FROM sbx_uat.wms_storage_bin AS sb
+LEFT JOIN sbx_uat.wms_storage_bin_fixed_mapping sbfm on sb.id=sbfm."binId"
+LEFT JOIN sbx_uat.wms_storage_bin_type sbt ON sb."binTypeId" = sbt.id
+LEFT JOIN sbx_uat.wms_storage_zone sz ON sb."zoneId" = sz.id
+LEFT JOIN sbx_uat.wms_storage_area sa ON sz."areaId" = sa.id
+LEFT JOIN sbx_uat.wms_storage_position ss ON ss."storageId" = sb.id
+LEFT JOIN sbx_uat.wms_storage_area_sloc sac ON sa."whId" = sac."whId" AND sa."code" = sac."areaCode"
+LEFT JOIN sbx_uat.wms_storage_bin_dockdoor sbd ON sb.id = sbd."binId"
+LEFT JOIN sbx_uat.wms_storage_dockdoor sd ON sbd."dockdoorId" = sd.id
+LEFT JOIN sbx_uat.wms_storage_dockdoor_position sdp ON sd."id" = sdp."dockdoorId";
 
 
 CREATE MATERIALIZED VIEW sbx_uat_insights.mv_inventory
@@ -123,4 +123,6 @@ SELECT
     "binTypeId",
     "usage",
     "huCountBlocked",
-FROM sbx_uat_wms.inventory;
+    "is_deleted",
+    "deleted_at"
+FROM sbx_uat.wms_inventory;

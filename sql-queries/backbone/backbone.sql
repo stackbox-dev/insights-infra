@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS sbx_uat_backbone.node
+CREATE TABLE IF NOT EXISTS sbx_uat.backbone_node
 (
     "id" Int64,
     "parentId" Int64,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS sbx_uat_backbone.node
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id);
 
-CREATE TABLE IF NOT EXISTS sbx_uat_backbone.node_closure
+CREATE TABLE IF NOT EXISTS sbx_uat.backbone_node_closure
 (
     "parentId" Int64,
     "childId" Int64,
