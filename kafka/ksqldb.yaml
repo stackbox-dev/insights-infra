@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ksqldb
+  namespace: kafka
+  labels:
+    app: ksqldb
+  annotations:
+      configmap.reloader.stakater.com/reload: token-config
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ksqldb
+  template:
+    metadata:
+      labels:
+        app: ksqldb
+    spec:
+      nodeSelector:
+        instance_type: kafka-genral
+      tolerations:
+        - key: "instance_type"
+          operator: "Equal"
+          value: "kafka-genral"
+          effect: "NoSchedule"
+      serviceAccountName: kafka-sa
+      containers:
+        - name: ksqldb-cli
+          image: confluentinc/cp-ksqldb-cli:8.0.0
+          command: ["/bin/sh"]
+          tty: true
+          stdin: true
+          resources:
+            limits:
+              cpu: 2
+              memory: 3Gi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+        - name: ksqldb
+          image: confluentinc/cp-ksqldb-server:8.0.0
+          ports:
+            - containerPort: 8088
+          resources:
+            limits:
+              cpu: 2
+              memory: 3Gi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+          env:
+            - name: KSQL_BOOTSTRAP_SERVERS
+              value: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
+            - name: KSQL_LISTENERS
+              value: http://0.0.0.0:8088/
+            - name: KSQL_KSQL_SERVICE_ID
+              value: "default_"
+            - name: KSQL_KSQL_SINK_REPLICAS
+              value: "3"
+            - name: KSQL_KSQL_STREAMS_REPLICATION_FACTOR
+              value: "3"
+            - name: KSQL_KSQL_INTERNAL_TOPIC_REPLICAS
+              value: "3"
+            - name: ACCESS_TOKEN
+              valueFrom:
+                configMapKeyRef:
+                  name: token-config
+                  key: token
+            - name: KSQL_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: KSQL_SASL_MECHANISM
+              value: "PLAIN"
+            - name: KSQL_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ksqldb
+  namespace: kafka
+spec:
+  selector:
+    app: ksqldb
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8088
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ksqldb-ui
+  namespace: kafka
+  labels:
+    app: ksqldb-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ksqldb-ui
+  template:
+    metadata:
+      labels:
+        app: ksqldb-ui
+    spec:
+      nodeSelector:
+        instance_type: kafka-genral
+      tolerations:
+        - key: "instance_type"
+          operator: "Equal"
+          value: "kafka-genral"
+          effect: "NoSchedule"
+      serviceAccountName: kafka-sa
+      containers:
+        - name: ksqldb-ui
+          image: deniskrumko/ksqldb-ui:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 3Gi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+          env:
+            - name: KSQLDB_UI__SERVERS__LOCALHOST__URL
+              value: "http://ksqldb:80"
+            - name: KSQLDB_UI__SERVERS__LOCALHOST__TOPIC_LINK
+              value: http://kafka-ui.kafka/ui/clusters/sbx-kafka-cluster/topics/{}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ksqldb-ui
+  namespace: kafka
+spec:
+  selector:
+    app: ksqldb-ui
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+---
