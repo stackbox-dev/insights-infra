@@ -1,3 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ksqldb-pvc
+  namespace: kafka
+spec:
+  storageClassName: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi 
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -5,8 +18,6 @@ metadata:
   namespace: kafka
   labels:
     app: ksqldb
-  annotations:
-      configmap.reloader.stakater.com/reload: token-config
 spec:
   replicas: 2
   selector:
@@ -26,6 +37,17 @@ spec:
           effect: "NoSchedule"
       serviceAccountName: kafka-sa
       containers:
+        - name: kafka-auth-server
+          image: shivamsbx/kafka-sasl@sha256:c7effb7b55aa487075e48b0b6b2c1822984f99c7a812be3cdb3cc181fcbbc398
+          ports:
+            - containerPort: 14293
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 10m
+              memory: 10Mi
         - name: ksqldb-cli
           image: confluentinc/cp-ksqldb-cli:8.0.0
           command: ["/bin/sh"]
@@ -44,11 +66,11 @@ spec:
             - containerPort: 8088
           resources:
             limits:
-              cpu: 2
+              cpu: 2000m
               memory: 3Gi
             requests:
-              cpu: 50m
-              memory: 50Mi
+              cpu: 200m
+              memory: 500Mi
           env:
             - name: KSQL_BOOTSTRAP_SERVERS
               value: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
@@ -62,6 +84,8 @@ spec:
               value: "3"
             - name: KSQL_KSQL_INTERNAL_TOPIC_REPLICAS
               value: "3"
+            - name: KSQL_KSQL_SCHEMA_REGISTRY_URL
+              value: http://cp-schema-registry
             - name: ACCESS_TOKEN
               valueFrom:
                 configMapKeyRef:
@@ -70,9 +94,24 @@ spec:
             - name: KSQL_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: KSQL_SASL_MECHANISM
-              value: "PLAIN"
+              value: "OAUTHBEARER"
             - name: KSQL_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: KSQL_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            - name: KSQL_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
+            - name: KAFKA_OPTS
+              value: "-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=http://localhost:14293"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=http://localhost:14293"
+          volumeMounts:     
+            - name: ksqldb-storage
+              mountPath: /var/lib/ksqldb/data
+      volumes:
+        - name: ksqldb-storage
+          persistentVolumeClaim:
+            claimName: ksqldb-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -128,6 +167,10 @@ spec:
             - name: KSQLDB_UI__SERVERS__LOCALHOST__URL
               value: "http://ksqldb:80"
             - name: KSQLDB_UI__SERVERS__LOCALHOST__TOPIC_LINK
+              value: http://kafka-ui.kafka/ui/clusters/sbx-kafka-cluster/topics/{}
+            - name: KSQLDB_UI__SERVERS__GCP__URL
+              value: "http://ksqldb:80"
+            - name: KSQLDB_UI__SERVERS__GCP__TOPIC_LINK
               value: http://kafka-ui.kafka/ui/clusters/sbx-kafka-cluster/topics/{}
 ---
 apiVersion: v1

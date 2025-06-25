@@ -5,8 +5,6 @@ metadata:
   namespace: kafka
   labels:
     app: cp-connect
-  annotations:
-      configmap.reloader.stakater.com/reload: token-config
 spec:
   replicas: 2
   selector:
@@ -26,13 +24,24 @@ spec:
           effect: "NoSchedule"
       serviceAccountName: kafka-sa
       containers:
+        - name: kafka-auth-server
+          image: shivamsbx/kafka-sasl@sha256:c7effb7b55aa487075e48b0b6b2c1822984f99c7a812be3cdb3cc181fcbbc398
+          ports:
+            - containerPort: 14293
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 10m
+              memory: 10Mi
         - name: cp-connect
           image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-replication-kafka-connect:latest
           ports:
             - containerPort: 8083
           resources:
             limits:
-              cpu: 4
+              cpu: 3000m
               memory: 3Gi
             requests:
               cpu: 250m
@@ -69,35 +78,50 @@ spec:
               value: "org.apache.kafka.connect.json.JsonConverter"
             - name: CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY
               value: "All"
-            - name: ACCESS_TOKEN
-              valueFrom:
-                configMapKeyRef:
-                  name: token-config
-                  key: token
+
+            # RBAC
             - name: CONNECT_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: CONNECT_SASL_MECHANISM
-              value: "PLAIN"
+              value: "OAUTHBEARER"
             - name: CONNECT_SASL_JAAS_CONFIG
-              value:  "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            - name: CONNECT_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
+            
+            # For consumers
             - name: CONNECT_CONSUMER_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: CONNECT_CONSUMER_SASL_MECHANISM
-              value: "PLAIN"
+              value: "OAUTHBEARER"
             - name: CONNECT_CONSUMER_SASL_JAAS_CONFIG
-              value:  "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_CONSUMER_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+  
+            # For producers
             - name: CONNECT_PRODUCER_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: CONNECT_PRODUCER_SASL_MECHANISM
-              value: "PLAIN"
+              value: "OAUTHBEARER"
             - name: CONNECT_PRODUCER_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
-            - name:  CONNECT_ADMIN_SECURITY_PROTOCOL
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_PRODUCER_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            
+            # For admin
+            - name: CONNECT_ADMIN_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: CONNECT_ADMIN_SASL_MECHANISM
-              value: "PLAIN"
+              value: "OAUTHBEARER"
             - name: CONNECT_ADMIN_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_ADMIN_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            - name: CONNECT_ADMIN_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
 ---
 apiVersion: v1
 kind: Service

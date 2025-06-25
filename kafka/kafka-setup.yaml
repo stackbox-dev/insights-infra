@@ -5,8 +5,6 @@ metadata:
   namespace: kafka
   labels:
     app: cp-schema-registry
-  annotations:
-      configmap.reloader.stakater.com/reload: token-config
 spec:
   replicas: 1
   selector:
@@ -24,7 +22,19 @@ spec:
           operator: "Equal"
           value: "kafka-genral"
           effect: "NoSchedule"
+      serviceAccountName: kafka-sa
       containers:
+        - name: kafka-auth-server
+          image: shivamsbx/kafka-sasl@sha256:c7effb7b55aa487075e48b0b6b2c1822984f99c7a812be3cdb3cc181fcbbc398
+          ports:
+            - containerPort: 14293
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 10m
+              memory: 10Mi
         - name: cp-schema-registry
           image: confluentinc/cp-schema-registry:7.7.1
           ports:
@@ -43,17 +53,16 @@ spec:
               value: cp-schema-registry
             - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
               value: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
-            - name: ACCESS_TOKEN
-              valueFrom:
-                configMapKeyRef:
-                  name: token-config
-                  key: token
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
             - name: SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM
-              value: "PLAIN"
+              value: "OAUTHBEARER"
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
             - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
 ---
 apiVersion: v1
 kind: Service
@@ -67,82 +76,6 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8081
-# ---
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: cp-control-center
-#   namespace: kafka
-#   labels:
-#     app: cp-control-center
-# spec:
-#   replicas: 1
-#   selector:
-#     matchLabels:
-#       app: cp-control-center
-#   template:
-#     metadata:
-#       labels:
-#         app: cp-control-center
-#     spec:
-#       nodeSelector:
-#         instance_type: kafka-genral
-#       tolerations:
-#         - key: "instance_type"
-#           operator: "Equal"
-#           value: "kafka-genral"
-#           effect: "NoSchedule"
-#       containers:
-#         - name: cp-control-center
-#           image: confluentinc/cp-enterprise-control-center:7.7.1
-#           ports:
-#             - containerPort: 9021
-#           resources:
-#             requests:
-#               memory: "100Mi"
-#               cpu: "50m"
-#             limits:
-#               memory: "2Gi"
-#               cpu: "1"
-#           env:
-#             - name: CONTROL_CENTER_BOOTSTRAP_SERVERS
-#               value: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
-#             - name: CONTROL_CENTER_REST_LISTENERS
-#               value: http://0.0.0.0:9021
-#             - name: SCHEMA_REGISTRY_URL
-#               value: "http://cp-schema-registry"
-#             - name: CONTROL_CENTER_SCHEMA_REGISTRY_URL
-#               value: "http://cp-schema-registry"
-#             - name: CONTROL_CENTER_CONNECT_CONNECT1_CLUSTER
-#               value: "http://cp-connect"
-#             - name: CONTROL_CENTER_REPLICATION_FACTOR
-#               value: "1"
-#             - name: CONTROL_CENTER_CONNECT_HEALTHCHECK_ENDPOINT
-#               value: "/connectors"
-            # - name: ACCESS_TOKEN
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: access-token
-            #       key: token
-            # - name: CONTROL_CENTER_STREAMS_SECURITY_PROTOCOL
-            #   value: "SASL_SSL"
-#             - name: CONTROL_CENTER_STREAMS_SASL_MECHANISM
-#               value: "PLAIN"
-#             - name: CONTROL_CENTER_STREAMS_SASL_JAAS_CONFIG
-#               value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
-# ---
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: cp-control-center
-#   namespace: kafka
-# spec:
-#   selector:
-#     app: cp-control-center
-#   ports:
-#     - protocol: TCP
-#       port: 80
-#       targetPort: 9021
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -151,8 +84,6 @@ metadata:
   namespace: kafka
   labels:
     app: kafka-ui
-  annotations:
-      configmap.reloader.stakater.com/reload: token-config
 spec:
   replicas: 1
   selector:
@@ -170,7 +101,19 @@ spec:
           operator: "Equal"
           value: "kafka-genral"
           effect: "NoSchedule"
+      serviceAccountName: kafka-sa
       containers:
+        - name: kafka-auth-server
+          image: shivamsbx/kafka-sasl@sha256:c7effb7b55aa487075e48b0b6b2c1822984f99c7a812be3cdb3cc181fcbbc398
+          ports:
+            - containerPort: 14293
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 10m
+              memory: 10Mi
         - name: kafka-ui
           image: provectuslabs/kafka-ui:latest
           ports:
@@ -189,17 +132,16 @@ spec:
               value: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
             - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
               value: http://cp-schema-registry
-            - name: ACCESS_TOKEN
-              valueFrom:
-                configMapKeyRef:
-                  name: token-config
-                  key: token
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM
-              value: "PLAIN"
+              value: "OAUTHBEARER"
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka-sa@sbx-stag.iam.gserviceaccount.com\" password=\"$(ACCESS_TOKEN)\";"
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"     
 ---
 apiVersion: v1
 kind: Service
