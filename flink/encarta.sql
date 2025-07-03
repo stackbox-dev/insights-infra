@@ -88,12 +88,13 @@ CREATE TABLE `sbx-uat.encarta.public.skus_denormalized` (
     brand_name STRING,
     brand_description STRING,
     brand_owner_id STRING,
-    brand_active BOOLEAN
+    brand_active BOOLEAN,
+    -- Primary Key
+    PRIMARY KEY (sku_id) NOT ENFORCED
 ) WITH (
     'connector' = 'confluent',
     'value.format' = 'avro-registry'
 );
-
 -- Continuously populate the denormalized table
 INSERT INTO `sbx-uat.encarta.public.skus_denormalized`
 SELECT -- SKU fields
