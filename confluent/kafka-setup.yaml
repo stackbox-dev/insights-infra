@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  namespace: kafka
+  labels:
+    app: kafka-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+    spec:
+      nodeSelector:
+        instance_type: kafka-genral
+      tolerations:
+        - key: "instance_type"
+          operator: "Equal"
+          value: "kafka-genral"
+          effect: "NoSchedule"
+      serviceAccountName: kafka-sa
+      containers:
+        - name: kafka-ui
+          image: provectuslabs/kafka-ui:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "50Mi"
+              cpu: "50m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          env:
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: "services-1-staging"
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              value: "pkc-41p56.asia-south1.gcp.confluent.cloud:9092"
+            - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
+              value: "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud"
+            - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRYAUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: schema-registry-credentials
+                  key: username
+            - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRYAUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: schema-registry-credentials
+                  key: password
+            - name: CLUSTER_USER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: confluent-cloud-credentials
+                  key: username
+            - name: CLUSTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: confluent-cloud-credentials
+                  key: password
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM
+              value: "PLAIN"
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+  namespace: kafka
+spec:
+  selector:
+    app: kafka-ui
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

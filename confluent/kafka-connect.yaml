@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cp-connect
+  namespace: kafka
+  labels:
+    app: cp-connect
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cp-connect
+  template:
+    metadata:
+      labels:
+        app: cp-connect
+    spec:
+      nodeSelector:
+        instance_type: kafka-genral
+      tolerations:
+        - key: "instance_type"
+          operator: "Equal"
+          value: "kafka-genral"
+          effect: "NoSchedule"
+      serviceAccountName: kafka-sa
+      containers:
+        - name: cp-connect
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-replication-kafka-connect:latest
+          ports:
+            - containerPort: 8083
+          resources:
+            limits:
+              cpu: 3000m
+              memory: 3Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          env:
+            - name: CONNECT_BOOTSTRAP_SERVERS
+              value: "pkc-41p56.asia-south1.gcp.confluent.cloud:9092"
+            - name: CONNECT_REST_PORT
+              value: "8083"
+            - name: CONNECT_GROUP_ID
+              value: "connect-cluster"
+            - name: CONNECT_PRODUCER_CLIENT_ID
+              value: "connect-worker-producer"
+            - name: CONNECT_PRODUCER_ENABLE_IDEMPOTENCE
+              value: "true"
+            - name: CONNECT_CONFIG_STORAGE_TOPIC
+              value: "connect-configs"
+            - name: CONNECT_OFFSET_STORAGE_TOPIC
+              value: "connect-offsets"
+            - name: CONNECT_STATUS_STORAGE_TOPIC
+              value: "connect-status"
+            - name: CONNECT_REST_ADVERTISED_HOST_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: KAFKA_JVM_PERFORMANCE_OPTS
+              value: "-server -XX:+UseG1GC -XX:GCTimeRatio=1
+                -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20
+                -XX:MaxGCPauseMillis=10000 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent
+                -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
+            - name: CONNECT_KEY_CONVERTER
+              value: "io.confluent.connect.avro.AvroConverter"
+            - name: CONNECT_VALUE_CONVERTER
+              value: "io.confluent.connect.avro.AvroConverter"
+            - name: CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY
+              value: "All"
+            - name: CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL
+              value: "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud"
+            - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL
+              value: "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud" 
+            - name: CONNECT_VALUE_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE
+              value: "USER_INFO"
+            - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO
+              valueFrom:
+                secretKeyRef:
+                  name: schema-registry-credentials
+                  key: credentials
+            - name: SCHEMAREGISTRYAUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: schema-registry-credentials
+                  key: username
+            - name: SCHEMAREGISTRYAUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: schema-registry-credentials
+                  key: password
+            - name: CLUSTER_USER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: confluent-cloud-credentials
+                  key: username
+            - name: CLUSTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: confluent-cloud-credentials
+                  key: password
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: debezium-pg-pass
+                  key: password
+            
+            # RBAC
+            - name: CONNECT_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_SASL_MECHANISM
+              value: "PLAIN"
+            - name: CONNECT_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+            - name: CONNECT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: "https"
+            
+            # For consumers
+            - name: CONNECT_CONSUMER_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_CONSUMER_SASL_MECHANISM
+              value: "PLAIN"
+            - name: CONNECT_CONSUMER_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+            - name: CONNECT_CONSUMER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: "https"
+              
+            # For producers
+            - name: CONNECT_PRODUCER_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_PRODUCER_SASL_MECHANISM
+              value: "PLAIN"
+            - name: CONNECT_PRODUCER_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+            - name: CONNECT_PRODUCER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: "https"
+
+            # For admin
+            - name: CONNECT_ADMIN_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_ADMIN_SASL_MECHANISM
+              value: "PLAIN"
+            - name: CONNECT_ADMIN_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+            - name: CONNECT_ADMIN_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: "https"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cp-connect
+  namespace: kafka
+spec:
+  selector:
+    app: cp-connect
+  ports:
+    - protocol: TCP
+      port: 8083
+      targetPort: 8083
