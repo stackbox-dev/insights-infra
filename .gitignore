@@ -2,3 +2,5 @@
 local.txt
 queries.sql
 *.png
+config.json
+sql-queries1

@@ -34,13 +34,13 @@ if ! ps -p $PORT_FORWARD_PID > /dev/null; then
 fi
 
 
-export DB_PASSWORD=$(kubectl get secret debezium-pg-pass -n kafka -o jsonpath='{.data.password}' | base64 --decode)
+export CLICKHOUSE_ADMIN_PASSWORD=$(kubectl get secret clickhouse-admin -n kafka -o jsonpath='{.data.password}' | base64 --decode)
 export SCHEMA_REGISTRY_AUTH=$(kubectl get secret schema-registry-credentials -n kafka -o jsonpath='{.data.credentials}' | base64 --decode)
 export CLUSTER_USER_NAME=$(kubectl get secret confluent-cloud-credentials -n kafka -o jsonpath='{.data.username}' | base64 --decode)
 export CLUSTER_PASSWORD=$(kubectl get secret confluent-cloud-credentials -n kafka -o jsonpath='{.data.password}' | base64 --decode)
 
 
-if [ -z "$DB_PASSWORD" ]; then
+if [ -z "$CLICKHOUSE_ADMIN_PASSWORD" ]; then
   echo "Error: DB_PASSWORD environment variable is not set"
   exit 1
 fi
@@ -61,33 +61,24 @@ if [ -z "$CLUSTER_PASSWORD" ]; then
 fi
 
 # The rest of the script uses these environment variables
-curl -X PUT http://localhost:8083/connectors/postgres-source-sbx-uat-backbone/config -H "Content-Type: application/json" \
--d '{
-      "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-      "database.hostname": "192.168.16.8",
-      "database.port": "5432",
-      "database.user": "debezium",
-      "database.password": "'"$DB_PASSWORD"'",
-      "database.dbname": "backbone",
-      "database.server.name": "postgres",
-      "plugin.name": "pgoutput",
-      "table.include.list": "public.node,public.node_closure", 
-      "database.history.kafka.topic": "schema-changes.postgres",
-      "publication.name": "dbz_publication",
-      "slot.name": "dbz2",
-      
-      "database.history.kafka.bootstrap.servers": "pkc-41p56.asia-south1.gcp.confluent.cloud:9092",
-      "topic.prefix": "sbx-uat.backbone",
-      "slot.drop.on.stop": false,
-      "schema.include.list": "public",
-      "publication.autocreate.mode": "disabled",
-      "tombstones.on.delete": true,
-      "provide.transaction.metadata": true,
-      "binary.handling.mode": "base64",
-      "snapshot.mode": "initial",
-      "incremental.snapshot.enabled": "true",
-      "snapshot.locking.mode": "shared",
-      "producer.compression.type": "lz4",
+curl -X PUT http://localhost:8083/connectors/clickhouse-connect/config -H "Content-Type: application/json" \
+-d  '{
+      "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
+      "tasks.max": "1",
+      "consumer.override.max.poll.records": "5000",
+      "consumer.override.max.partition.fetch.bytes": "5242880",
+      "database": "sbx_uat",
+      "errors.retry.timeout": "60",
+      "exactlyOnce": "false",
+      "hostname": "clickhouse-headless",
+      "port": "8123",
+      "username": "default",
+      "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
+      "topics": "sbx-uat.wms.public.inventory,sbx-uat.encarta.public.skus_master",
+      "value.converter.schemas.enable": "false",
+      "clickhouseSettings": "",
+      "topic2TableMap": "sbx-uat.wms.public.inventory=inventory,sbx-uat.encarta.public.skus_master=skus_master",
+
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "key.converter.schema.registry.url": "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud",
@@ -96,29 +87,10 @@ curl -X PUT http://localhost:8083/connectors/postgres-source-sbx-uat-backbone/co
       "value.converter.basic.auth.credentials.source": "USER_INFO",
       "key.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
       "value.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
-      "key.converter.basic.auth.user.info.configurable": "true",
-      "key.converter.schemas.enable": "true",
-      "value.converter.schemas.enable": "true",
-      "topic.creation.default.replication.factor": 3,
-      "topic.creation.default.partitions": 1,
-      "topic.creation.default.cleanup.policy": "compact",
-      "topic.creation.default.compression.type": "lz4",
-      "skipped.operations": "none",
-      "producer.override.metadata.max.age.ms": "20000",
-      "producer.override.request.timeout.ms": "30000",
-      "producer.override.retries": "10",
-      "producer.override.retry.backoff.ms": "1000",
-      "producer.override.delivery.timeout.ms": "120000",
 
-      "transforms": "unwrap,cast,renameDelete",
-      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-      "transforms.unwrap.drop.tombstones": "false",
-      "transforms.unwrap.delete.handling.mode": "rewrite",
-      "transforms.unwrap.add.fields": "__deleted",
-      "transforms.cast.type": "org.apache.kafka.connect.transforms.Cast$Value",
-      "transforms.cast.spec": "__deleted:boolean",
-      "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
-      "transforms.renameDelete.renames": "__deleted:is_deleted",
+      "errors.deadletterqueue.topic.name": "sbx-uat.wms.clickhouse-sink-dlq",
+      "errors.tolerance": "all",
+      "errors.log.enable": "true",
 
       "producer.security.protocol": "SASL_SSL",
       "producer.sasl.mechanism": "PLAIN",
@@ -132,6 +104,7 @@ curl -X PUT http://localhost:8083/connectors/postgres-source-sbx-uat-backbone/co
       "admin.sasl.mechanism": "PLAIN",
       "admin.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";"
 }'
+
 
 # Stop port forwarding
 echo "Stopping port forwarding..."
