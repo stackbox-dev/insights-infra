@@ -61,7 +61,7 @@ if [ -z "$CLUSTER_PASSWORD" ]; then
 fi
 
 # The rest of the script uses these environment variables
-curl -X PUT http://localhost:8083/connectors/postgres-source-sbx-uat-encarta/config -H "Content-Type: application/json" \
+curl -X PUT http://localhost:8083/connectors/source-sbx-uat-encarta/config -H "Content-Type: application/json" \
 -d '{
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
       "database.hostname": "192.168.16.8",
@@ -109,6 +109,7 @@ curl -X PUT http://localhost:8083/connectors/postgres-source-sbx-uat-encarta/con
       "producer.override.retries": "10",
       "producer.override.retry.backoff.ms": "1000",
       "producer.override.delivery.timeout.ms": "120000",
+      "time.precision.mode":"connect",
 
       "transforms": "unwrap,cast,renameDelete",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
