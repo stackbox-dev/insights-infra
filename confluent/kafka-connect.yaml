@@ -154,5 +154,59 @@ spec:
     app: cp-connect
   ports:
     - protocol: TCP
-      port: 8083
+      port: 80
       targetPort: 8083
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cp-connect-ui
+  namespace: kafka
+  labels:
+    app: cp-connect-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cp-connect-ui
+  template:
+    metadata:
+      labels:
+        app: cp-connect-ui
+    spec:
+      nodeSelector:
+        instance_type: kafka-genral
+      tolerations:
+        - key: "instance_type"
+          operator: "Equal"
+          value: "kafka-genral"
+          effect: "NoSchedule"
+      serviceAccountName: kafka-sa
+      containers:
+        - name: cp-connect-ui
+          image: landoop/kafka-connect-ui:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: 3000m
+              memory: 3Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          env:
+            - name: CONNECT_URL
+              value: "http://cp-connect"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cp-connect-ui
+  namespace: kafka
+spec:
+  selector:
+    app: cp-connect-ui
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
