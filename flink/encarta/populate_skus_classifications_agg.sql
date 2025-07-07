@@ -7,6 +7,7 @@ SELECT sc.sku_id,
         ),
         '{}'
     ) AS sku_classifications,
+    MIN(sc.created_at) AS created_at,
     MAX(sc.updated_at) AS updated_at
 FROM `sbx-uat.encarta.public.classifications` sc
 GROUP BY sc.sku_id;

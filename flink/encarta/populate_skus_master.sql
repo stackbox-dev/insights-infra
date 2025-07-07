@@ -1,6 +1,6 @@
 -- Optimized INSERT statement using materialized aggregation tables
+-- Uses regular LEFT JOINs for real-time latest data processing
 -- Source 'skus' table has proper PRIMARY KEY (id) NOT ENFORCED with changelog.mode = 'upsert'
--- This should resolve upsert key derivation issues
 INSERT INTO `sbx-uat.encarta.public.skus_master`
 SELECT s.id,
     -- Primary key from source matches target primary key
@@ -117,6 +117,7 @@ SELECT s.id,
     COALESCE(class_agg.classifications, '{}') AS classifications,
     COALESCE(prod_class_agg.product_classifications, '{}') AS product_classifications,
     COALESCE(s.is_deleted, FALSE) AS is_deleted,
+    s.created_at,
     s.updated_at
 FROM `sbx-uat.encarta.public.skus` s
     LEFT JOIN `sbx-uat.encarta.public.skus_uoms_agg` AS uom_agg ON s.id = uom_agg.sku_id

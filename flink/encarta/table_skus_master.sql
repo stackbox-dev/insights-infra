@@ -114,9 +114,10 @@ CREATE TABLE `sbx-uat.encarta.public.skus_master` (
     classifications VARCHAR NOT NULL,
     product_classifications VARCHAR NOT NULL,
     is_deleted BOOLEAN NOT NULL,
+    created_at TIMESTAMP_LTZ(3) NOT NULL,
     updated_at TIMESTAMP_LTZ(3) NOT NULL,
     PRIMARY KEY (id) NOT ENFORCED,
-    WATERMARK FOR updated_at AS updated_at - INTERVAL '5' SECOND
+    WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'confluent',
     'value.format' = 'avro-registry'

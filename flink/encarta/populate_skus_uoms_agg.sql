@@ -381,6 +381,7 @@ SELECT u.sku_id,
             WHEN u.hierarchy = 'L3' THEN u.num_tag1
         END
     ) AS l3_num_tag1,
+    MIN(u.created_at) AS created_at,
     MAX(u.updated_at) AS updated_at
 FROM `sbx-uat.encarta.public.uoms` u
 WHERE u.active = true
