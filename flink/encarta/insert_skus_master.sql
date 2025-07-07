@@ -1,6 +1,9 @@
 -- Optimized INSERT statement using materialized aggregation tables
+-- Source 'skus' table has proper PRIMARY KEY (id) NOT ENFORCED with changelog.mode = 'upsert'
+-- This should resolve upsert key derivation issues
 INSERT INTO `sbx-uat.encarta.public.skus_master`
 SELECT s.id,
+    -- Primary key from source matches target primary key
     s.principal_id,
     s.principal_id AS node_id,
     cat.code AS category,
@@ -110,17 +113,18 @@ SELECT s.id,
     uom_agg.l3_text_tag2,
     uom_agg.l3_image,
     uom_agg.l3_num_tag1,
-    s.active,
+    COALESCE(s.active, FALSE) AS active,
     COALESCE(class_agg.classifications, '{}') AS classifications,
     COALESCE(prod_class_agg.product_classifications, '{}') AS product_classifications,
-    s.is_deleted
+    COALESCE(s.is_deleted, FALSE) AS is_deleted,
+    s.updated_at
 FROM `sbx-uat.encarta.public.skus` s
-    LEFT JOIN `sbx-uat.encarta.public.products` FOR SYSTEM_TIME AS OF s.`$rowtime` AS p ON s.product_id = p.id
-    LEFT JOIN `sbx-uat.encarta.public.sub_categories` FOR SYSTEM_TIME AS OF s.`$rowtime` AS subcat ON p.sub_category_id = subcat.id
-    LEFT JOIN `sbx-uat.encarta.public.categories` FOR SYSTEM_TIME AS OF s.`$rowtime` AS cat ON subcat.category_id = cat.id
-    LEFT JOIN `sbx-uat.encarta.public.category_groups` FOR SYSTEM_TIME AS OF s.`$rowtime` AS cg ON cat.category_group_id = cg.id
-    LEFT JOIN `sbx-uat.encarta.public.sub_brands` FOR SYSTEM_TIME AS OF s.`$rowtime` AS sb ON p.sub_brand_id = sb.id
-    LEFT JOIN `sbx-uat.encarta.public.brands` FOR SYSTEM_TIME AS OF s.`$rowtime` AS b ON sb.brand_id = b.id
-    LEFT JOIN `sbx-uat.encarta.public.skus_uoms_agg` FOR SYSTEM_TIME AS OF s.`$rowtime` AS uom_agg ON s.id = uom_agg.sku_id
-    LEFT JOIN `sbx-uat.encarta.public.skus_classifications_agg` FOR SYSTEM_TIME AS OF s.`$rowtime` AS class_agg ON s.id = class_agg.sku_id
-    LEFT JOIN `sbx-uat.encarta.public.products_classifications_agg` FOR SYSTEM_TIME AS OF s.`$rowtime` AS prod_class_agg ON s.product_id = prod_class_agg.product_id;
+    LEFT JOIN `sbx-uat.encarta.public.skus_uoms_agg` AS uom_agg ON s.id = uom_agg.sku_id
+    LEFT JOIN `sbx-uat.encarta.public.skus_classifications_agg` AS class_agg ON s.id = class_agg.sku_id
+    LEFT JOIN `sbx-uat.encarta.public.products_classifications_agg` AS prod_class_agg ON s.product_id = prod_class_agg.product_id
+    LEFT JOIN `sbx-uat.encarta.public.products` AS p ON s.product_id = p.id
+    LEFT JOIN `sbx-uat.encarta.public.sub_categories` AS subcat ON p.sub_category_id = subcat.id
+    LEFT JOIN `sbx-uat.encarta.public.categories` AS cat ON subcat.category_id = cat.id
+    LEFT JOIN `sbx-uat.encarta.public.category_groups` AS cg ON cat.category_group_id = cg.id
+    LEFT JOIN `sbx-uat.encarta.public.sub_brands` AS sb ON p.sub_brand_id = sb.id
+    LEFT JOIN `sbx-uat.encarta.public.brands` AS b ON sb.brand_id = b.id;

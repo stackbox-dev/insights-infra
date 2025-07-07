@@ -1,6 +1,6 @@
 -- Materialized table for UOM aggregations backed by topic
 CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
-    sku_id VARCHAR,
+    sku_id VARCHAR NOT NULL,
     l0_units INT,
     l1_units INT,
     l2_units INT,
@@ -77,7 +77,9 @@ CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     l3_text_tag2 VARCHAR,
     l3_image VARCHAR,
     l3_num_tag1 DOUBLE PRECISION,
-    PRIMARY KEY (sku_id) NOT ENFORCED
+    updated_at TIMESTAMP_LTZ(3) NOT NULL,
+    PRIMARY KEY (sku_id) NOT ENFORCED,
+    WATERMARK FOR updated_at AS updated_at - INTERVAL '5' SECONDS
 ) WITH (
     'connector' = 'confluent',
     'value.format' = 'avro-registry'

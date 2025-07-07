@@ -1,8 +1,8 @@
 -- Create denormalized table structure
 CREATE TABLE `sbx-uat.encarta.public.skus_master` (
-    id VARCHAR,
-    principal_id BIGINT,
-    node_id BIGINT,
+    id VARCHAR NOT NULL,
+    principal_id BIGINT NOT NULL,
+    node_id BIGINT NOT NULL,
     category VARCHAR,
     product VARCHAR,
     category_group VARCHAR,
@@ -30,8 +30,8 @@ CREATE TABLE `sbx-uat.encarta.public.skus_master` (
     handling_unit_type VARCHAR,
     cases_per_layer INT,
     layers INT,
-    active_from VARCHAR,
-    active_till VARCHAR,
+    active_from TIMESTAMP_LTZ,
+    active_till TIMESTAMP_LTZ,
     l0_units INT,
     l1_units INT,
     l2_units INT,
@@ -110,11 +110,13 @@ CREATE TABLE `sbx-uat.encarta.public.skus_master` (
     l3_text_tag2 VARCHAR,
     l3_image VARCHAR,
     l3_num_tag1 DOUBLE PRECISION,
-    active BOOLEAN,
-    classifications VARCHAR,
-    product_classifications VARCHAR,
-    is_deleted BOOLEAN,
-    PRIMARY KEY (id) NOT ENFORCED
+    active BOOLEAN NOT NULL,
+    classifications VARCHAR NOT NULL,
+    product_classifications VARCHAR NOT NULL,
+    is_deleted BOOLEAN NOT NULL,
+    updated_at TIMESTAMP_LTZ(3) NOT NULL,
+    PRIMARY KEY (id) NOT ENFORCED,
+    WATERMARK FOR updated_at AS updated_at - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'confluent',
     'value.format' = 'avro-registry'

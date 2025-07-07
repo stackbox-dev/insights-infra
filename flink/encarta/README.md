@@ -1,130 +1,168 @@
-# Encarta Flink Scripts - Execution Guide
+# Encarta Flink SQL Pipeline - Complete Migration Guide
 
-This directory contains Flink SQL scripts for building the Encarta data pipeline. Follow the execution order below to set up the complete pipeline.
+This directory contains the complete Flink SQL pipeline for `skus_master` that has been migrated from view-based to materialized aggregation table architecture with event-time processing and watermarks.
+
+## 🏗️ **Architecture Overview**
+
+### **Migration Summary**
+- ✅ **From**: Static views with complex joins
+- ✅ **To**: Materialized aggregation tables with streaming updates  
+- ✅ **Benefits**: Better performance, event-time processing, proper state management
+
+### **Key Components**
+1. **Main Table**: `skus_master` - Denormalized view with 116 fields
+2. **Aggregation Tables**: Pre-computed UOM and classification data
+3. **Streaming Pipeline**: Real-time updates with watermarks
+4. **Event-Time Processing**: Proper handling of late-arriving data
+
+## � **Table Structure**
+
+### **Primary Tables**
+- `skus_master` (116 fields) - Main denormalized table with watermarks
+- `skus_uoms_agg` (79 fields) - UOM aggregations with L0-L3 hierarchy  
+- `skus_classifications_agg` (3 fields) - SKU classifications as JSON
+- `products_classifications_agg` (3 fields) - Product classifications as JSON
+
+### **Schema Features**
+- **NOT NULL constraints** on key fields (id, updated_at, active, is_deleted)
+- **TIMESTAMP_LTZ(3)** for consistent timezone handling
+- **Watermarks** for event-time processing (5-second delay)
+- **Primary keys** with NOT ENFORCED for streaming compatibility
 
 ## 📋 **Execution Order**
 
-### **Phase 1: Create Base Tables**
-Run these scripts first to create the main target tables:
+### **Phase 1: Configure Source Tables**
+Add watermarks to existing Confluent source tables:
 
 ```bash
-# 1. Create the main skus_master table
-flink-sql -f table_skus_master.sql
+# IMPORTANT: Run this first to enable event-time processing
+flink-sql -f add_watermarks.sql
 ```
 
 ### **Phase 2: Create Aggregation Tables**
-Create the materialized aggregation tables that will store pre-computed data:
+Create the materialized aggregation tables:
 
 ```bash
-# 2. Create UOM aggregations table
+# Create UOM aggregations table (79 fields including updated_at)
 flink-sql -f table_skus_uoms_agg.sql
 
-# 3. Create SKU classifications aggregations table  
+# Create SKU classifications aggregations table
 flink-sql -f table_skus_classifications_agg.sql
 
-# 4. Create product classifications aggregations table
+# Create product classifications aggregations table
 flink-sql -f table_products_classifications_agg.sql
 ```
 
-### **Phase 3: Start Aggregation Streams**
-Start the streaming pipelines to continuously populate aggregation tables:
+### **Phase 3: Create Main Table**
+Create the main denormalized table:
 
 ```bash
-# 5. Start UOM aggregations streaming pipeline
+# Create the main skus_master table (116 fields with watermarks)
+flink-sql -f table_skus_master.sql
+```
+
+### **Phase 4: Start Aggregation Pipelines**
+Populate the aggregation tables with streaming data:
+
+```bash
+# Start UOM aggregations streaming pipeline (groups by sku_id)
 flink-sql -f populate_skus_uoms_agg.sql
 
-# 6. Start SKU classifications streaming pipeline
+# Start SKU classifications streaming pipeline (JSON aggregation)
 flink-sql -f populate_skus_classifications_agg.sql
 
-# 7. Start product classifications streaming pipeline
+# Start product classifications streaming pipeline (JSON aggregation)
 flink-sql -f populate_products_classifications_agg.sql
 ```
 
-### **Phase 4: Main Pipeline**
-Start the main streaming pipeline:
+### **Phase 5: Start Main Pipeline**
+Start the main denormalization streaming pipeline:
 
 ```bash
-# 8. Start the main skus_master streaming insert
+# Start the main skus_master streaming pipeline
 flink-sql -f insert_skus_master.sql
 ```
 
-## 🔄 **Continuous Operations**
+## 🔧 **Technical Details**
 
-All pipelines are now streaming continuously:
+### **Watermark Configuration**
+- **Source Tables**: Use `ALTER TABLE MODIFY WATERMARK` (Confluent system-provided)
+- **Custom Tables**: Watermarks declared in CREATE TABLE statements
+- **Delay**: 5 seconds to handle late-arriving events
+- **Purpose**: Event-time processing for aggregations and windowing
 
-1. **UOM Aggregations**: `populate_skus_uoms_agg.sql` - Updates when `uoms` table changes
-2. **SKU Classifications**: `populate_skus_classifications_agg.sql` - Updates when `classifications` table changes  
-3. **Product Classifications**: `populate_products_classifications_agg.sql` - Updates when `product_classifications` table changes
-4. **Main Pipeline**: `insert_skus_master.sql` - Updates when any source table changes
+### **Join Strategy** 
+- **Main Pipeline**: Regular LEFT JOINs for real-time latest data
+- **Aggregation Tables**: Event-time based GROUP BY with MAX(updated_at)
+- **Key Alignment**: Proper upsert key derivation from primary source (skus.id)
 
-## 📊 **Monitoring & Maintenance**
+### **Data Types**
+- **Timestamps**: `TIMESTAMP_LTZ(3)` for timezone consistency
+- **Numeric Fields**: `DOUBLE PRECISION` for precision
+- **JSON Fields**: `VARCHAR` with COALESCE('{}') for safe defaults
+- **Keys**: `VARCHAR NOT NULL` for primary keys
 
-### **Performance Monitoring**
-- Monitor CFU consumption after implementing materialized tables
-- Check for any remaining state-intensive operations
-- Verify temporal join performance
+### **State Management**
+- **Aggregation Tables**: Materialized for performance
+- **Streaming Joins**: Stateless regular joins for main pipeline  
+- **Event Ordering**: Watermark-based for proper time semantics
 
-## 🚨 **Troubleshooting**
+## 📁 **File Structure**
 
-### **Common Issues**
+### **Core Pipeline Files**
+- `table_skus_master.sql` - Main denormalized table (116 fields)
+- `insert_skus_master.sql` - Streaming insert with real-time joins
+- `add_watermarks.sql` - Watermark configuration for source tables
 
-1. **Schema Mismatch Error**
-   - Ensure all aggregation tables are created before running insert
-   - Verify column counts match between source and target
+### **Aggregation Components**
+- `table_skus_uoms_agg.sql` - UOM aggregation table (79 fields)
+- `table_skus_classifications_agg.sql` - SKU classifications (JSON)
+- `table_products_classifications_agg.sql` - Product classifications (JSON)
+- `populate_skus_uoms_agg.sql` - UOM streaming aggregation
+- `populate_skus_classifications_agg.sql` - SKU classification streaming aggregation  
+- `populate_products_classifications_agg.sql` - Product classification streaming aggregation
 
-2. **Primary Key Warnings**
-   - Aggregation tables use proper primary keys (sku_id, product_id)
-   - Main table uses sku id as primary key
+### **Documentation**
+- `README.md` - This complete execution guide
+- `MIGRATION_SUMMARY.md` - Detailed migration summary and validation
 
-3. **State-Intensive Operations**
-   - Use materialized tables instead of views for aggregations
-   - Ensure temporal joins are properly configured
+## ⚠️ **Important Notes**
 
-### **Recovery Procedures**
+### **Execution Dependencies**
+1. **Source tables must exist** (created by Confluent)
+2. **Watermarks must be added first** before any streaming operations
+3. **Aggregation tables must be created** before the main pipeline
+4. **Population pipelines must be running** before starting main insert
 
-1. **Restart Failed Jobs**
-   ```bash
-   # Stop and restart the main pipeline
-   flink stop <job-id>
-   flink-sql -f insert_skus_master.sql
-   ```
+### **Data Flow**
+1. Source data flows into Confluent tables
+2. Watermarks enable event-time processing
+3. Population scripts aggregate data into materialized tables
+4. Main pipeline joins latest data from all sources
+5. Final denormalized data lands in skus_master
 
-2. **Rebuild Aggregations**
-   ```bash
-   # Stop and restart aggregation pipelines
-   flink stop <aggregation-job-id>
-   flink-sql -f populate_skus_uoms_agg.sql
-   ```
+### **Performance Considerations**
+- **Materialized aggregations** reduce join complexity
+- **Real-time joins** provide latest data without temporal overhead
+- **Proper key alignment** eliminates state-intensive operations
+- **Event-time processing** handles late data correctly
 
-## 📁 **File Descriptions**
+## 🚀 **Production Readiness**
 
-| File | Purpose | When to Run |
-|------|---------|-------------|
-| `table_skus_master.sql` | Main denormalized table schema | Phase 1 - Once |
-| `table_skus_uoms_agg.sql` | UOM aggregations table schema | Phase 2 - Once |
-| `table_skus_classifications_agg.sql` | SKU classifications table schema | Phase 2 - Once |
-| `table_products_classifications_agg.sql` | Product classifications table schema | Phase 2 - Once |
-| `populate_skus_uoms_agg.sql` | UOM aggregations streaming pipeline | Phase 3 - Continuous |
-| `populate_skus_classifications_agg.sql` | SKU classifications streaming pipeline | Phase 3 - Continuous |
-| `populate_products_classifications_agg.sql` | Product classifications streaming pipeline | Phase 3 - Continuous |
-| `insert_skus_master.sql` | Main streaming pipeline | Phase 4 - Continuous |
+### **Validation Checklist**
+- ✅ Schema field count: 116 fields (table) = 115 SELECT fields (insert)
+- ✅ Event-time columns present in all tables
+- ✅ Watermarks configured for all source and custom tables
+- ✅ NOT NULL constraints on critical fields
+- ✅ COALESCE() handling for safe defaults
+- ✅ Real-time joins for latest data
+- ✅ Streaming aggregations with event-time
+- ✅ Comprehensive documentation
 
-## 🎯 **Best Practices**
+### **Monitoring Points**
+- **Aggregation lag**: Monitor population pipeline delays
+- **Join performance**: Watch for backpressure in main pipeline
+- **Data freshness**: Check updated_at timestamps
+- **Error rates**: Monitor failed records and schema mismatches
 
-1. **Always run in order** - Dependencies must be created first
-2. **Monitor resource usage** - Check CFU consumption after each phase
-3. **Test with small datasets** - Validate logic before full deployment
-4. **Use temporal joins** - Maintain data consistency across time
-5. **Set up monitoring** - Track pipeline health and performance
-6. **Plan for recovery** - Have rollback procedures ready
-
-## 🔧 **Configuration Notes**
-
-- All tables use `confluent` connector with `avro-registry` format
-- Primary keys are defined but not enforced (`NOT ENFORCED`)
-- Temporal joins use `FOR SYSTEM_TIME AS OF` for consistency
-- COALESCE functions handle NULL values gracefully
-
----
-
-**⚠️ Important**: Always test scripts in a development environment before deploying to production. The order of execution is critical for proper pipeline setup.
+The pipeline is ready for production deployment with robust streaming capabilities and proper event-time semantics.

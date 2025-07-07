@@ -380,7 +380,8 @@ SELECT u.sku_id,
         CASE
             WHEN u.hierarchy = 'L3' THEN u.num_tag1
         END
-    ) AS l3_num_tag1
+    ) AS l3_num_tag1,
+    MAX(u.updated_at) AS updated_at
 FROM `sbx-uat.encarta.public.uoms` u
 WHERE u.active = true
 GROUP BY u.sku_id;
