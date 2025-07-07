@@ -22,7 +22,8 @@ echo "Found subjects: $sorted_subjects"
 # Step 2: Loop through and delete each subject
 for subject in $sorted_subjects; do
   echo -n "Deleting subject: $subject ... "
-  status=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "http://kafka-ui.kafka.api.staging.stackbox.internal/api/clusters/${KAFKA_CLUSTER_NAME}/schemas/$subject")
+  # status=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "http://kafka-ui.kafka.api.staging.stackbox.internal/api/clusters/${KAFKA_CLUSTER_NAME}/schemas/$subject")
+  status=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE -u "$SCHEMA_REGISTRY_AUTH" "$SCHEMA_REGISTRY_URL/subjects/$subject")
 
   if [ "$status" = "200" ]; then
     echo "✅ Deleted"

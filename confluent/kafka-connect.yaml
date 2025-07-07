@@ -25,7 +25,7 @@ spec:
       serviceAccountName: kafka-sa
       containers:
         - name: cp-connect
-          image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-replication-kafka-connect:latest
+          image: asia-docker.pkg.dev/sbx-ci-cd/private/devops-kafka-connect:latest
           ports:
             - containerPort: 8083
           resources:

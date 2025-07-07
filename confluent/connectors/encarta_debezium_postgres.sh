@@ -117,7 +117,7 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-encarta/config -H "C
       "transforms.unwrap.drop.tombstones": "false",
       "transforms.unwrap.delete.handling.mode": "rewrite",
       "transforms.unwrap.add.fields": "__deleted",
-      "transforms.ts2epoch.type": "com.example.kafka.transforms.AllTimestamptzToEpoch",
+      "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch",
       "transforms.cast.type": "org.apache.kafka.connect.transforms.Cast$Value",
       "transforms.cast.spec": "__deleted:boolean",
       "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
