@@ -1,8 +1,11 @@
 -- Create final summary table structure
+
 CREATE TABLE `sbx-uat.wms.public.storage_bin_summary`
-(
+(   
     wh_id BIGINT,
     bin_code STRING,
+    quality STRING,
+    sd_code STRING,
     bin_description STRING,
     multi_sku BOOLEAN,
     multi_batch BOOLEAN,
@@ -18,8 +21,8 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin_summary`
     max_sku_batch_count INT,
     bin_type_code STRING,
     bin_type_description STRING,
-    max_volume_in_cc FLOAT,
-    max_weight_in_kg FLOAT,
+    max_volume_in_cc DOUBLE,
+    max_weight_in_kg DOUBLE,
     pallet_capacity INT,
     storage_hu_type STRING,
     auxiliary_bin BOOLEAN,
@@ -35,17 +38,15 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin_summary`
     sa_description STRING,
     area_type STRING,
     rolling_days INT,
-    x1 FLOAT,
-    x2 FLOAT,
-    y1 FLOAT,
-    y2 FLOAT,
-    quality STRING,
+    x1 DOUBLE,
+    x2 DOUBLE,
+    y1 DOUBLE,
+    y2 DOUBLE,
     sloc STRING,
     sloc_description STRING,
     client_quality STRING,
     inventory_visible BOOLEAN,
     erp_to_wms BOOLEAN,
-    sd_code STRING,
     `usage` STRING,
     multi_trip BOOLEAN,
     sd_description STRING,
@@ -55,16 +56,18 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin_summary`
     allow_returns BOOLEAN,
     incompatible_vehicle_types STRING,
     incompatible_load_types STRING,
-    dockdoor_x_coordinate FLOAT,
-    dockdoor_y_coordinate FLOAT,
+    dockdoor_x_coordinate DOUBLE,
+    dockdoor_y_coordinate DOUBLE,
     sb_status STRING,
     sbt_active BOOLEAN,
     bin_mapping STRING,
     PRIMARY KEY (wh_id, bin_code, quality, sd_code) NOT ENFORCED
 ) WITH (
     'connector' = 'confluent',
-    'value.format' = 'avro-registry'
+    'value.format' = 'avro-registry',
+    'value.fields-include' = 'all'
 );
+
 
 
 -- Continuously populate the summary table
@@ -72,6 +75,8 @@ INSERT INTO `sbx-uat.wms.public.storage_bin_summary`
 SELECT
     sb.`whId` AS wh_id,
     sb.code AS bin_code,
+    case when sac.quality is null then '-' else sac.quality end as quality,
+    case when sd.code is null then '-' else sd.code end AS sd_code,
     sb.description AS bin_description,
     sb.`multiSku` AS multi_sku,
     sb.`multiBatch` AS multi_batch,
@@ -108,13 +113,11 @@ SELECT
     ss.x2,
     ss.y1,
     ss.y2,
-    sac.quality,
     sac.sloc,
     sac.`slocDescription` AS sloc_description,
     sac.`clientQuality` AS client_quality,
     sac.`inventoryVisible` AS inventory_visible,
     sac.`erpToWMS` AS erp_to_wms,
-    sd.code AS sd_code,
     sbd.`usage`,
     sbd.`multiTrip` AS multi_trip,
     sd.description AS sd_description,

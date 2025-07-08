@@ -134,7 +134,8 @@ CREATE TABLE `sbx-uat.wms.public.pick_drop_item_summary`
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'confluent',
-    'value.format' = 'avro-registry'
+    'value.format' = 'avro-registry',
+    'value.fields-include' = 'all'
 );
 
 -- Continuously populate the summary table
