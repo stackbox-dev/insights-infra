@@ -120,5 +120,6 @@ CREATE TABLE `sbx-uat.encarta.public.skus_master` (
     WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'confluent',
-    'value.format' = 'avro-registry'
+    'value.format' = 'avro-registry',
+    'value.fields-include' = 'all'
 );

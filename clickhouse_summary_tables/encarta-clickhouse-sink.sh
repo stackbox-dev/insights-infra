@@ -89,14 +89,6 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/
       "key.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
       "value.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
 
-      "transforms": "ExtractKey,keyToValue,renameDelete",
-      "transforms.ExtractKey.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
-      "transforms.ExtractKey.field": "id",
-      "transforms.keyToValue.type": "com.clickhouse.kafka.connect.transforms.KeyToValue",
-      "transforms.keyToValue.field": "_key",
-      "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
-      "transforms.renameDelete.renames": "_key:id",
-
       "errors.tolerance": "all",
       "errors.log.enable": "true",
       "errors.log.include.messages": "true",
