@@ -1,0 +1,105 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: flink-sql-gateway-policy
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-sql-gateway
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: flink-sql-gateway
+      app.kubernetes.io/component: sql-gateway
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: hue
+    - namespaceSelector:
+        matchLabels:
+          name: default
+    ports:
+    - protocol: TCP
+      port: 8083
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: flink-session-cluster
+    ports:
+    - protocol: TCP
+      port: 6123
+    - protocol: TCP
+      port: 8081
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: flink-cluster-policy
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-session-cluster
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: flink-session-cluster
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: flink-sql-gateway
+    - namespaceSelector:
+        matchLabels:
+          name: default
+    ports:
+    - protocol: TCP
+      port: 6123
+    - protocol: TCP
+      port: 8081
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: flink-session-cluster
+    ports:
+    - protocol: TCP
+      port: 6121
+    - protocol: TCP
+      port: 6122
+    - protocol: TCP
+      port: 6123
+    - protocol: TCP
+      port: 8081
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: flink-session-cluster
+    ports:
+    - protocol: TCP
+      port: 6121
+    - protocol: TCP
+      port: 6122
+    - protocol: TCP
+      port: 6123
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 443

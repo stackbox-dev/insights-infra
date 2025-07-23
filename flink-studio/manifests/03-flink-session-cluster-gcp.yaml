@@ -1,0 +1,57 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: flink-session-cluster
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-session-cluster
+    app.kubernetes.io/component: flink-cluster
+    app.kubernetes.io/cloud: gcp
+spec:
+  image: asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21
+  flinkVersion: v2_0
+  imagePullPolicy: IfNotPresent
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "4"
+    state.backend: "hashmap"
+    # GCS paths for Flink state management
+    state.checkpoints.dir: gs://sbx-stag-flink-storage/checkpoints
+    state.savepoints.dir: gs://sbx-stag-flink-storage/savepoints
+    high-availability.type: kubernetes
+    high-availability.storageDir: gs://sbx-stag-flink-storage/ha
+    restart-strategy.type: failure-rate
+    restart-strategy.failure-rate.max-failures-per-interval: "10"
+    restart-strategy.failure-rate.failure-rate-interval: "10 min"
+    restart-strategy.failure-rate.delay: "30 s"
+    execution.checkpointing.interval: "30 s"
+    execution.checkpointing.mode: EXACTLY_ONCE
+    execution.checkpointing.timeout: "10 min"
+    table.exec.source.idle-timeout: "30 s"
+  serviceAccount: flink
+  jobManager:
+    resource:
+      memory: "2048m"
+      cpu: 1
+    replicas: 2
+    podTemplate:
+      spec:
+        containers:
+          - name: flink-main-container
+            env:
+              - name: HADOOP_CONF_DIR
+                value: /opt/hadoop/conf
+            # No volume mounts needed - using GCS directly
+  taskManager:
+    resource:
+      memory: "4096m"
+      cpu: 2
+    replicas: 3
+    podTemplate:
+      spec:
+        containers:
+          - name: flink-main-container
+            env:
+              - name: HADOOP_CONF_DIR
+                value: /opt/hadoop/conf
+            # No volume mounts needed - using GCS directly
+  mode: native
