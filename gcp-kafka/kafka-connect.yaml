@@ -1,0 +1,201 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cp-connect
+  namespace: kafka
+  labels:
+    app: cp-connect
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cp-connect
+  template:
+    metadata:
+      labels:
+        app: cp-connect
+    spec:
+      nodeSelector:
+        instance_type: kafka-genral
+      tolerations:
+        - key: "instance_type"
+          operator: "Equal"
+          value: "kafka-genral"
+          effect: "NoSchedule"
+      serviceAccountName: kafka-sa
+      containers:
+        - name: kafka-auth-server
+          image: shivamsbx/kafka-sasl@sha256:c7effb7b55aa487075e48b0b6b2c1822984f99c7a812be3cdb3cc181fcbbc398
+          ports:
+            - containerPort: 14293
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 10m
+              memory: 10Mi
+        - name: cp-connect
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-replication-kafka-connect:latest
+          ports:
+            - containerPort: 8083
+          resources:
+            limits:
+              cpu: 3000m
+              memory: 3Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          env:
+            - name: CONNECT_BOOTSTRAP_SERVERS
+              value: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
+            - name: CONNECT_REST_PORT
+              value: "8083"
+            - name: CONNECT_GROUP_ID
+              value: "connect-cluster"
+            - name: CONNECT_PRODUCER_CLIENT_ID
+              value: "connect-worker-producer"
+            - name: CONNECT_PRODUCER_ENABLE_IDEMPOTENCE
+              value: "true"
+            - name: CONNECT_CONFIG_STORAGE_TOPIC
+              value: "connect-configs"
+            - name: CONNECT_OFFSET_STORAGE_TOPIC
+              value: "connect-offsets"
+            - name: CONNECT_STATUS_STORAGE_TOPIC
+              value: "connect-status"
+            - name: CONNECT_REST_ADVERTISED_HOST_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: KAFKA_JVM_PERFORMANCE_OPTS
+              value: "-server -XX:+UseG1GC -XX:GCTimeRatio=1
+                -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20
+                -XX:MaxGCPauseMillis=10000 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent
+                -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
+            - name: CONNECT_KEY_CONVERTER
+              value: "io.confluent.connect.avro.AvroConverter"
+            - name: CONNECT_VALUE_CONVERTER
+              value: "io.confluent.connect.avro.AvroConverter"
+            - name: CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY
+              value: "All"
+            - name: CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL
+              value: "http://cp-schema-registry"
+            - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL 
+              value: "http://cp-schema-registry"
+
+            # RBAC
+            - name: CONNECT_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_SASL_MECHANISM
+              value: "OAUTHBEARER"
+            - name: CONNECT_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            - name: CONNECT_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
+            
+            # For consumers
+            - name: CONNECT_CONSUMER_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_CONSUMER_SASL_MECHANISM
+              value: "OAUTHBEARER"
+            - name: CONNECT_CONSUMER_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_CONSUMER_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            - name: CONNECT_CONSUMER_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
+  
+            # For producers
+            - name: CONNECT_PRODUCER_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_PRODUCER_SASL_MECHANISM
+              value: "OAUTHBEARER"
+            - name: CONNECT_PRODUCER_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_PRODUCER_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            - name: CONNECT_PRODUCER_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
+            
+            # For admin
+            - name: CONNECT_ADMIN_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_ADMIN_SASL_MECHANISM
+              value: "OAUTHBEARER"
+            - name: CONNECT_ADMIN_SASL_JAAS_CONFIG
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"unused\" clientSecret=\"unused\";"
+            - name: CONNECT_ADMIN_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+            - name: CONNECT_ADMIN_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+              value: "http://localhost:14293"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cp-connect
+  namespace: kafka
+spec:
+  selector:
+    app: cp-connect
+  ports:
+    - protocol: TCP
+      port: 8083
+      targetPort: 8083
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cp-connect-ui
+  namespace: kafka
+  labels:
+    app: cp-connect-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cp-connect-ui
+  template:
+    metadata:
+      labels:
+        app: cp-connect-ui
+    spec:
+      nodeSelector:
+        instance_type: kafka-genral
+      tolerations:
+        - key: "instance_type"
+          operator: "Equal"
+          value: "kafka-genral"
+          effect: "NoSchedule"
+      serviceAccountName: kafka-sa
+      containers:
+        - name: cp-connect-ui
+          image: landoop/kafka-connect-ui:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: 3000m
+              memory: 3Gi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+          env:
+            - name: CONNECT_URL
+              value: "http://cp-connect:8083"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cp-connect-ui
+  namespace: kafka
+spec:
+  selector:
+    app: cp-connect-ui
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
