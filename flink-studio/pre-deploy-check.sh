@@ -362,6 +362,21 @@ else
     echo ""
     print_status "Next steps:"
     print_status "1. Run ./deploy.sh to start deployment"
-    print_status "2. Monitor deployment progress"
-    print_status "3. Access Hue UI once deployment completes"
+    print_status "2. Monitor deployment progress with: kubectl get pods -n flink-studio -w"
+    print_status "3. Access Flink UI via port-forward once deployment completes"
+    print_status "4. Access Hue UI via port-forward for SQL development"
+    
+    if [ "$CLOUD_PROVIDER" = "gcp" ]; then
+        echo ""
+        print_status "GKE-specific notes:"
+        print_status "- Cluster will autoscale as needed for Flink workloads"
+        print_status "- Workload Identity provides secure GCS access"
+        print_status "- Monitor GCS bucket usage for checkpoint storage"
+    elif [ "$CLOUD_PROVIDER" = "azure" ]; then
+        echo ""
+        print_status "AKS-specific notes:"
+        print_status "- Ensure Azure storage account key secret is properly configured"
+        print_status "- Monitor Azure Blob Storage usage for checkpoint storage"
+        print_status "- Consider using managed identity for enhanced security"
+    fi
 fi
