@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hadoop-config
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: hadoop-config
+    app.kubernetes.io/component: configuration
+data:
+  core-site.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+      <!-- Azure Data Lake Storage Gen2 Configuration -->
+      <property>
+        <name>fs.azure.abfs.impl</name>
+        <value>org.apache.hadoop.fs.azurebfs.AzureBlobFileSystem</value>
+        <description>The implementation class of the Azure Blob FileSystem</description>
+      </property>
+      
+      <property>
+        <name>fs.azure.abfss.impl</name>
+        <value>org.apache.hadoop.fs.azurebfs.SecureAzureBlobFileSystem</value>
+        <description>The implementation class of the Azure Blob FileSystem (SSL)</description>
+      </property>
+      
+      <property>
+        <name>fs.AbstractFileSystem.abfs.impl</name>
+        <value>org.apache.hadoop.fs.azurebfs.Abfs</value>
+        <description>The AbstractFileSystem for abfs: URIs</description>
+      </property>
+      
+      <property>
+        <name>fs.AbstractFileSystem.abfss.impl</name>
+        <value>org.apache.hadoop.fs.azurebfs.Abfss</value>
+        <description>The AbstractFileSystem for abfss: URIs</description>
+      </property>
+      
+      <!-- Azure Storage Account Configuration -->
+      <property>
+        <name>fs.azure.account.key.sbxstagflinkstorage.dfs.core.windows.net</name>
+        <value>/mnt/azure-secret/storage-account-key</value>
+        <description>Azure Storage Account Key</description>
+      </property>
+      
+      <!-- Performance tuning -->
+      <property>
+        <name>fs.azure.block.size</name>
+        <value>134217728</value>
+        <description>Block size for Azure Storage (128MB)</description>
+      </property>
+      
+      <property>
+        <name>fs.azure.io.read.request.size</name>
+        <value>8388608</value>
+        <description>Read request size for Azure Storage (8MB)</description>
+      </property>
+    </configuration>

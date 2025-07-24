@@ -120,18 +120,14 @@ kubectl auth can-i create pods --as=system:serviceaccount:flink-studio:flink -n 
 
 **Solutions:**
 ```bash
-# Check image availability
-docker pull asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21  # GCP
-docker pull sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure                      # Azure
+# Check image availability (now using default Docker Hub images)
+docker pull flink:2.0.0-scala_2.12-java21  # Default Flink image for both GCP and Azure
 
-# For GCP: Ensure cluster has access to Artifact Registry
-gcloud auth configure-docker asia-docker.pkg.dev
+# No additional authentication needed for Docker Hub public images
+# Custom cloud configurations are handled via ConfigMaps and environment variables
 
-# For Azure: Ensure AKS has access to ACR
-az aks update -n CLUSTER_NAME -g RESOURCE_GROUP --attach-acr ACR_NAME
-
-# Check image pull secrets (if needed)
-kubectl get secrets -n flink-studio
+# Check if pods can pull the image
+kubectl describe pod POD_NAME -n flink-studio
 ```
 
 ### 4. Azure Storage Secret Issues

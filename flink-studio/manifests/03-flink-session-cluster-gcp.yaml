@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: flink-cluster
     app.kubernetes.io/cloud: gcp
 spec:
-  image: asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21
+  image: flink:2.0.0-scala_2.12-java21
   flinkVersion: v2_0
   imagePullPolicy: IfNotPresent
   flinkConfiguration:
@@ -27,6 +27,12 @@ spec:
     execution.checkpointing.mode: EXACTLY_ONCE
     execution.checkpointing.timeout: "10 min"
     table.exec.source.idle-timeout: "30 s"
+    # Hadoop configuration for GCS
+    fs.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
+    fs.AbstractFileSystem.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS
+    fs.gs.project.id: sbx-stag
+    fs.gs.auth.service.account.enable: "true"
+    fs.gs.auth.service.account.json.keyfile: /opt/flink/gcp/service-account.json
   serviceAccount: flink
   jobManager:
     resource:
@@ -36,23 +42,61 @@ spec:
     podTemplate:
       spec:
         serviceAccountName: flink
+        initContainers:
+          - name: flink-plugin-setup
+            image: flink:2.0.0-scala_2.12-java21
+            command:
+              - "sh"
+              - "-c"
+              - |
+                echo "Loading all Flink connectors and plugins..."
+                mkdir -p /mnt/plugins/gs-fs-hadoop
+                mkdir -p /mnt/plugins/s3-fs-hadoop  
+                mkdir -p /mnt/plugins/s3-fs-presto
+                mkdir -p /mnt/plugins/azure-fs-hadoop
+                mkdir -p /mnt/plugins/oss-fs-hadoop
+                
+                # Copy all filesystem connectors
+                cp /opt/flink/opt/flink-gs-fs-hadoop-*.jar /mnt/plugins/gs-fs-hadoop/ 2>/dev/null || echo "GCS connector not found"
+                cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /mnt/plugins/s3-fs-hadoop/ 2>/dev/null || echo "S3 Hadoop connector not found"  
+                cp /opt/flink/opt/flink-s3-fs-presto-*.jar /mnt/plugins/s3-fs-presto/ 2>/dev/null || echo "S3 Presto connector not found"
+                cp /opt/flink/opt/flink-azure-fs-hadoop-*.jar /mnt/plugins/azure-fs-hadoop/ 2>/dev/null || echo "Azure connector not found"
+                cp /opt/flink/opt/flink-oss-fs-hadoop-*.jar /mnt/plugins/oss-fs-hadoop/ 2>/dev/null || echo "OSS connector not found"
+                
+                echo "Available plugins in /opt/flink/opt/:"
+                ls -la /opt/flink/opt/
+                echo "Enabled plugins:"
+                find /mnt/plugins -name "*.jar" -exec echo "  {}" \;
+            volumeMounts:
+              - name: flink-plugins
+                mountPath: /mnt/plugins
         containers:
           - name: flink-main-container
             env:
               - name: HADOOP_CONF_DIR
                 value: /opt/hadoop/conf
               - name: GOOGLE_APPLICATION_CREDENTIALS
-                value: /opt/flink/conf/service-account.json
+                value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
             volumeMounts:
+              - name: flink-plugins
+                mountPath: /opt/flink/plugins
               - name: gcp-service-account
-                mountPath: /opt/flink/conf
+                mountPath: /opt/flink/gcp
+                readOnly: true
+              - name: hadoop-config
+                mountPath: /opt/hadoop/conf
                 readOnly: true
         volumes:
+          - name: flink-plugins
+            emptyDir: {}
           - name: gcp-service-account
             secret:
               secretName: gcp-service-account-key
+          - name: hadoop-config
+            configMap:
+              name: hadoop-config
   taskManager:
     resource:
       memory: "3072m"
@@ -61,21 +105,59 @@ spec:
     podTemplate:
       spec:
         serviceAccountName: flink
+        initContainers:
+          - name: flink-plugin-setup
+            image: flink:2.0.0-scala_2.12-java21
+            command:
+              - "sh"
+              - "-c"
+              - |
+                echo "Loading all Flink connectors and plugins..."
+                mkdir -p /mnt/plugins/gs-fs-hadoop
+                mkdir -p /mnt/plugins/s3-fs-hadoop  
+                mkdir -p /mnt/plugins/s3-fs-presto
+                mkdir -p /mnt/plugins/azure-fs-hadoop
+                mkdir -p /mnt/plugins/oss-fs-hadoop
+                
+                # Copy all filesystem connectors
+                cp /opt/flink/opt/flink-gs-fs-hadoop-*.jar /mnt/plugins/gs-fs-hadoop/ 2>/dev/null || echo "GCS connector not found"
+                cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /mnt/plugins/s3-fs-hadoop/ 2>/dev/null || echo "S3 Hadoop connector not found"  
+                cp /opt/flink/opt/flink-s3-fs-presto-*.jar /mnt/plugins/s3-fs-presto/ 2>/dev/null || echo "S3 Presto connector not found"
+                cp /opt/flink/opt/flink-azure-fs-hadoop-*.jar /mnt/plugins/azure-fs-hadoop/ 2>/dev/null || echo "Azure connector not found"
+                cp /opt/flink/opt/flink-oss-fs-hadoop-*.jar /mnt/plugins/oss-fs-hadoop/ 2>/dev/null || echo "OSS connector not found"
+                
+                echo "Available plugins in /opt/flink/opt/:"
+                ls -la /opt/flink/opt/
+                echo "Enabled plugins:"
+                find /mnt/plugins -name "*.jar" -exec echo "  {}" \;
+            volumeMounts:
+              - name: flink-plugins
+                mountPath: /mnt/plugins
         containers:
           - name: flink-main-container
             env:
               - name: HADOOP_CONF_DIR
                 value: /opt/hadoop/conf
               - name: GOOGLE_APPLICATION_CREDENTIALS
-                value: /opt/flink/conf/service-account.json
+                value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
             volumeMounts:
+              - name: flink-plugins
+                mountPath: /opt/flink/plugins
               - name: gcp-service-account
-                mountPath: /opt/flink/conf
+                mountPath: /opt/flink/gcp
+                readOnly: true
+              - name: hadoop-config
+                mountPath: /opt/hadoop/conf
                 readOnly: true
         volumes:
+          - name: flink-plugins
+            emptyDir: {}
           - name: gcp-service-account
             secret:
               secretName: gcp-service-account-key
+          - name: hadoop-config
+            configMap:
+              name: hadoop-config
   mode: native

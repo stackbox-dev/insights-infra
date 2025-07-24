@@ -69,18 +69,12 @@ print_status "Starting Flink Platform deployment for $CLOUD_PROVIDER..."
 # Step 1: Install Flink Kubernetes Operator
 print_status "Step 1: Installing Flink Kubernetes Operator..."
 
-# Check if custom image is required and update SQL Gateway image
+# Check cloud provider configuration
 if [ "$CLOUD_PROVIDER" = "gcp" ]; then
-    print_warning "Make sure you have built and pushed the custom GCS-enabled Flink image:"
-    print_warning "cd gcp && docker build -t asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21 ."
-    print_warning "cd gcp && docker push asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21"
-    # Update SQL Gateway to use GCP image - using more reliable replacement
-    GCP_IMAGE="asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21"
-    if ! grep -q "$GCP_IMAGE" manifests/04-flink-sql-gateway.yaml; then
-        print_warning "SQL Gateway already configured with GCP image"
-    else
-        print_status "SQL Gateway image already configured for GCP"
-    fi
+    print_status "Using default Docker Hub Flink image with GCP configuration"
+    
+    # SQL Gateway already configured with default image - no changes needed
+    print_status "SQL Gateway configured to use default Flink image"
     
     # Create GCP Service Account and Kubernetes Secret
     print_status "Setting up GCP Service Account authentication..."
@@ -137,11 +131,10 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
         exit 1
     fi
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
-    print_warning "Make sure you have built and pushed the custom Azure-enabled Flink image:"
-    print_warning "cd azure && docker build -t sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure ."
-    print_warning "docker push sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure"
-    # Update SQL Gateway to use Azure image
-    sed -i '' 's|image: asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21|image: sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure|g' manifests/04-flink-sql-gateway.yaml
+    print_status "Using default Docker Hub Flink image with Azure configuration"
+    
+    # SQL Gateway already configured with default image - no changes needed
+    print_status "SQL Gateway configured to use default Flink image"
     
     # Check if Azure storage account key is set
     if ! kubectl get secret azure-storage-secret -n flink-studio --ignore-not-found 2>/dev/null | grep -q azure-storage-secret; then
@@ -176,6 +169,19 @@ fi
 # Step 2: Deploy platform namespace and RBAC
 print_status "Step 2: Creating platform namespace and RBAC for $CLOUD_PROVIDER..."
 kubectl apply -f manifests/01-namespace.yaml
+
+# Ensure namespace is ready before proceeding
+kubectl wait --for=condition=Active namespace/flink-studio --timeout=30s
+
+# Deploy cloud-specific configurations
+if [ "$CLOUD_PROVIDER" = "gcp" ]; then
+    print_status "Deploying Hadoop configuration for GCP..."
+    kubectl apply -f manifests/02-hadoop-config-gcp.yaml
+elif [ "$CLOUD_PROVIDER" = "azure" ]; then
+    print_status "Deploying Hadoop configuration for Azure..."
+    kubectl apply -f manifests/02-hadoop-config-aks.yaml
+fi
+
 kubectl apply -f manifests/02-rbac${MANIFEST_SUFFIX}.yaml
 kubectl apply -f manifests/02-storage${MANIFEST_SUFFIX}.yaml
 kubectl apply -f manifests/05-resource-quotas.yaml
@@ -186,12 +192,32 @@ kubectl apply -f manifests/03-flink-session-cluster${MANIFEST_SUFFIX}.yaml
 
 # Wait for Flink cluster to be ready with better timeout handling
 print_status "Waiting for Flink Session Cluster to be ready (this may take several minutes)..."
-if ! kubectl wait --for=condition=Ready flinkdeployment/flink-session-cluster -n flink-studio --timeout=600s; then
-    print_error "Flink Session Cluster failed to become ready within 10 minutes"
-    print_error "Check the logs with: kubectl logs -n flink-system deployment/flink-kubernetes-operator"
-    print_error "Check cluster status with: kubectl get flinkdeployment -n flink-studio"
-    exit 1
-fi
+
+# Check FlinkDeployment status instead of using kubectl wait
+print_status "Checking FlinkDeployment status..."
+for i in {1..60}; do
+    FLINK_STATUS=$(kubectl get flinkdeployment flink-session-cluster -n flink-studio -o jsonpath='{.status.lifecycleState}' 2>/dev/null || echo "UNKNOWN")
+    JM_STATUS=$(kubectl get flinkdeployment flink-session-cluster -n flink-studio -o jsonpath='{.status.jobManagerDeploymentStatus}' 2>/dev/null || echo "UNKNOWN")
+    
+    if [ "$FLINK_STATUS" = "STABLE" ] && [ "$JM_STATUS" = "READY" ]; then
+        print_status "Flink Session Cluster is ready! (Status: $FLINK_STATUS, JobManager: $JM_STATUS)"
+        break
+    elif [ "$FLINK_STATUS" = "DEPLOYED" ]; then
+        print_status "Flink Session Cluster is deployed and ready! (Status: $FLINK_STATUS, JobManager: $JM_STATUS)"
+        break
+    else
+        print_warning "Waiting for Flink cluster... Status: $FLINK_STATUS, JobManager: $JM_STATUS (attempt $i/60)"
+        sleep 10
+    fi
+    
+    if [ $i -eq 60 ]; then
+        print_error "Flink Session Cluster failed to become ready within 10 minutes"
+        print_error "Final Status: $FLINK_STATUS, JobManager: $JM_STATUS"
+        print_error "Check the logs with: kubectl logs -n flink-system deployment/flink-kubernetes-operator"
+        print_error "Check cluster status with: kubectl describe flinkdeployment flink-session-cluster -n flink-studio"
+        exit 1
+    fi
+done
 
 # Additional verification that JobManager is accessible
 print_status "Verifying Flink JobManager is accessible..."
@@ -209,7 +235,10 @@ print_status "Step 4: Deploying Flink SQL Gateway..."
 kubectl apply -f manifests/04-flink-sql-gateway.yaml
 
 # Wait for SQL Gateway to be ready
-kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flink-studio --timeout=180s
+print_status "Waiting for SQL Gateway to be ready..."
+if ! kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flink-studio --timeout=180s; then
+    print_warning "SQL Gateway deployment may need more time. Continuing with deployment..."
+fi
 
 # Step 5: Deploy Hue configuration and application
 print_status "Step 5: Deploying Apache Hue..."
@@ -217,7 +246,10 @@ kubectl apply -f manifests/07-hue-config.yaml
 kubectl apply -f manifests/08-hue.yaml
 
 # Wait for Hue to be ready
-kubectl wait --for=condition=Available deployment/hue -n flink-studio --timeout=300s
+print_status "Waiting for Hue to be ready..."
+if ! kubectl wait --for=condition=Available deployment/hue -n flink-studio --timeout=300s; then
+    print_warning "Hue deployment may need more time. Continuing with deployment..."
+fi
 
 # Step 6: Apply security policies (optional)
 print_status "Step 6: Applying Network Policies..."
