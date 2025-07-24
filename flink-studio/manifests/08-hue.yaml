@@ -42,16 +42,20 @@ spec:
               cpu: "1"
           livenessProbe:
             httpGet:
-              path: /desktop/debug/check_config
+              path: /desktop/
               port: 8888
             initialDelaySeconds: 120
             periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /desktop/debug/check_config
+              path: /desktop/
               port: 8888
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
       volumes:
         - name: hue-config
           configMap:
@@ -78,22 +82,6 @@ spec:
   selector:
     app.kubernetes.io/name: hue
     app.kubernetes.io/component: web-ui
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: hue-data-pvc
-  namespace: flink-studio
-  labels:
-    app.kubernetes.io/name: hue
-    app.kubernetes.io/component: storage
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: standard
 ---
 # apiVersion: networking.k8s.io/v1
 # kind: Ingress

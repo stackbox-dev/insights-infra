@@ -35,12 +35,20 @@ spec:
       port: 6123
     - protocol: TCP
       port: 8081
+  # DNS resolution
   - to: []
     ports:
     - protocol: TCP
       port: 53
     - protocol: UDP
       port: 53
+  # Cloud storage access (if needed by SQL Gateway)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -95,11 +103,22 @@ spec:
       port: 6122
     - protocol: TCP
       port: 6123
+  # DNS resolution
   - to: []
     ports:
     - protocol: TCP
       port: 53
     - protocol: UDP
       port: 53
+  # Cloud storage access (GCS and Azure Blob Storage)
+  - to: []
+    ports:
     - protocol: TCP
-      port: 443
+      port: 443  # HTTPS for cloud storage
+    - protocol: TCP
+      port: 80   # HTTP fallback
+  # Kubernetes API server access
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 6443

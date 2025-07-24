@@ -22,19 +22,23 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install Azure Storage connector for Hadoop
+# Download and install Azure Storage connector for Hadoop (updated for abfss support)
 RUN wget -O /opt/flink/lib/hadoop-azure-${HADOOP_VERSION}.jar \
     https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-azure/${HADOOP_VERSION}/hadoop-azure-${HADOOP_VERSION}.jar
 
-# Download Azure Storage SDK (updated version)
-RUN wget -O /opt/flink/lib/azure-storage-12.21.2.jar \
+# Download Azure Storage SDK for abfss support
+RUN wget -O /opt/flink/lib/azure-storage-blob-12.21.2.jar \
     https://repo1.maven.org/maven2/com/azure/azure-storage-blob/12.21.2/azure-storage-blob-12.21.2.jar
 
-# Download additional Azure dependencies (updated versions)
+# Download Azure Identity for authentication
+RUN wget -O /opt/flink/lib/azure-identity-1.10.4.jar \
+    https://repo1.maven.org/maven2/com/azure/azure-identity/1.10.4/azure-identity-1.10.4.jar
+
+# Download additional Azure dependencies
 RUN wget -O /opt/flink/lib/azure-core-1.45.1.jar \
     https://repo1.maven.org/maven2/com/azure/azure-core/1.45.1/azure-core-1.45.1.jar
 
-# Download Jetty dependencies (updated for compatibility)
+# Download Jetty dependencies for compatibility
 RUN wget -O /opt/flink/lib/jetty-util-ajax-11.0.18.jar \
     https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-util-ajax/11.0.18/jetty-util-ajax-11.0.18.jar
 

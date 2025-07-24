@@ -41,13 +41,16 @@ kubectl delete -f manifests/04-flink-sql-gateway.yaml --ignore-not-found=true
 
 # Remove Flink Session Cluster
 print_status "Removing Flink Session Cluster..."
-kubectl delete -f manifests/03-flink-session-cluster.yaml --ignore-not-found=true
+kubectl delete -f manifests/03-flink-session-cluster-gcp.yaml --ignore-not-found=true
+kubectl delete -f manifests/03-flink-session-cluster-aks.yaml --ignore-not-found=true
 
 # Remove storage, RBAC, and quotas
 print_status "Removing storage, RBAC, and resource quotas..."
 kubectl delete -f manifests/05-resource-quotas.yaml --ignore-not-found=true
-kubectl delete -f manifests/02-storage.yaml --ignore-not-found=true
-kubectl delete -f manifests/02-rbac.yaml --ignore-not-found=true
+kubectl delete -f manifests/02-storage-gcp.yaml --ignore-not-found=true
+kubectl delete -f manifests/02-storage-aks.yaml --ignore-not-found=true
+kubectl delete -f manifests/02-rbac-gcp.yaml --ignore-not-found=true
+kubectl delete -f manifests/02-rbac-aks.yaml --ignore-not-found=true
 
 # Remove namespace (this will clean up any remaining resources)
 print_status "Removing namespace..."

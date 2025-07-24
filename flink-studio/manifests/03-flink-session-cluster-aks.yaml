@@ -8,17 +8,17 @@ metadata:
     app.kubernetes.io/component: flink-cluster
     app.kubernetes.io/cloud: azure
 spec:
-  image: sbxstag.azurecr.io/flink:2.0.0-scala_2.12-azure # Custom Azure-enabled image
+  image: sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure # Custom Azure-enabled image
   flinkVersion: v2_0
   imagePullPolicy: IfNotPresent
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "4"
     state.backend: "hashmap"
-    # Azure Blob Storage paths for Flink state management
-    state.checkpoints.dir: wasbs://flink@sbxstagflinkstorage.blob.core.windows.net/checkpoints
-    state.savepoints.dir: wasbs://flink@sbxstagflinkstorage.blob.core.windows.net/savepoints
+    # Azure Blob Storage paths for Flink state management (using modern abfss:// protocol)
+    state.checkpoints.dir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/checkpoints
+    state.savepoints.dir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/savepoints
     high-availability.type: kubernetes
-    high-availability.storageDir: wasbs://flink@sbxstagflinkstorage.blob.core.windows.net/ha
+    high-availability.storageDir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/ha
     restart-strategy.type: failure-rate
     restart-strategy.failure-rate.max-failures-per-interval: "10"
     restart-strategy.failure-rate.failure-rate-interval: "10 min"
@@ -30,9 +30,9 @@ spec:
   serviceAccount: flink
   jobManager:
     resource:
-      memory: "2048m"
+      memory: "1536m"
       cpu: 1
-    replicas: 2
+    replicas: 1
     podTemplate:
       spec:
         containers:
@@ -48,9 +48,9 @@ spec:
             # No volume mounts needed - using Azure Blob Storage directly
   taskManager:
     resource:
-      memory: "4096m"
-      cpu: 2
-    replicas: 3
+      memory: "3072m"
+      cpu: 1
+    replicas: 2
     podTemplate:
       spec:
         containers:

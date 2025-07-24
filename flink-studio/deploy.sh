@@ -5,6 +5,9 @@
 
 set -e
 
+# Trap to handle failures and provide rollback information
+trap 'echo -e "${RED}[ERROR]${NC} Deployment failed! Run ./cleanup.sh to remove partially deployed resources"; exit 1' ERR
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -66,19 +69,42 @@ print_status "Starting Flink Platform deployment for $CLOUD_PROVIDER..."
 # Step 1: Install Flink Kubernetes Operator
 print_status "Step 1: Installing Flink Kubernetes Operator..."
 
-# Check if custom Docker image is required
+# Check if custom image is required and update SQL Gateway image
 if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_warning "Make sure you have built and pushed the custom GCS-enabled Flink image:"
     print_warning "cd gcp && docker build -t asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21 ."
     print_warning "cd gcp && docker push asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21"
+    # Update SQL Gateway to use GCP image - using more reliable replacement
+    GCP_IMAGE="asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21"
+    if ! grep -q "$GCP_IMAGE" manifests/04-flink-sql-gateway.yaml; then
+        print_warning "SQL Gateway already configured with GCP image"
+    else
+        print_status "SQL Gateway image already configured for GCP"
+    fi
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_warning "Make sure you have built and pushed the custom Azure-enabled Flink image:"
-    print_warning "cd azure && docker build -t sbxstag.azurecr.io/flink-gke:2.0.0-scala_2.12-azure ."
-    print_warning "docker push sbxstag.azurecr.io/flink-gke:2.0.0-scala_2.12-azure"
+    print_warning "cd azure && docker build -t sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure ."
+    print_warning "docker push sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure"
+    # Update SQL Gateway to use Azure image
+    sed -i '' 's|image: asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21|image: sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure|g' manifests/04-flink-sql-gateway.yaml
+    
+    # Check if Azure storage account key is set
+    if ! kubectl get secret azure-storage-secret -n flink-studio --ignore-not-found 2>/dev/null | grep -q azure-storage-secret; then
+        print_error "Azure storage account key not configured!"
+        print_error "Please run:"
+        print_error "kubectl create secret generic azure-storage-secret --from-literal=storage-account-key=YOUR_ACTUAL_STORAGE_ACCOUNT_KEY -n flink-studio"
+        read -p "Have you set the Azure storage account key? (y/N): " confirm
+        if [[ ! $confirm =~ ^[Yy]$ ]]; then
+            print_error "Deployment cannot continue without storage account key. Exiting."
+            exit 1
+        fi
+    else
+        print_status "Azure storage secret found"
+    fi
 fi
 print_status ""
 
-helm repo add flink-operator-repo https://downloads.apache.org/flink/flink-kubernetes-operator-1.14.0/
+helm repo add flink-operator-repo https://downloads.apache.org/flink/flink-kubernetes-operator-1.12.1/
 helm repo update
 
 if ! helm list -n flink-system | grep -q flink-kubernetes-operator; then
@@ -103,9 +129,25 @@ kubectl apply -f manifests/05-resource-quotas.yaml
 print_status "Step 3: Deploying Flink Session Cluster for $CLOUD_PROVIDER..."
 kubectl apply -f manifests/03-flink-session-cluster${MANIFEST_SUFFIX}.yaml
 
-# Wait for Flink cluster to be ready
-print_status "Waiting for Flink Session Cluster to be ready..."
-kubectl wait --for=condition=Ready flinkdeployment/flink-session-cluster -n flink-studio --timeout=300s
+# Wait for Flink cluster to be ready with better timeout handling
+print_status "Waiting for Flink Session Cluster to be ready (this may take several minutes)..."
+if ! kubectl wait --for=condition=Ready flinkdeployment/flink-session-cluster -n flink-studio --timeout=600s; then
+    print_error "Flink Session Cluster failed to become ready within 10 minutes"
+    print_error "Check the logs with: kubectl logs -n flink-system deployment/flink-kubernetes-operator"
+    print_error "Check cluster status with: kubectl get flinkdeployment -n flink-studio"
+    exit 1
+fi
+
+# Additional verification that JobManager is accessible
+print_status "Verifying Flink JobManager is accessible..."
+for i in {1..30}; do
+    if kubectl get service flink-session-cluster-rest -n flink-studio >/dev/null 2>&1; then
+        print_status "Flink JobManager service is ready"
+        break
+    fi
+    print_warning "Waiting for Flink JobManager service... (attempt $i/30)"
+    sleep 10
+done
 
 # Step 4: Deploy Flink SQL Gateway
 print_status "Step 4: Deploying Flink SQL Gateway..."
@@ -156,17 +198,17 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "  flink-gcs@sbx-stag.iam.gserviceaccount.com"
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_status "=== Azure-Specific Configuration ==="
-    print_status "Storage: wasbs://flink@sbxstagflinkstorage.blob.core.windows.net"
+    print_status "Storage: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net"
     print_status "Authentication: Storage Account Key"
     print_status ""
     print_warning "Make sure you have:"
     print_warning "1. Created Azure Storage Account: sbxstagflinkstorage"
-    print_warning "2. Created blob container: flink"
-    print_warning "3. Updated the storage account key in manifests/02-rbac-aks.yaml"
+    print_warning "2. Created blob container: flink"  
+    print_warning "3. Enabled hierarchical namespace (Data Lake Gen2)"
+    print_warning "4. Set the storage account key secret in Kubernetes:"
     print_warning ""
-    print_status "To update storage key:"
-    print_status "echo -n 'YOUR_STORAGE_ACCOUNT_KEY' | base64"
-    print_status "# Replace REPLACE_WITH_BASE64_ENCODED_STORAGE_KEY in 02-rbac-aks.yaml"
+    print_status "To set storage key:"
+    print_status "kubectl create secret generic azure-storage-secret --from-literal=storage-account-key=YOUR_ACTUAL_KEY -n flink-studio"
 fi
 
 print_status ""

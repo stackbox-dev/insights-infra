@@ -30,11 +30,12 @@ spec:
   serviceAccount: flink
   jobManager:
     resource:
-      memory: "2048m"
+      memory: "1536m"
       cpu: 1
-    replicas: 2
+    replicas: 1
     podTemplate:
       spec:
+        serviceAccountName: flink
         containers:
           - name: flink-main-container
             env:
@@ -43,11 +44,12 @@ spec:
             # No volume mounts needed - using GCS directly
   taskManager:
     resource:
-      memory: "4096m"
-      cpu: 2
-    replicas: 3
+      memory: "3072m"
+      cpu: 1
+    replicas: 2
     podTemplate:
       spec:
+        serviceAccountName: flink
         containers:
           - name: flink-main-container
             env:

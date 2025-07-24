@@ -3,12 +3,24 @@
     <!-- Azure Blob Storage Configuration -->
     <property>
         <name>fs.azure.impl</name>
-        <value>org.apache.hadoop.fs.azure.NativeAzureFileSystem</value>
+        <value>org.apache.hadoop.fs.azurebfs.AzureBlobFileSystem</value>
         <description>The implementation class of the Azure Blob Storage filesystem</description>
     </property>
 
     <property>
-        <name>fs.azure.account.key</name>
+        <name>fs.AbstractFileSystem.abfs.impl</name>
+        <value>org.apache.hadoop.fs.azurebfs.Abfs</value>
+        <description>The AbstractFileSystem for abfs: uris</description>
+    </property>
+
+    <property>
+        <name>fs.AbstractFileSystem.abfss.impl</name>
+        <value>org.apache.hadoop.fs.azurebfs.Abfss</value>
+        <description>The AbstractFileSystem for abfss: uris</description>
+    </property>
+
+    <property>
+        <name>fs.azure.account.key.sbxstagflinkstorage.dfs.core.windows.net</name>
         <value>${AZURE_STORAGE_ACCOUNT_KEY}</value>
         <description>Azure Storage Account Key - will be provided via environment variable</description>
     </property>

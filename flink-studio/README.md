@@ -19,40 +19,57 @@ Before deploying the Flink platform, ensure you have:
 - `kubectl` (v1.24+) - configured to access your Kubernetes cluster
 - `helm` (v3.8+) - for installing the Flink Kubernetes Operator
 - A Kubernetes cluster with:
-  - At least 8 CPU cores and 16GB RAM available
-  - Storage provisioner (for PersistentVolumes)
+  - At least 6 CPU cores and 12GB RAM available
+  - Storage provisioner for Hue data persistence
   - Ingress controller (nginx recommended)
 
-### Storage Requirements
+### Cloud Storage Requirements
 
-**IMPORTANT**: This deployment requires `ReadWriteMany` (RWX) storage for Flink checkpoints and high availability.
+This deployment uses cloud-native storage solutions for Flink state management:
 
 #### Google Cloud Platform (GKE)
-- **Required**: Google Filestore with CSI driver enabled
-- **Storage Classes**: `standard-rwx` (Filestore Basic)
+- **Required**: Google Cloud Storage (GCS) bucket
+- **Bucket**: `gs://sbx-stag-flink-storage/`
+- **Authentication**: GKE Workload Identity
 - **Setup**:
   ```bash
-  # Enable Filestore CSI driver
-  gcloud container clusters update CLUSTER_NAME \
-      --update-addons=GcpFilestoreCsiDriver=ENABLED \
-      --zone=ZONE
+  # Create GCS bucket
+  gsutil mb gs://sbx-stag-flink-storage/
+  
+  # Create Google Service Account
+  gcloud iam service-accounts create flink-gcs --project=sbx-stag
+  
+  # Grant storage permissions
+  gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin \
+    gs://sbx-stag-flink-storage/
   ```
 
-#### Microsoft Azure (AKS) - Coming Soon
-- **Required**: Azure Files with Premium tier
-- **Storage Classes**: `azurefile-csi-premium`
-- **Setup**: (Implementation pending)
+#### Microsoft Azure (AKS)
+- **Required**: Azure Blob Storage with Data Lake Gen2
+- **Storage Account**: `sbxstagflinkstorage`
+- **Container**: `flink`
+- **Authentication**: Storage Account Key
+- **Setup**:
+  ```bash
+  # Create storage account with hierarchical namespace
+  az storage account create --name sbxstagflinkstorage \
+    --resource-group YOUR_RG --location YOUR_LOCATION \
+    --sku Standard_LRS --kind StorageV2 --hns true
+  
+  # Create container
+  az storage container create --name flink --account-name sbxstagflinkstorage
+  ```
 
-#### Storage Allocation
-- **Checkpoints**: 75Gi (ReadWriteMany via Filestore)
-- **Savepoints**: 150Gi (ReadWriteMany via Filestore)  
-- **High Availability**: 5Gi (ReadWriteMany via Filestore)
-- **Total Filestore**: ~230Gi minimum
+#### Storage Usage
+- **Checkpoints**: Stored directly in cloud storage (GCS/Azure Blob)
+- **Savepoints**: Stored directly in cloud storage (GCS/Azure Blob)
+- **High Availability**: Kubernetes-native HA with cloud storage backend
+- **Local Storage**: Only required for Hue data persistence (~5Gi)
 
 ### Required Kubernetes Resources
-- **CPU**: Minimum 8 cores (recommended: 16+ cores)
-- **Memory**: Minimum 16GB (recommended: 32+ GB)
-- **Storage**: At least 50GB for persistent volumes
+- **CPU**: Minimum 6 cores (recommended: 12+ cores)
+- **Memory**: Minimum 12GB (recommended: 24+ GB)
+- **Storage**: At least 10GB for Hue data persistence
 - **Network**: Ingress controller for external access
 
 ### Optional Components
@@ -66,14 +83,28 @@ Before deploying the Flink platform, ensure you have:
 cd flink-studio
 ```
 
-### 2. Review Configuration
+### 2. Pre-Deployment Validation (Recommended)
+Run the comprehensive validation script to check all prerequisites:
+```bash
+./pre-deploy-check.sh
+```
+
+This validation script will check:
+- Required tools (kubectl, helm, cloud CLI)
+- Kubernetes cluster connectivity and resources
+- Cloud-specific prerequisites (GCS bucket, Azure storage account)
+- Storage configuration and permissions
+- Network requirements and connectivity
+
+**Important**: Address any issues found by the validation script before proceeding with deployment.
+
+### 3. Review Configuration
 Before deployment, review and customize these files if needed:
-- `manifests/03-flink-session-cluster.yaml` - Flink cluster resources
+- `manifests/03-flink-session-cluster-gcp.yaml` or `manifests/03-flink-session-cluster-aks.yaml` - Flink cluster resources
 - `manifests/05-resource-quotas.yaml` - Resource limits
 - `manifests/08-hue.yaml` - Hue ingress hostname
-- `helm/hue-values.yaml` - Hue configuration (if using Helm)
 
-### 3. Deploy the Platform
+### 4. Deploy the Platform
 Run the automated deployment script:
 ```bash
 ./deploy.sh
@@ -88,7 +119,9 @@ The script will:
 6. Deploy Apache Hue with configuration
 7. Apply security policies
 
-### 4. Verify Deployment
+**Note:** For any deployment issues, refer to [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
+
+### 5. Verify Deployment
 Check that all components are running:
 ```bash
 kubectl get pods -n flink-studio
@@ -105,7 +138,7 @@ If you prefer to deploy manually or want to understand each step:
 ### Step 1: Install Flink Kubernetes Operator
 ```bash
 # Add Flink operator Helm repository
-helm repo add flink-operator-repo https://downloads.apache.org/flink/flink-kubernetes-operator-1.7.0/
+helm repo add flink-operator-repo https://downloads.apache.org/flink/flink-kubernetes-operator-1.12.1/
 helm repo update
 
 # Install the operator
@@ -119,17 +152,29 @@ helm install flink-kubernetes-operator flink-operator-repo/flink-kubernetes-oper
 ```bash
 # Create namespace and basic resources
 kubectl apply -f manifests/01-namespace.yaml
-kubectl apply -f manifests/02-rbac.yaml
-kubectl apply -f manifests/02-storage.yaml
+
+# For GCP deployment
+kubectl apply -f manifests/02-rbac-gcp.yaml
+kubectl apply -f manifests/02-storage-gcp.yaml
+
+# For Azure deployment  
+kubectl apply -f manifests/02-rbac-aks.yaml
+kubectl apply -f manifests/02-storage-aks.yaml
+
+# Apply resource quotas
 kubectl apply -f manifests/05-resource-quotas.yaml
 ```
 
 ### Step 3: Deploy Flink Session Cluster
 ```bash
-kubectl apply -f manifests/03-flink-session-cluster.yaml
+# For GCP deployment
+kubectl apply -f manifests/03-flink-session-cluster-gcp.yaml
+
+# For Azure deployment
+kubectl apply -f manifests/03-flink-session-cluster-aks.yaml
 
 # Wait for cluster to be ready
-kubectl wait --for=condition=Ready flinkdeployment/flink-session-cluster -n flink-studio --timeout=300s
+kubectl wait --for=condition=Ready flinkdeployment/flink-session-cluster -n flink-studio --timeout=600s
 ```
 
 ### Step 4: Deploy SQL Gateway
@@ -185,20 +230,23 @@ For production access via ingress:
 ## Configuration
 
 ### Flink Cluster Scaling
-Edit `manifests/03-flink-session-cluster.yaml` to adjust resources:
+Edit the appropriate cluster manifest to adjust resources:
+
+**For GCP**: `manifests/03-flink-session-cluster-gcp.yaml`
+**For Azure**: `manifests/03-flink-session-cluster-aks.yaml`
 
 ```yaml
 jobManager:
   resource:
-    memory: "2048m"  # Adjust as needed
+    memory: "1536m"  # Adjust as needed
     cpu: 1
-  replicas: 2        # For high availability
+  replicas: 1        # Single replica for cost efficiency
 
 taskManager:
   resource:
-    memory: "4096m"  # Adjust as needed
-    cpu: 2
-  replicas: 3        # Scale based on workload
+    memory: "3072m"  # Adjust as needed
+    cpu: 1
+  replicas: 2        # Scale based on workload
 ```
 
 ### Resource Quotas
@@ -207,10 +255,10 @@ Modify `manifests/05-resource-quotas.yaml` to set appropriate limits:
 ```yaml
 spec:
   hard:
-    requests.cpu: "20"      # Total CPU requests
-    requests.memory: 40Gi   # Total memory requests
-    limits.cpu: "40"        # Total CPU limits
-    limits.memory: 80Gi     # Total memory limits
+    requests.cpu: "12"      # Total CPU requests
+    requests.memory: 24Gi   # Total memory requests
+    limits.cpu: "24"        # Total CPU limits
+    limits.memory: 48Gi     # Total memory limits
 ```
 
 ### Hue Configuration
@@ -267,8 +315,10 @@ kubectl logs deployment/hue -n flink-studio
 
 #### 1. Flink Cluster Not Starting
 - Check resource availability: `kubectl describe nodes`
-- Verify PVC status: `kubectl get pvc -n flink-studio`
+- Verify cloud storage access permissions
 - Check operator logs: `kubectl logs -n flink-system deployment/flink-kubernetes-operator`
+- For GCP: Verify Workload Identity setup and GCS bucket permissions
+- For Azure: Ensure storage account key secret exists and is correct
 
 #### 2. SQL Gateway Connection Issues
 - Verify Flink cluster is ready: `kubectl get flinkdeployment -n flink-studio`
@@ -331,8 +381,10 @@ kubectl delete namespace flink-system
 | Issue | Solution |
 |-------|----------|
 | Insufficient resources | Check cluster capacity with `kubectl describe nodes` |
-| PVC binding issues | Verify storage class exists and has available storage |
+| Cloud storage access issues | Verify GCS bucket/Azure storage account permissions |
 | Image pull failures | Check internet connectivity and image availability |
+| Workload Identity issues (GCP) | Verify service account binding and permissions |
+| Storage account key issues (Azure) | Check secret creation and validity |
 
 ### Runtime Issues
 | Issue | Solution |

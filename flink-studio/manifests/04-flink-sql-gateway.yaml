@@ -21,7 +21,10 @@ spec:
       serviceAccountName: flink
       containers:
       - name: flink-sql-gateway
-        image: flink:2.0.0-scala_2.12-java21
+        # Note: This image will be updated by the deployment script based on cloud provider
+        # GCP: asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21
+        # Azure: sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure
+        image: asia-docker.pkg.dev/sbx-ci-cd/private/flink-gke:2.0.0-scala_2.12-java21
         command: ["/opt/flink/bin/sql-gateway.sh"]
         args: ["start-foreground"]
         ports:
@@ -49,14 +52,18 @@ spec:
           httpGet:
             path: /v1/info
             port: 8083
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /v1/info
             port: 8083
-          initialDelaySeconds: 10
+          initialDelaySeconds: 30
           periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
