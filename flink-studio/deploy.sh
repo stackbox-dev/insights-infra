@@ -171,7 +171,22 @@ print_status "Step 2: Creating platform namespace and RBAC for $CLOUD_PROVIDER..
 kubectl apply -f manifests/01-namespace.yaml
 
 # Ensure namespace is ready before proceeding
-kubectl wait --for=condition=Active namespace/flink-studio --timeout=30s
+print_status "Verifying namespace is active..."
+for i in {1..12}; do
+    NAMESPACE_PHASE=$(kubectl get namespace flink-studio -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
+    if [ "$NAMESPACE_PHASE" = "Active" ]; then
+        print_status "Namespace flink-studio is active and ready"
+        break
+    else
+        print_warning "Waiting for namespace to be active... Status: $NAMESPACE_PHASE (attempt $i/12)"
+        sleep 5
+    fi
+    
+    if [ $i -eq 12 ]; then
+        print_error "Namespace failed to become active within 60 seconds"
+        exit 1
+    fi
+done
 
 # Deploy cloud-specific configurations
 if [ "$CLOUD_PROVIDER" = "gcp" ]; then

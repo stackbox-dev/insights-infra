@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: flink-sql-gateway
     app.kubernetes.io/component: sql-gateway
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: flink-sql-gateway
@@ -26,7 +26,12 @@ spec:
           # Cloud-specific configurations are handled through environment variables and volumes
           image: flink:2.0.0-scala_2.12-java21
           command: ["/opt/flink/bin/sql-gateway.sh"]
-          args: ["start-foreground"]
+          args:
+            [
+              "start-foreground",
+              "-Dsql-gateway.endpoint.rest.address=0.0.0.0",
+              "-Dsql-gateway.endpoint.rest.port=8083",
+            ]
           ports:
             - containerPort: 8083
               name: rest-api
@@ -41,12 +46,6 @@ spec:
               value: |
                 jobmanager.rpc.address: flink-session-cluster-rest
                 jobmanager.rpc.port: 6123
-                rest.port: 8083
-                sql-gateway.endpoint.rest.address: 0.0.0.0
-                sql-gateway.endpoint.rest.port: 8083
-                sql-gateway.session.max-num: 1000
-                sql-gateway.session.idle-timeout: 600000
-                sql-gateway.session.check-interval: 60000
           volumeMounts:
             - name: gcp-service-account
               mountPath: /opt/flink/gcp

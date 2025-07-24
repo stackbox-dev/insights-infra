@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: hue
-          image: gethue/hue:latest
+          image: gethue/hue:4.11.0
           ports:
             - containerPort: 8888
               name: http
@@ -32,7 +32,7 @@ spec:
               mountPath: /etc/hue/conf
               readOnly: true
             - name: hue-data
-              mountPath: /usr/share/hue/desktop
+              mountPath: /usr/share/hue/data
           resources:
             requests:
               memory: "1Gi"
@@ -42,7 +42,7 @@ spec:
               cpu: "1"
           livenessProbe:
             httpGet:
-              path: /desktop/
+              path: /
               port: 8888
             initialDelaySeconds: 120
             periodSeconds: 30
@@ -50,7 +50,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /desktop/
+              path: /
               port: 8888
             initialDelaySeconds: 60
             periodSeconds: 10

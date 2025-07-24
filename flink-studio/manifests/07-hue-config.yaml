@@ -20,6 +20,7 @@ data:
     server_group=hue
     default_user=hue
     default_hdfs_superuser=hdfs
+    app_blacklist=search,security
 
     [[database]]
     engine=sqlite3
@@ -45,6 +46,3 @@ data:
     [useradmin]
     default_username=admin
     default_user_password=admin
-
-    [desktop]
-    app_blacklist=search,security
