@@ -14,6 +14,8 @@ spec:
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "4"
     state.backend: "hashmap"
+    # Force session cluster to start TaskManager pods immediately
+    slotmanager.number-of-slots.min: "8"
     # GCS paths for Flink state management
     state.checkpoints.dir: gs://sbx-stag-flink-storage/checkpoints
     state.savepoints.dir: gs://sbx-stag-flink-storage/savepoints
@@ -33,6 +35,13 @@ spec:
     fs.gs.project.id: sbx-stag
     fs.gs.auth.service.account.enable: "true"
     fs.gs.auth.service.account.json.keyfile: /opt/flink/gcp/service-account.json
+    # Kafka configuration for GCP managed Kafka
+    kafka.bootstrap.servers: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
+    kafka.security.protocol: "SASL_SSL"
+    kafka.sasl.mechanism: "OAUTHBEARER"
+    kafka.sasl.jaas.config: 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="unused" clientSecret="unused";'
+    kafka.sasl.login.callback.handler.class: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
+    kafka.sasl.oauthbearer.token.endpoint.url: "http://localhost:14293"
   serviceAccount: flink
   jobManager:
     resource:
@@ -55,18 +64,27 @@ spec:
                 mkdir -p /mnt/plugins/s3-fs-presto
                 mkdir -p /mnt/plugins/azure-fs-hadoop
                 mkdir -p /mnt/plugins/oss-fs-hadoop
-                
+
                 # Copy all filesystem connectors
                 cp /opt/flink/opt/flink-gs-fs-hadoop-*.jar /mnt/plugins/gs-fs-hadoop/ 2>/dev/null || echo "GCS connector not found"
                 cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /mnt/plugins/s3-fs-hadoop/ 2>/dev/null || echo "S3 Hadoop connector not found"  
                 cp /opt/flink/opt/flink-s3-fs-presto-*.jar /mnt/plugins/s3-fs-presto/ 2>/dev/null || echo "S3 Presto connector not found"
                 cp /opt/flink/opt/flink-azure-fs-hadoop-*.jar /mnt/plugins/azure-fs-hadoop/ 2>/dev/null || echo "Azure connector not found"
                 cp /opt/flink/opt/flink-oss-fs-hadoop-*.jar /mnt/plugins/oss-fs-hadoop/ 2>/dev/null || echo "OSS connector not found"
-                
+
+                # Copy Kafka connector to lib directory (not plugins)
+                echo "Setting up Kafka connector..."
+                # For Flink 2.0, we need to download the Kafka connector
+                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
+                # Copy to the actual Flink lib directory (not mounting over it)
+                cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/ || echo "Failed to copy Kafka connector to lib"
+
                 echo "Available plugins in /opt/flink/opt/:"
                 ls -la /opt/flink/opt/
                 echo "Enabled plugins:"
                 find /mnt/plugins -name "*.jar" -exec echo "  {}" \;
+                echo "Lib directory contents:"
+                ls -la /opt/flink/lib/
             volumeMounts:
               - name: flink-plugins
                 mountPath: /mnt/plugins
@@ -118,18 +136,27 @@ spec:
                 mkdir -p /mnt/plugins/s3-fs-presto
                 mkdir -p /mnt/plugins/azure-fs-hadoop
                 mkdir -p /mnt/plugins/oss-fs-hadoop
-                
+
                 # Copy all filesystem connectors
                 cp /opt/flink/opt/flink-gs-fs-hadoop-*.jar /mnt/plugins/gs-fs-hadoop/ 2>/dev/null || echo "GCS connector not found"
                 cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /mnt/plugins/s3-fs-hadoop/ 2>/dev/null || echo "S3 Hadoop connector not found"  
                 cp /opt/flink/opt/flink-s3-fs-presto-*.jar /mnt/plugins/s3-fs-presto/ 2>/dev/null || echo "S3 Presto connector not found"
                 cp /opt/flink/opt/flink-azure-fs-hadoop-*.jar /mnt/plugins/azure-fs-hadoop/ 2>/dev/null || echo "Azure connector not found"
                 cp /opt/flink/opt/flink-oss-fs-hadoop-*.jar /mnt/plugins/oss-fs-hadoop/ 2>/dev/null || echo "OSS connector not found"
-                
+
+                # Copy Kafka connector to lib directory (not plugins)
+                echo "Setting up Kafka connector..."
+                # For Flink 2.0, we need to download the Kafka connector
+                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
+                # Copy to the actual Flink lib directory (not mounting over it)
+                cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/ || echo "Failed to copy Kafka connector to lib"
+
                 echo "Available plugins in /opt/flink/opt/:"
                 ls -la /opt/flink/opt/
                 echo "Enabled plugins:"
                 find /mnt/plugins -name "*.jar" -exec echo "  {}" \;
+                echo "Lib directory contents:"
+                ls -la /opt/flink/lib/
             volumeMounts:
               - name: flink-plugins
                 mountPath: /mnt/plugins

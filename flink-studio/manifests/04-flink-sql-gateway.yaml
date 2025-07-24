@@ -19,6 +19,20 @@ spec:
         app.kubernetes.io/component: sql-gateway
     spec:
       serviceAccountName: flink
+      initContainers:
+        - name: kafka-connector-setup
+          image: flink:2.0.0-scala_2.12-java21
+          command:
+            - "sh"
+            - "-c"
+            - |
+              echo "Setting up Kafka connector for SQL Gateway..."
+              # Download Kafka connector JAR
+              wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
+              # Copy to lib directory
+              cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/ || echo "Failed to copy Kafka connector to lib"
+              echo "Kafka connector setup complete"
+              ls -la /opt/flink/lib/flink-sql-connector-kafka*.jar
       containers:
         - name: flink-sql-gateway
           # Note: Using default Docker Hub Flink image
