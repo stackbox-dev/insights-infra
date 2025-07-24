@@ -31,6 +31,12 @@ spec:
         - containerPort: 8083
           name: rest-api
         env:
+        - name: HADOOP_CONF_DIR
+          value: /opt/hadoop/conf
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /opt/flink/conf/service-account.json
+        - name: GOOGLE_CLOUD_PROJECT
+          value: sbx-stag
         - name: FLINK_PROPERTIES
           value: |
             jobmanager.rpc.address: flink-session-cluster-rest
@@ -41,6 +47,10 @@ spec:
             sql-gateway.session.max-num: 1000
             sql-gateway.session.idle-timeout: 600000
             sql-gateway.session.check-interval: 60000
+        volumeMounts:
+        - name: gcp-service-account
+          mountPath: /opt/flink/conf
+          readOnly: true
         resources:
           requests:
             memory: "1Gi"
@@ -64,6 +74,10 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
+      volumes:
+      - name: gcp-service-account
+        secret:
+          secretName: gcp-service-account-key
 ---
 apiVersion: v1
 kind: Service

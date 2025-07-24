@@ -7,9 +7,6 @@ metadata:
     app.kubernetes.io/name: flink
     app.kubernetes.io/component: serviceaccount
     app.kubernetes.io/cloud: gcp
-  annotations:
-    # Workload Identity annotation - bind to Google Service Account
-    iam.gke.io/gcp-service-account: flink-gcs@sbx-stag.iam.gserviceaccount.com
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

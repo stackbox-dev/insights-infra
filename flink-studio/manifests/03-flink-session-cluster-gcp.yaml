@@ -41,7 +41,18 @@ spec:
             env:
               - name: HADOOP_CONF_DIR
                 value: /opt/hadoop/conf
-            # No volume mounts needed - using GCS directly
+              - name: GOOGLE_APPLICATION_CREDENTIALS
+                value: /opt/flink/conf/service-account.json
+              - name: GOOGLE_CLOUD_PROJECT
+                value: sbx-stag
+            volumeMounts:
+              - name: gcp-service-account
+                mountPath: /opt/flink/conf
+                readOnly: true
+        volumes:
+          - name: gcp-service-account
+            secret:
+              secretName: gcp-service-account-key
   taskManager:
     resource:
       memory: "3072m"
@@ -55,5 +66,16 @@ spec:
             env:
               - name: HADOOP_CONF_DIR
                 value: /opt/hadoop/conf
-            # No volume mounts needed - using GCS directly
+              - name: GOOGLE_APPLICATION_CREDENTIALS
+                value: /opt/flink/conf/service-account.json
+              - name: GOOGLE_CLOUD_PROJECT
+                value: sbx-stag
+            volumeMounts:
+              - name: gcp-service-account
+                mountPath: /opt/flink/conf
+                readOnly: true
+        volumes:
+          - name: gcp-service-account
+            secret:
+              secretName: gcp-service-account-key
   mode: native

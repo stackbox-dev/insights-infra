@@ -81,6 +81,61 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     else
         print_status "SQL Gateway image already configured for GCP"
     fi
+    
+    # Create GCP Service Account and Kubernetes Secret
+    print_status "Setting up GCP Service Account authentication..."
+    
+    # Check if service account key file already exists
+    if [ ! -f "gcp-service-account-key.json" ]; then
+        print_status "Creating Google Service Account and downloading key..."
+        
+        # Create service account if it doesn't exist
+        if ! gcloud iam service-accounts describe flink-gcs@sbx-stag.iam.gserviceaccount.com >/dev/null 2>&1; then
+            print_status "Creating Google Service Account: flink-gcs"
+            gcloud iam service-accounts create flink-gcs \
+                --display-name="Flink GCS Service Account" \
+                --description="Service account for Flink to access GCS" \
+                --project=sbx-stag
+        else
+            print_status "Google Service Account flink-gcs already exists"
+        fi
+        
+        # Grant storage permissions
+        print_status "Granting Storage Admin permissions..."
+        gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin \
+            gs://sbx-stag-flink-storage/
+            
+        # Generate and download service account key
+        print_status "Generating service account key..."
+        gcloud iam service-accounts keys create gcp-service-account-key.json \
+            --iam-account=flink-gcs@sbx-stag.iam.gserviceaccount.com \
+            --project=sbx-stag
+            
+        print_status "Service account key saved to: gcp-service-account-key.json"
+    else
+        print_status "Service account key file already exists: gcp-service-account-key.json"
+    fi
+    
+    # Create Kubernetes secret from the service account key
+    print_status "Creating Kubernetes secret for GCP service account..."
+    if kubectl get secret gcp-service-account-key -n flink-studio >/dev/null 2>&1; then
+        print_status "Kubernetes secret already exists, updating..."
+        kubectl delete secret gcp-service-account-key -n flink-studio
+    fi
+    
+    kubectl create secret generic gcp-service-account-key \
+        --from-file=service-account.json=gcp-service-account-key.json \
+        -n flink-studio
+        
+    print_status "Kubernetes secret 'gcp-service-account-key' created successfully"
+    
+    # Verify the secret was created correctly
+    if kubectl get secret gcp-service-account-key -n flink-studio -o jsonpath='{.data.service-account\.json}' | base64 -d | jq . >/dev/null 2>&1; then
+        print_status "Secret verification: Service account key is valid JSON"
+    else
+        print_error "Secret verification failed: Service account key is not valid JSON"
+        exit 1
+    fi
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_warning "Make sure you have built and pushed the custom Azure-enabled Flink image:"
     print_warning "cd azure && docker build -t sbxstag.azurecr.io/flink-aks:2.0.0-scala_2.12-azure ."
@@ -182,20 +237,23 @@ print_status ""
 if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "=== GCP-Specific Configuration ==="
     print_status "Storage: gs://sbx-stag-flink-storage"
-    print_status "Authentication: GKE Workload Identity"
+    print_status "Authentication: Service Account JSON Key"
     print_status ""
-    print_warning "Make sure you have:"
-    print_warning "1. Created Google Service Account: flink-gcs@sbx-stag.iam.gserviceaccount.com"
-    print_warning "2. Granted Storage Admin role on gs://sbx-stag-flink-storage bucket"
-    print_warning "3. Enabled Workload Identity binding between Kubernetes and Google Service Accounts"
+    print_status "Service Account Details:"
+    print_status "- Google Service Account: flink-gcs@sbx-stag.iam.gserviceaccount.com"
+    print_status "- Kubernetes Secret: gcp-service-account-key"
+    print_status "- Key File: gcp-service-account-key.json"
+    print_status ""
+    print_warning "Security Note:"
+    print_warning "- The service account key file 'gcp-service-account-key.json' has been created"
+    print_warning "- This file contains sensitive credentials - keep it secure"
+    print_warning "- Consider rotating the key periodically for better security"
     print_warning ""
-    print_status "Setup commands:"
-    print_status "gcloud iam service-accounts create flink-gcs --project=sbx-stag"
-    print_status "gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin gs://sbx-stag-flink-storage"
-    print_status "gcloud iam service-accounts add-iam-policy-binding \\"
-    print_status "  --role roles/iam.workloadIdentityUser \\"
-    print_status "  --member 'serviceAccount:sbx-stag.svc.id.goog[flink-studio/flink]' \\"
-    print_status "  flink-gcs@sbx-stag.iam.gserviceaccount.com"
+    print_status "To verify GCS access from a pod:"
+    print_status "kubectl exec -it deployment/flink-session-cluster -n flink-studio -- gsutil ls gs://sbx-stag-flink-storage/"
+    print_status ""
+    print_status "To run comprehensive authentication verification:"
+    print_status "kubectl exec -it deployment/flink-session-cluster -n flink-studio -- /opt/flink/bin/verify-gcp-auth.sh"
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_status "=== Azure-Specific Configuration ==="
     print_status "Storage: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net"
