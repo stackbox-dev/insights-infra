@@ -2,8 +2,38 @@
 
 # Google Cloud Managed Kafka Testing Script for Flink
 # This script tests the connectivity and functionality of the Flink cluster with GCP Managed Kafka
+# 
+# Features:
+# - Uses local gcp-service-account-key.json if available, otherwise falls back to K8s secret
+# - Creates test topic if it doesn't exist
+# - Tests Kafka and Avro connector availability
+# - Creates and drops test tables with comprehensive Avro schemas
+# - Validates SQL Gateway connectivity and operations
+# - Provides comprehensive diagnostics and examples
+#
+# Prerequisites:
+# - kubectl configured and connected to the cluster
+# - gcloud CLI installed
+# - jq and curl available on the system
+# - Flink cluster deployed in flink-studio namespace
+# - Either: gcp-service-account-key.json in current directory OR gcp-service-account-key secret in K8s
+#
+# Usage: ./test-kafka-connectivity.sh
 
 set -e
+
+# Cleanup function
+cleanup() {
+    # Kill any port-forward processes
+    pkill -f "kubectl port-forward.*flink-sql-gateway" 2>/dev/null || true
+    pkill -f "kubectl port-forward.*flink-session-cluster-rest" 2>/dev/null || true
+    
+    # Remove only temporary service account key file (not local one)
+    rm -f /tmp/gcp-service-account-key.json 2>/dev/null || true
+}
+
+# Set trap to run cleanup on script exit
+trap cleanup EXIT
 
 # Colors for output
 RED='\033[0;31m'
@@ -34,8 +64,13 @@ NAMESPACE="flink-studio"
 KAFKA_CLUSTER="sbx-kafka-cluster"
 KAFKA_BOOTSTRAP="bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
 TEST_TOPIC="flink-test-topic"
+SERVICE_ACCOUNT_SECRET="gcp-service-account-key"
 
 print_status "Starting Google Cloud Managed Kafka connectivity tests for Flink..."
+print_status "Target cluster: $KAFKA_CLUSTER"
+print_status "Test topic: $TEST_TOPIC" 
+print_status "Namespace: $NAMESPACE"
+print_status "Service Account Secret: $SERVICE_ACCOUNT_SECRET"
 print_status "=========================================="
 
 # Test 1: Check if pods are running
@@ -65,28 +100,48 @@ else
     exit 1
 fi
 
-# Test 2: Check Google Cloud service account secret
-print_test "2. Checking Google Cloud service account secret..."
-if kubectl get secret gcp-service-account-key -n $NAMESPACE >/dev/null 2>&1; then
-    print_status "✓ GCP service account secret exists"
+# Test 2: Check Google Cloud service account availability
+print_test "2. Checking Google Cloud service account availability..."
+
+# Check if local service account key file exists first
+LOCAL_SA_KEY="./gcp-service-account-key.json"
+if [ -f "$LOCAL_SA_KEY" ]; then
+    print_status "✓ Local service account key file found: $LOCAL_SA_KEY"
     
-    # Verify the secret contains valid JSON
-    if kubectl get secret gcp-service-account-key -n $NAMESPACE -o jsonpath='{.data.service-account\.json}' | base64 -d | jq . >/dev/null 2>&1; then
-        print_status "✓ Service account key is valid JSON"
+    # Verify the local file contains valid JSON
+    if jq . "$LOCAL_SA_KEY" >/dev/null 2>&1; then
+        print_status "✓ Local service account key is valid JSON"
     else
-        print_error "✗ Service account key is not valid JSON"
+        print_error "✗ Local service account key is not valid JSON"
+        exit 1
     fi
 else
-    print_error "✗ GCP service account secret not found"
-    exit 1
+    print_status "Local key file not found, checking Kubernetes secret..."
+    if kubectl get secret $SERVICE_ACCOUNT_SECRET -n $NAMESPACE >/dev/null 2>&1; then
+        print_status "✓ GCP service account secret exists in Kubernetes"
+        
+        # Verify the secret contains valid JSON
+        if kubectl get secret $SERVICE_ACCOUNT_SECRET -n $NAMESPACE -o jsonpath='{.data.service-account\.json}' | base64 -d | jq . >/dev/null 2>&1; then
+            print_status "✓ Service account key in secret is valid JSON"
+        else
+            print_error "✗ Service account key in secret is not valid JSON"
+            exit 1
+        fi
+    else
+        print_error "✗ Neither local key file nor Kubernetes secret found"
+        print_warning "  Expected local file: $LOCAL_SA_KEY"
+        print_warning "  Expected secret name: $SERVICE_ACCOUNT_SECRET"
+        exit 1
+    fi
 fi
 
 # Test 3: Check required JAR files
 print_test "3. Checking required JAR files in containers..."
 REQUIRED_JARS=(
     "flink-sql-connector-kafka"
-    "managedkafka-client"
+    "flink-sql-avro"
     "google-auth-library-oauth2-http"
+    "google-cloud-core"
 )
 
 JM_POD=$(echo $JOBMANAGER_PODS | cut -d' ' -f1)
@@ -99,28 +154,68 @@ for jar in "${REQUIRED_JARS[@]}"; do
     fi
 done
 
-# Test 4: Create test topic (requires gcloud CLI and proper permissions)
-print_test "4. Creating test topic in Google Cloud Managed Kafka..."
+# Test 4: Create test topic using service account
+print_test "4. Ensuring test topic exists in Google Cloud Managed Kafka..."
+TOPIC_CREATED=false
+
 if command -v gcloud &> /dev/null; then
-    # Check if topic already exists
-    TOPIC_EXISTS=$(gcloud managed-kafka topics list --cluster=$KAFKA_CLUSTER --location=asia-south1 --format="value(name)" --filter="name:$TEST_TOPIC" 2>/dev/null || echo "")
+    # Check if local service account key file exists first
+    LOCAL_SA_KEY="./gcp-service-account-key.json"
+    TEMP_SA_KEY="/tmp/gcp-service-account-key.json"
     
-    if [ -z "$TOPIC_EXISTS" ]; then
-        print_status "Creating test topic: $TEST_TOPIC"
-        if gcloud managed-kafka topics create $TEST_TOPIC \
-            --cluster=$KAFKA_CLUSTER \
-            --location=asia-south1 \
-            --partitions=3 \
-            --replication-factor=3 2>/dev/null; then
-            print_status "✓ Test topic created successfully"
-        else
-            print_warning "⚠ Failed to create test topic (check permissions)"
-        fi
+    if [ -f "$LOCAL_SA_KEY" ]; then
+        print_status "Using local service account key file: $LOCAL_SA_KEY"
+        SA_KEY_FILE="$LOCAL_SA_KEY"
     else
-        print_status "✓ Test topic already exists"
+        print_status "Local key file not found, extracting from Kubernetes secret..."
+        # Extract and use the service account key from Kubernetes secret
+        kubectl get secret $SERVICE_ACCOUNT_SECRET -n $NAMESPACE -o jsonpath='{.data.service-account\.json}' | base64 -d > "$TEMP_SA_KEY"
+        SA_KEY_FILE="$TEMP_SA_KEY"
+    fi
+    
+    # Activate service account
+    if gcloud auth activate-service-account --key-file="$SA_KEY_FILE" --quiet 2>/dev/null; then
+        print_status "✓ Service account activated successfully"
+        
+        # Extract project ID from service account key
+        PROJECT_ID=$(jq -r '.project_id' "$SA_KEY_FILE" 2>/dev/null || echo "")
+        if [ ! -z "$PROJECT_ID" ]; then
+            print_status "✓ Using project: $PROJECT_ID"
+            gcloud config set project "$PROJECT_ID" --quiet
+        fi
+        
+        # Check if topic already exists
+        print_status "Checking if test topic exists: $TEST_TOPIC"
+        TOPIC_EXISTS=$(gcloud managed-kafka topics list --cluster=$KAFKA_CLUSTER --location=asia-south1 --format="value(name)" --filter="name:$TEST_TOPIC" 2>/dev/null || echo "")
+        
+        if [ -z "$TOPIC_EXISTS" ]; then
+            print_status "Creating test topic: $TEST_TOPIC"
+            if gcloud managed-kafka topics create $TEST_TOPIC \
+                --cluster=$KAFKA_CLUSTER \
+                --location=asia-south1 \
+                --partitions=3 \
+                --replication-factor=3 2>/dev/null; then
+                print_status "✓ Test topic created successfully"
+                TOPIC_CREATED=true
+                sleep 5  # Wait for topic to be fully available
+            else
+                print_error "✗ Failed to create test topic (check service account permissions)"
+                print_warning "  Ensure service account has managed-kafka.admin role or equivalent"
+                # Don't exit here, continue with tests using existing topics
+            fi
+        else
+            print_status "✓ Test topic already exists: $TEST_TOPIC"
+        fi
+        
+    else
+        print_error "✗ Failed to activate service account"
+        print_warning "  Check if the service account key file is valid"
+        exit 1
     fi
 else
-    print_warning "⚠ gcloud CLI not available, skipping topic creation"
+    print_error "✗ gcloud CLI not available - cannot manage topics"
+    print_warning "  Install gcloud CLI to manage Kafka topics"
+    exit 1
 fi
 
 # Test 5: Test Flink SQL connectivity via port-forward
@@ -141,10 +236,10 @@ GATEWAY_RESPONSE=$(curl -s http://localhost:8083/v1/info 2>/dev/null || echo "FA
 if [[ "$GATEWAY_RESPONSE" != "FAILED" ]]; then
     print_status "✓ SQL Gateway is accessible"
     
-    # Test Kafka connector availability via SQL Gateway
-    print_test "6. Testing Kafka connector in SQL Gateway..."
+    # Test Kafka and Avro connector availability via SQL Gateway
+    print_test "6. Testing Kafka and Avro connectors in SQL Gateway..."
     
-    # Create a simple SQL statement to test Kafka connectivity
+    # Create a SQL session
     SQL_SESSION=$(curl -s -X POST http://localhost:8083/v1/sessions \
         -H "Content-Type: application/json" \
         -d '{"properties": {}}' 2>/dev/null | jq -r '.sessionHandle' 2>/dev/null || echo "FAILED")
@@ -152,45 +247,87 @@ if [[ "$GATEWAY_RESPONSE" != "FAILED" ]]; then
     if [[ "$SQL_SESSION" != "FAILED" && "$SQL_SESSION" != "null" ]]; then
         print_status "✓ SQL session created: $SQL_SESSION"
         
-        # Test Kafka table creation
-        KAFKA_SQL="CREATE TABLE test_kafka_table (
-            id BIGINT,
-            message STRING,
-            ts TIMESTAMP(3),
-            WATERMARK FOR ts AS ts - INTERVAL '5' SECOND
-        ) WITH (
-            'connector' = 'kafka',
-            'topic' = '$TEST_TOPIC',
-            'properties.bootstrap.servers' = '$KAFKA_BOOTSTRAP',
-            'properties.security.protocol' = 'SASL_SSL',
-            'properties.sasl.mechanism' = 'OAUTHBEARER',
-            'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-            'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler',
-            'scan.startup.mode' = 'latest-offset',
-            'format' = 'json'
-        )"
-        
-        KAFKA_TABLE_RESULT=$(curl -s -X POST "http://localhost:8083/v1/sessions/$SQL_SESSION/statements" \
-            -H "Content-Type: application/json" \
-            -d "{\"statement\": \"$KAFKA_SQL\"}" 2>/dev/null || echo "FAILED")
-        
-        if [[ "$KAFKA_TABLE_RESULT" != "FAILED" ]]; then
-            print_status "✓ Kafka table creation statement executed"
+        # Function to execute SQL statement and check result
+        execute_sql() {
+            local sql_statement="$1"
+            local description="$2"
             
-            # Check statement status
-            OPERATION_HANDLE=$(echo "$KAFKA_TABLE_RESULT" | jq -r '.operationHandle' 2>/dev/null || echo "FAILED")
-            if [[ "$OPERATION_HANDLE" != "FAILED" && "$OPERATION_HANDLE" != "null" ]]; then
-                sleep 2
-                STATUS_RESULT=$(curl -s "http://localhost:8083/v1/sessions/$SQL_SESSION/operations/$OPERATION_HANDLE/status" 2>/dev/null || echo "FAILED")
-                STATUS=$(echo "$STATUS_RESULT" | jq -r '.status' 2>/dev/null || echo "UNKNOWN")
-                print_status "✓ Statement status: $STATUS"
+            print_status "Executing: $description"
+            
+            # Properly escape the SQL statement for JSON
+            local escaped_sql=$(echo "$sql_statement" | jq -R . | sed 's/^"//;s/"$//')
+            
+            local result=$(curl -s -X POST "http://localhost:8083/v1/sessions/$SQL_SESSION/statements" \
+                -H "Content-Type: application/json" \
+                -d "{\"statement\": \"$escaped_sql\"}" 2>/dev/null || echo "FAILED")
+            
+            if [[ "$result" != "FAILED" ]]; then
+                local operation_handle=$(echo "$result" | jq -r '.operationHandle' 2>/dev/null || echo "FAILED")
+                
+                if [[ "$operation_handle" != "FAILED" && "$operation_handle" != "null" ]]; then
+                    sleep 3
+                    local status_result=$(curl -s "http://localhost:8083/v1/sessions/$SQL_SESSION/operations/$operation_handle/status" 2>/dev/null || echo "FAILED")
+                    local status=$(echo "$status_result" | jq -r '.status' 2>/dev/null || echo "UNKNOWN")
+                    
+                    if [[ "$status" == "FINISHED" ]]; then
+                        print_status "✓ $description - SUCCESS"
+                        return 0
+                    elif [[ "$status" == "ERROR" ]]; then
+                        local error_msg=$(echo "$status_result" | jq -r '.errorMessage.errorMessage' 2>/dev/null || echo "Unknown error")
+                        print_error "✗ $description - ERROR: $error_msg"
+                        return 1
+                    else
+                        print_warning "⚠ $description - Status: $status"
+                        return 1
+                    fi
+                else
+                    print_error "✗ $description - No operation handle"
+                    # Show what we actually got
+                    local error_msg=$(echo "$result" | jq -r '.message // .error // .errorMessage // "No error message"' 2>/dev/null || echo "Failed to parse error")
+                    print_error "    Error details: $error_msg"
+                    return 1
+                fi
+            else
+                print_error "✗ $description - Request failed"
+                return 1
+            fi
+        }
+        
+        # 1. Drop table if exists (ignore errors)
+        print_status "Cleaning up any existing test table..."
+        execute_sql "DROP TABLE IF EXISTS test_kafka_avro_table" "Drop existing table" || true
+        
+        # 2. Create simple Kafka table with JSON format first to test basic connectivity
+        print_status "Creating simple Kafka table with JSON format..."
+        SIMPLE_KAFKA_SQL="CREATE TABLE test_kafka_simple (id BIGINT, message STRING, ts TIMESTAMP(3)) WITH ('connector' = 'kafka', 'topic' = '$TEST_TOPIC', 'properties.bootstrap.servers' = '$KAFKA_BOOTSTRAP', 'properties.security.protocol' = 'SASL_SSL', 'properties.sasl.mechanism' = 'OAUTHBEARER', 'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;', 'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler', 'scan.startup.mode' = 'latest-offset', 'format' = 'json')"
+        
+        if execute_sql "$SIMPLE_KAFKA_SQL" "Create simple Kafka table with JSON"; then
+            # Test table description
+            execute_sql "DESCRIBE test_kafka_simple" "Describe simple table structure" || true
+            
+            # Clean up simple table
+            execute_sql "DROP TABLE IF EXISTS test_kafka_simple" "Drop simple test table" || true
+            
+            print_status "✓ Basic Kafka connectivity test completed successfully"
+            
+            # 3. Try Avro table if basic connectivity works
+            print_status "Creating Kafka table with Avro format..."
+            AVRO_KAFKA_SQL="CREATE TABLE test_kafka_avro (user_id BIGINT, username STRING, ts TIMESTAMP(3)) WITH ('connector' = 'kafka', 'topic' = '$TEST_TOPIC', 'properties.bootstrap.servers' = '$KAFKA_BOOTSTRAP', 'properties.security.protocol' = 'SASL_SSL', 'properties.sasl.mechanism' = 'OAUTHBEARER', 'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;', 'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler', 'scan.startup.mode' = 'latest-offset', 'format' = 'avro', 'avro.schema' = '{\"type\": \"record\", \"name\": \"UserRecord\", \"fields\": [{\"name\": \"user_id\", \"type\": \"long\"}, {\"name\": \"username\", \"type\": \"string\"}, {\"name\": \"ts\", \"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-millis\"}}]}')"
+            
+            if execute_sql "$AVRO_KAFKA_SQL" "Create Avro Kafka table"; then
+                execute_sql "DESCRIBE test_kafka_avro" "Describe Avro table structure" || true
+                execute_sql "DROP TABLE IF EXISTS test_kafka_avro" "Drop Avro test table" || true
+                print_status "✓ Kafka-Avro integration test completed successfully"
+            else
+                print_error "✗ Avro table creation failed, but basic Kafka connectivity works"
             fi
         else
-            print_error "✗ Failed to execute Kafka table creation"
+            print_error "✗ Basic Kafka connectivity test failed"
         fi
         
         # Clean up session
         curl -s -X DELETE "http://localhost:8083/v1/sessions/$SQL_SESSION" >/dev/null 2>&1
+        print_status "✓ SQL session cleaned up"
     else
         print_error "✗ Failed to create SQL session"
     fi
@@ -227,17 +364,21 @@ print_status ""
 print_status "=========================================="
 print_status "Testing completed!"
 print_status ""
+if [ "$TOPIC_CREATED" = true ]; then
+    print_status "✓ Test topic '$TEST_TOPIC' was created and is ready for use"
+fi
+print_status ""
 print_status "Next steps:"
 print_status "1. Use 'kubectl port-forward svc/flink-sql-gateway 8083:8083 -n flink-studio' to access SQL Gateway"
 print_status "2. Use 'kubectl port-forward svc/flink-session-cluster-rest 8081:8081 -n flink-studio' to access Flink UI"
 print_status "3. Test Kafka connectivity with your actual topics and data"
 print_status ""
-print_status "Example Kafka table creation SQL:"
-echo "CREATE TABLE my_kafka_table ("
-echo "  id BIGINT,"
-echo "  data STRING,"
-echo "  event_time TIMESTAMP(3),"
-echo "  WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND"
+print_status "Example Kafka table creation SQL (JSON format):"
+echo "CREATE TABLE my_kafka_json_table ("
+echo "  user_id BIGINT,"
+echo "  action STRING,"
+echo "  timestamp_val TIMESTAMP(3),"
+echo "  WATERMARK FOR timestamp_val AS timestamp_val - INTERVAL '5' SECOND"
 echo ") WITH ("
 echo "  'connector' = 'kafka',"
 echo "  'topic' = 'your-topic-name',"
@@ -247,4 +388,32 @@ echo "  'properties.sasl.mechanism' = 'OAUTHBEARER',"
 echo "  'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',"
 echo "  'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler',"
 echo "  'format' = 'json'"
+echo ");"
+echo ""
+print_status "Example Kafka table creation SQL (Avro format):"
+echo "CREATE TABLE my_kafka_avro_table ("
+echo "  user_id BIGINT,"
+echo "  username STRING,"
+echo "  metadata MAP<STRING, STRING>,"
+echo "  timestamp_val TIMESTAMP(3),"
+echo "  WATERMARK FOR timestamp_val AS timestamp_val - INTERVAL '5' SECOND"
+echo ") WITH ("
+echo "  'connector' = 'kafka',"
+echo "  'topic' = 'your-avro-topic',"
+echo "  'properties.bootstrap.servers' = '$KAFKA_BOOTSTRAP',"
+echo "  'properties.security.protocol' = 'SASL_SSL',"
+echo "  'properties.sasl.mechanism' = 'OAUTHBEARER',"
+echo "  'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',"
+echo "  'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler',"
+echo "  'format' = 'avro',"
+echo "  'avro.schema' = '{"
+echo "    \"type\": \"record\","
+echo "    \"name\": \"UserEvent\","
+echo "    \"fields\": ["
+echo "      {\"name\": \"user_id\", \"type\": \"long\"},"
+echo "      {\"name\": \"username\", \"type\": \"string\"},"
+echo "      {\"name\": \"metadata\", \"type\": {\"type\": \"map\", \"values\": \"string\"}},"
+echo "      {\"name\": \"timestamp_val\", \"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-millis\"}}"
+echo "    ]"
+echo "  }'"
 echo ");"
