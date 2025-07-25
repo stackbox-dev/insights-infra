@@ -28,6 +28,6 @@ CREATE TABLE `sbx-uat_backbone_public_node` (
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler',
     'properties.group.id' = 'flink-backbone-public-node',
     'scan.startup.mode' = 'earliest-offset',
-    'format' = 'avro',
-    'avro-confluent.url' = 'http://cp-schema-registry.kafka:8081'
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.schema-registry.url' = 'http://cp-schema-registry.kafka:80'
 );
