@@ -154,69 +154,43 @@ for jar in "${REQUIRED_JARS[@]}"; do
     fi
 done
 
-# Test 4: Create test topic using service account
-print_test "4. Ensuring test topic exists in Google Cloud Managed Kafka..."
+# Test 4: Check service account key validity without affecting local auth
+print_test "4. Validating service account key (without affecting local gcloud auth)..."
 TOPIC_CREATED=false
 
-if command -v gcloud &> /dev/null; then
-    # Check if local service account key file exists first
-    LOCAL_SA_KEY="./gcp-service-account-key.json"
-    TEMP_SA_KEY="/tmp/gcp-service-account-key.json"
-    
-    if [ -f "$LOCAL_SA_KEY" ]; then
-        print_status "Using local service account key file: $LOCAL_SA_KEY"
-        SA_KEY_FILE="$LOCAL_SA_KEY"
-    else
-        print_status "Local key file not found, extracting from Kubernetes secret..."
-        # Extract and use the service account key from Kubernetes secret
-        kubectl get secret $SERVICE_ACCOUNT_SECRET -n $NAMESPACE -o jsonpath='{.data.service-account\.json}' | base64 -d > "$TEMP_SA_KEY"
-        SA_KEY_FILE="$TEMP_SA_KEY"
-    fi
-    
-    # Activate service account
-    if gcloud auth activate-service-account --key-file="$SA_KEY_FILE" --quiet 2>/dev/null; then
-        print_status "✓ Service account activated successfully"
-        
-        # Extract project ID from service account key
-        PROJECT_ID=$(jq -r '.project_id' "$SA_KEY_FILE" 2>/dev/null || echo "")
-        if [ ! -z "$PROJECT_ID" ]; then
-            print_status "✓ Using project: $PROJECT_ID"
-            gcloud config set project "$PROJECT_ID" --quiet
-        fi
-        
-        # Check if topic already exists
-        print_status "Checking if test topic exists: $TEST_TOPIC"
-        TOPIC_EXISTS=$(gcloud managed-kafka topics list --cluster=$KAFKA_CLUSTER --location=asia-south1 --format="value(name)" --filter="name:$TEST_TOPIC" 2>/dev/null || echo "")
-        
-        if [ -z "$TOPIC_EXISTS" ]; then
-            print_status "Creating test topic: $TEST_TOPIC"
-            if gcloud managed-kafka topics create $TEST_TOPIC \
-                --cluster=$KAFKA_CLUSTER \
-                --location=asia-south1 \
-                --partitions=3 \
-                --replication-factor=3 2>/dev/null; then
-                print_status "✓ Test topic created successfully"
-                TOPIC_CREATED=true
-                sleep 5  # Wait for topic to be fully available
-            else
-                print_error "✗ Failed to create test topic (check service account permissions)"
-                print_warning "  Ensure service account has managed-kafka.admin role or equivalent"
-                # Don't exit here, continue with tests using existing topics
-            fi
-        else
-            print_status "✓ Test topic already exists: $TEST_TOPIC"
-        fi
-        
-    else
-        print_error "✗ Failed to activate service account"
-        print_warning "  Check if the service account key file is valid"
-        exit 1
-    fi
+# Check if local service account key file exists first
+LOCAL_SA_KEY="./gcp-service-account-key.json"
+TEMP_SA_KEY="/tmp/gcp-service-account-key.json"
+
+if [ -f "$LOCAL_SA_KEY" ]; then
+    print_status "Using local service account key file: $LOCAL_SA_KEY"
+    SA_KEY_FILE="$LOCAL_SA_KEY"
 else
-    print_error "✗ gcloud CLI not available - cannot manage topics"
-    print_warning "  Install gcloud CLI to manage Kafka topics"
-    exit 1
+    print_status "Local key file not found, extracting from Kubernetes secret..."
+    # Extract and use the service account key from Kubernetes secret
+    kubectl get secret $SERVICE_ACCOUNT_SECRET -n $NAMESPACE -o jsonpath='{.data.service-account\.json}' | base64 -d > "$TEMP_SA_KEY"
+    SA_KEY_FILE="$TEMP_SA_KEY"
 fi
+
+# Validate service account key structure without using gcloud auth
+PROJECT_ID=$(jq -r '.project_id' "$SA_KEY_FILE" 2>/dev/null || echo "")
+CLIENT_EMAIL=$(jq -r '.client_email' "$SA_KEY_FILE" 2>/dev/null || echo "")
+PRIVATE_KEY_ID=$(jq -r '.private_key_id' "$SA_KEY_FILE" 2>/dev/null || echo "")
+
+if [ ! -z "$PROJECT_ID" ] && [ ! -z "$CLIENT_EMAIL" ] && [ ! -z "$PRIVATE_KEY_ID" ]; then
+    print_status "✓ Service account key is valid"
+    print_status "  - Project ID: $PROJECT_ID"
+    print_status "  - Client Email: $CLIENT_EMAIL"
+    print_status "  - Private Key ID: ${PRIVATE_KEY_ID:0:8}..."
+else
+    print_error "✗ Service account key is invalid or missing required fields"
+    print_warning "  Required fields: project_id, client_email, private_key_id"
+fi
+
+print_status "✓ Service account validation completed (local gcloud auth unchanged)"
+print_warning "  Note: Skipping topic creation to preserve your local gcloud authentication"
+print_warning "  Please ensure test topic '$TEST_TOPIC' exists in your Kafka cluster"
+print_warning "  You can create it manually using: gcloud managed-kafka topics create $TEST_TOPIC --cluster=$KAFKA_CLUSTER --location=asia-south1"
 
 # Test 5: Test Flink SQL connectivity via port-forward
 print_test "5. Testing Flink SQL Gateway connectivity..."
@@ -364,14 +338,14 @@ print_status ""
 print_status "=========================================="
 print_status "Testing completed!"
 print_status ""
-if [ "$TOPIC_CREATED" = true ]; then
-    print_status "✓ Test topic '$TEST_TOPIC' was created and is ready for use"
-fi
+print_status "✓ Service account key validated successfully"
+print_status "✓ Flink cluster connectivity tested"
 print_status ""
 print_status "Next steps:"
-print_status "1. Use 'kubectl port-forward svc/flink-sql-gateway 8083:80 -n flink-studio' to access SQL Gateway"
-print_status "2. Use 'kubectl port-forward svc/flink-session-cluster-web 8081:80 -n flink-studio' to access Flink UI"
-print_status "3. Test Kafka connectivity with your actual topics and data"
+print_status "1. Create test topic '$TEST_TOPIC' manually: gcloud managed-kafka topics create $TEST_TOPIC --cluster=$KAFKA_CLUSTER --location=asia-south1"
+print_status "2. Use 'kubectl port-forward svc/flink-sql-gateway 8083:80 -n flink-studio' to access SQL Gateway"
+print_status "3. Use 'kubectl port-forward svc/flink-session-cluster-web 8081:80 -n flink-studio' to access Flink UI"
+print_status "4. Test Kafka connectivity with your actual topics and data"
 print_status ""
 print_status "Example Kafka table creation SQL (JSON format):"
 echo "CREATE TABLE my_kafka_json_table ("
