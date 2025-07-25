@@ -57,10 +57,10 @@ spec:
             [
               "start-foreground",
               "-Dsql-gateway.endpoint.rest.address=0.0.0.0",
-              "-Dsql-gateway.endpoint.rest.port=8083",
+              "-Dsql-gateway.endpoint.rest.port=80",
             ]
           ports:
-            - containerPort: 8083
+            - containerPort: 80
               name: rest-api
           env:
             - name: HADOOP_CONF_DIR
@@ -95,7 +95,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /v1/info
-              port: 8083
+              port: 80
             initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
@@ -103,7 +103,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /v1/info
-              port: 8083
+              port: 80
             initialDelaySeconds: 30
             periodSeconds: 5
             timeoutSeconds: 3
@@ -127,8 +127,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 8083
-      targetPort: 8083
+    - port: 80
+      targetPort: 80
       protocol: TCP
       name: rest-api
   selector:

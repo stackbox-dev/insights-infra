@@ -19,12 +19,10 @@ spec:
     - podSelector:
         matchLabels:
           app.kubernetes.io/name: hue
-    - namespaceSelector:
-        matchLabels:
-          name: default
+    - namespaceSelector: {}  # Allow access from all namespaces
     ports:
     - protocol: TCP
-      port: 8083
+      port: 80
   egress:
   - to:
     - podSelector:
@@ -70,14 +68,14 @@ spec:
     - podSelector:
         matchLabels:
           app.kubernetes.io/name: flink-sql-gateway
-    - namespaceSelector:
-        matchLabels:
-          name: default
+    - namespaceSelector: {}  # Allow access from all namespaces
     ports:
     - protocol: TCP
       port: 6123
     - protocol: TCP
       port: 8081
+    - protocol: TCP
+      port: 80  # Allow access to web UI on port 80
   - from:
     - podSelector:
         matchLabels:

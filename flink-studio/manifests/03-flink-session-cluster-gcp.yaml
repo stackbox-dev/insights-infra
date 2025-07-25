@@ -39,7 +39,7 @@ spec:
     kafka.bootstrap.servers: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
     kafka.security.protocol: "SASL_SSL"
     kafka.sasl.mechanism: "OAUTHBEARER"
-    kafka.sasl.jaas.config: 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;'
+    kafka.sasl.jaas.config: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;"
     kafka.sasl.login.callback.handler.class: "com.google.cloud.kafka.OAuthBearerTokenCallbackHandler"
   serviceAccount: flink
   jobManager:
@@ -293,3 +293,22 @@ spec:
             secret:
               secretName: gcp-service-account-key
   mode: native
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-session-cluster-web
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-session-cluster
+    app.kubernetes.io/component: web-service
+spec:
+  selector:
+    app: flink-session-cluster
+    component: jobmanager
+  ports:
+    - name: web
+      port: 80
+      targetPort: 8081
+      protocol: TCP
+  type: ClusterIP
