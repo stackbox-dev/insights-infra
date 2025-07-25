@@ -8,9 +8,9 @@ metadata:
     app.kubernetes.io/component: flink-cluster
     app.kubernetes.io/cloud: gcp
 spec:
-  image: flink:2.0.0-scala_2.12-java21
+  image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:latest
   flinkVersion: v2_0
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "4"
     state.backend: "hashmap"
@@ -50,120 +50,18 @@ spec:
     podTemplate:
       spec:
         serviceAccountName: flink
-        initContainers:
-          - name: flink-plugin-setup
-            image: flink:2.0.0-scala_2.12-java21
-            command:
-              - "sh"
-              - "-c"
-              - |
-                echo "Loading all Flink connectors and plugins..."
-                mkdir -p /mnt/plugins/gs-fs-hadoop
-                mkdir -p /mnt/plugins/s3-fs-hadoop  
-                mkdir -p /mnt/plugins/s3-fs-presto
-                mkdir -p /mnt/plugins/azure-fs-hadoop
-                mkdir -p /mnt/plugins/oss-fs-hadoop
-
-                # Copy all filesystem connectors
-                cp /opt/flink/opt/flink-gs-fs-hadoop-*.jar /mnt/plugins/gs-fs-hadoop/ 2>/dev/null || echo "GCS connector not found"
-                cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /mnt/plugins/s3-fs-hadoop/ 2>/dev/null || echo "S3 Hadoop connector not found"  
-                cp /opt/flink/opt/flink-s3-fs-presto-*.jar /mnt/plugins/s3-fs-presto/ 2>/dev/null || echo "S3 Presto connector not found"
-                cp /opt/flink/opt/flink-azure-fs-hadoop-*.jar /mnt/plugins/azure-fs-hadoop/ 2>/dev/null || echo "Azure connector not found"
-                cp /opt/flink/opt/flink-oss-fs-hadoop-*.jar /mnt/plugins/oss-fs-hadoop/ 2>/dev/null || echo "OSS connector not found"
-
-                # Copy Kafka connector to lib directory (not plugins)
-                echo "Setting up Kafka connector..."
-                # For Flink 2.0, we need to download the Kafka connector
-                wget -O /tmp/flink-sql-connector-kafka-4.0.0-2.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Kafka connector"
-                  exit 1
-                fi
-                # Copy to the actual Flink lib directory (not mounting over it)
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                # Download Google Auth Library for OAuth (required for GCP authentication)
-                echo "Setting up Google Auth Library..."
-                wget -O /tmp/google-auth-library-oauth2-http-1.19.0.jar https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.19.0/google-auth-library-oauth2-http-1.19.0.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Google Auth Library"
-                  exit 1
-                fi
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                # Download Google Cloud libraries for GCP Managed Kafka authentication
-                echo "Setting up Google Cloud libraries..."
-                wget -O /tmp/google-cloud-core-2.8.1.jar https://repo1.maven.org/maven2/com/google/cloud/google-cloud-core/2.8.1/google-cloud-core-2.8.1.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Google Cloud Core library"
-                  exit 1
-                fi
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                # Download Avro connector for schema registry and serialization
-                echo "Setting up Avro connector..."
-                wget -O /tmp/flink-sql-avro-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-avro/2.0.0/flink-sql-avro-2.0.0.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Avro connector"
-                  exit 1
-                fi
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                echo "Available plugins in /opt/flink/opt/:"
-                ls -la /opt/flink/opt/
-                echo "Enabled plugins:"
-                find /mnt/plugins -name "*.jar" -exec echo "  {}" \;
-                echo "Shared lib directory contents:"
-                ls -la /mnt/lib/
-            volumeMounts:
-              - name: flink-plugins
-                mountPath: /mnt/plugins
-              - name: flink-lib
-                mountPath: /mnt/lib
         containers:
           - name: flink-main-container
-            command:
-              - "sh"
-              - "-c"
-              - |
-                echo "Copying libraries from shared volume to Flink lib directory..."
-                cp /opt/flink/lib-extra/*.jar /opt/flink/lib/ 2>/dev/null || echo "No additional libraries to copy"
-                echo "Starting Flink JobManager..."
-                exec /docker-entrypoint.sh jobmanager
             env:
               - name: GOOGLE_APPLICATION_CREDENTIALS
                 value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
             volumeMounts:
-              - name: flink-plugins
-                mountPath: /opt/flink/plugins
-              - name: flink-lib
-                mountPath: /opt/flink/lib-extra
               - name: gcp-service-account
                 mountPath: /opt/flink/gcp
                 readOnly: true
         volumes:
-          - name: flink-plugins
-            emptyDir: {}
-          - name: flink-lib
-            emptyDir: {}
           - name: gcp-service-account
             secret:
               secretName: gcp-service-account-key
@@ -175,120 +73,18 @@ spec:
     podTemplate:
       spec:
         serviceAccountName: flink
-        initContainers:
-          - name: flink-plugin-setup
-            image: flink:2.0.0-scala_2.12-java21
-            command:
-              - "sh"
-              - "-c"
-              - |
-                echo "Loading all Flink connectors and plugins..."
-                mkdir -p /mnt/plugins/gs-fs-hadoop
-                mkdir -p /mnt/plugins/s3-fs-hadoop  
-                mkdir -p /mnt/plugins/s3-fs-presto
-                mkdir -p /mnt/plugins/azure-fs-hadoop
-                mkdir -p /mnt/plugins/oss-fs-hadoop
-
-                # Copy all filesystem connectors
-                cp /opt/flink/opt/flink-gs-fs-hadoop-*.jar /mnt/plugins/gs-fs-hadoop/ 2>/dev/null || echo "GCS connector not found"
-                cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /mnt/plugins/s3-fs-hadoop/ 2>/dev/null || echo "S3 Hadoop connector not found"  
-                cp /opt/flink/opt/flink-s3-fs-presto-*.jar /mnt/plugins/s3-fs-presto/ 2>/dev/null || echo "S3 Presto connector not found"
-                cp /opt/flink/opt/flink-azure-fs-hadoop-*.jar /mnt/plugins/azure-fs-hadoop/ 2>/dev/null || echo "Azure connector not found"
-                cp /opt/flink/opt/flink-oss-fs-hadoop-*.jar /mnt/plugins/oss-fs-hadoop/ 2>/dev/null || echo "OSS connector not found"
-
-                # Copy Kafka connector to lib directory (not plugins)
-                echo "Setting up Kafka connector..."
-                # For Flink 2.0, we need to download the Kafka connector
-                wget -O /tmp/flink-sql-connector-kafka-4.0.0-2.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Kafka connector"
-                  exit 1
-                fi
-                # Copy to the actual Flink lib directory (not mounting over it)
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                # Download Google Auth Library for OAuth (required for GCP authentication)
-                echo "Setting up Google Auth Library..."
-                wget -O /tmp/google-auth-library-oauth2-http-1.19.0.jar https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.19.0/google-auth-library-oauth2-http-1.19.0.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Google Auth Library"
-                  exit 1
-                fi
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                # Download Google Cloud libraries for GCP Managed Kafka authentication
-                echo "Setting up Google Cloud libraries..."
-                wget -O /tmp/google-cloud-core-2.8.1.jar https://repo1.maven.org/maven2/com/google/cloud/google-cloud-core/2.8.1/google-cloud-core-2.8.1.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Google Cloud Core library"
-                  exit 1
-                fi
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                # Download Avro connector for schema registry and serialization
-                echo "Setting up Avro connector..."
-                wget -O /tmp/flink-sql-avro-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-avro/2.0.0/flink-sql-avro-2.0.0.jar
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to download Avro connector"
-                  exit 1
-                fi
-                cp /tmp/*.jar /mnt/lib/
-                if [ $? -ne 0 ]; then
-                  echo "ERROR: Failed to copy to shared lib"
-                  exit 1
-                fi
-
-                echo "Available plugins in /opt/flink/opt/:"
-                ls -la /opt/flink/opt/
-                echo "Enabled plugins:"
-                find /mnt/plugins -name "*.jar" -exec echo "  {}" \;
-                echo "Shared lib directory contents:"
-                ls -la /mnt/lib/
-            volumeMounts:
-              - name: flink-plugins
-                mountPath: /mnt/plugins
-              - name: flink-lib
-                mountPath: /mnt/lib
         containers:
           - name: flink-main-container
-            command:
-              - "sh"
-              - "-c"
-              - |
-                echo "Copying libraries from shared volume to Flink lib directory..."
-                cp /opt/flink/lib-extra/*.jar /opt/flink/lib/ 2>/dev/null || echo "No additional libraries to copy"
-                echo "Starting Flink TaskManager..."
-                exec /docker-entrypoint.sh taskmanager
             env:
               - name: GOOGLE_APPLICATION_CREDENTIALS
                 value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
             volumeMounts:
-              - name: flink-plugins
-                mountPath: /opt/flink/plugins
-              - name: flink-lib
-                mountPath: /opt/flink/lib-extra
               - name: gcp-service-account
                 mountPath: /opt/flink/gcp
                 readOnly: true
         volumes:
-          - name: flink-plugins
-            emptyDir: {}
-          - name: flink-lib
-            emptyDir: {}
           - name: gcp-service-account
             secret:
               secretName: gcp-service-account-key
