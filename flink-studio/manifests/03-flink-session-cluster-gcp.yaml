@@ -39,9 +39,8 @@ spec:
     kafka.bootstrap.servers: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
     kafka.security.protocol: "SASL_SSL"
     kafka.sasl.mechanism: "OAUTHBEARER"
-    kafka.sasl.jaas.config: 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="unused" clientSecret="unused";'
-    kafka.sasl.login.callback.handler.class: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler"
-    kafka.sasl.oauthbearer.token.endpoint.url: "http://localhost:14293"
+    kafka.sasl.jaas.config: 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;'
+    kafka.sasl.login.callback.handler.class: "com.google.cloud.kafka.OAuthBearerTokenCallbackHandler"
   serviceAccount: flink
   jobManager:
     resource:
@@ -75,9 +74,43 @@ spec:
                 # Copy Kafka connector to lib directory (not plugins)
                 echo "Setting up Kafka connector..."
                 # For Flink 2.0, we need to download the Kafka connector
-                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
+                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to download Kafka connector"
+                  exit 1
+                fi
                 # Copy to the actual Flink lib directory (not mounting over it)
-                cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/ || echo "Failed to copy Kafka connector to lib"
+                cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to copy Kafka connector to lib"
+                  exit 1
+                fi
+
+                # Download Google Auth Library for OAuth (required for GCP authentication)
+                echo "Setting up Google Auth Library..."
+                wget -O /tmp/google-auth-library-oauth2-http-1.19.0.jar https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.19.0/google-auth-library-oauth2-http-1.19.0.jar
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to download Google Auth Library"
+                  exit 1
+                fi
+                cp /tmp/google-auth-library-oauth2-http-1.19.0.jar /opt/flink/lib/
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to copy Google Auth Library to lib"
+                  exit 1
+                fi
+
+                # Download Google Cloud libraries for GCP Managed Kafka authentication
+                echo "Setting up Google Cloud libraries..."
+                wget -O /tmp/google-cloud-core-2.8.1.jar https://repo1.maven.org/maven2/com/google/cloud/google-cloud-core/2.8.1/google-cloud-core-2.8.1.jar
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to download Google Cloud Core library"
+                  exit 1
+                fi
+                cp /tmp/google-cloud-core-2.8.1.jar /opt/flink/lib/
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to copy Google Cloud Core library to lib"
+                  exit 1
+                fi
 
                 echo "Available plugins in /opt/flink/opt/:"
                 ls -la /opt/flink/opt/
@@ -91,8 +124,6 @@ spec:
         containers:
           - name: flink-main-container
             env:
-              - name: HADOOP_CONF_DIR
-                value: /opt/hadoop/conf
               - name: GOOGLE_APPLICATION_CREDENTIALS
                 value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
@@ -103,18 +134,12 @@ spec:
               - name: gcp-service-account
                 mountPath: /opt/flink/gcp
                 readOnly: true
-              - name: hadoop-config
-                mountPath: /opt/hadoop/conf
-                readOnly: true
         volumes:
           - name: flink-plugins
             emptyDir: {}
           - name: gcp-service-account
             secret:
               secretName: gcp-service-account-key
-          - name: hadoop-config
-            configMap:
-              name: hadoop-config
   taskManager:
     resource:
       memory: "3072m"
@@ -147,9 +172,43 @@ spec:
                 # Copy Kafka connector to lib directory (not plugins)
                 echo "Setting up Kafka connector..."
                 # For Flink 2.0, we need to download the Kafka connector
-                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
+                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to download Kafka connector"
+                  exit 1
+                fi
                 # Copy to the actual Flink lib directory (not mounting over it)
-                cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/ || echo "Failed to copy Kafka connector to lib"
+                cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to copy Kafka connector to lib"
+                  exit 1
+                fi
+
+                # Download Google Auth Library for OAuth (required for GCP authentication)
+                echo "Setting up Google Auth Library..."
+                wget -O /tmp/google-auth-library-oauth2-http-1.19.0.jar https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.19.0/google-auth-library-oauth2-http-1.19.0.jar
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to download Google Auth Library"
+                  exit 1
+                fi
+                cp /tmp/google-auth-library-oauth2-http-1.19.0.jar /opt/flink/lib/
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to copy Google Auth Library to lib"
+                  exit 1
+                fi
+
+                # Download Google Cloud libraries for GCP Managed Kafka authentication
+                echo "Setting up Google Cloud libraries..."
+                wget -O /tmp/google-cloud-core-2.8.1.jar https://repo1.maven.org/maven2/com/google/cloud/google-cloud-core/2.8.1/google-cloud-core-2.8.1.jar
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to download Google Cloud Core library"
+                  exit 1
+                fi
+                cp /tmp/google-cloud-core-2.8.1.jar /opt/flink/lib/
+                if [ $? -ne 0 ]; then
+                  echo "ERROR: Failed to copy Google Cloud Core library to lib"
+                  exit 1
+                fi
 
                 echo "Available plugins in /opt/flink/opt/:"
                 ls -la /opt/flink/opt/
@@ -163,8 +222,6 @@ spec:
         containers:
           - name: flink-main-container
             env:
-              - name: HADOOP_CONF_DIR
-                value: /opt/hadoop/conf
               - name: GOOGLE_APPLICATION_CREDENTIALS
                 value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
@@ -175,16 +232,10 @@ spec:
               - name: gcp-service-account
                 mountPath: /opt/flink/gcp
                 readOnly: true
-              - name: hadoop-config
-                mountPath: /opt/hadoop/conf
-                readOnly: true
         volumes:
           - name: flink-plugins
             emptyDir: {}
           - name: gcp-service-account
             secret:
               secretName: gcp-service-account-key
-          - name: hadoop-config
-            configMap:
-              name: hadoop-config
   mode: native

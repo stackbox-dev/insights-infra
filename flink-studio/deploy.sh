@@ -98,6 +98,16 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
         print_status "Granting Storage Admin permissions..."
         gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin \
             gs://sbx-stag-flink-storage/
+        
+        # Grant Managed Kafka permissions
+        print_status "Granting Managed Kafka permissions..."
+        gcloud projects add-iam-policy-binding sbx-stag \
+            --member="serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com" \
+            --role="roles/managedkafka.client"
+        
+        gcloud projects add-iam-policy-binding sbx-stag \
+            --member="serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com" \
+            --role="roles/managedkafka.viewer"
             
         # Generate and download service account key
         print_status "Generating service account key..."

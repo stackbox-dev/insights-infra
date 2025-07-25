@@ -31,8 +31,21 @@ spec:
               wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
               # Copy to lib directory
               cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/ || echo "Failed to copy Kafka connector to lib"
+
+              # Download Google Cloud Managed Kafka client library
+              echo "Setting up Google Cloud Managed Kafka client library..."
+              wget -O /tmp/managedkafka-client-1.9.0.jar https://repo1.maven.org/maven2/com/google/cloud/managedkafka-client/1.9.0/managedkafka-client-1.9.0.jar || echo "Managed Kafka client download failed"
+              cp /tmp/managedkafka-client-1.9.0.jar /opt/flink/lib/ || echo "Failed to copy Managed Kafka client to lib"
+
+              # Download Google Auth Library for OAuth
+              echo "Setting up Google Auth Library..."
+              wget -O /tmp/google-auth-library-oauth2-http-1.19.0.jar https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.19.0/google-auth-library-oauth2-http-1.19.0.jar || echo "Google Auth Library download failed"
+              cp /tmp/google-auth-library-oauth2-http-1.19.0.jar /opt/flink/lib/ || echo "Failed to copy Google Auth Library to lib"
+
               echo "Kafka connector setup complete"
               ls -la /opt/flink/lib/flink-sql-connector-kafka*.jar
+              ls -la /opt/flink/lib/managedkafka-client*.jar
+              ls -la /opt/flink/lib/google-auth-library*.jar
       containers:
         - name: flink-sql-gateway
           # Note: Using default Docker Hub Flink image
@@ -60,6 +73,11 @@ spec:
               value: |
                 jobmanager.rpc.address: flink-session-cluster-rest
                 jobmanager.rpc.port: 6123
+                kafka.bootstrap.servers: bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092
+                kafka.security.protocol: SASL_SSL
+                kafka.sasl.mechanism: OAUTHBEARER
+                kafka.sasl.jaas.config: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;
+                kafka.sasl.login.callback.handler.class: com.google.cloud.kafka.OAuthBearerTokenCallbackHandler
           volumeMounts:
             - name: gcp-service-account
               mountPath: /opt/flink/gcp
