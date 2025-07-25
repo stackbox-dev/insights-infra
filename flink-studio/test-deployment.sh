@@ -116,28 +116,37 @@ check_pods_status() {
     fi
 }
 
-check_init_containers() {
-    log_info "Checking init container logs..."
+check_sql_gateway() {
+    log_info "Checking SQL Gateway pod status..."
     
-    local pods=$(kubectl get pods -n "$NAMESPACE" -l app="$DEPLOYMENT_NAME" -o jsonpath='{.items[*].metadata.name}')
+    local sql_pods=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=flink-sql-gateway -o jsonpath='{.items[*].metadata.name}')
     
-    for pod in $pods; do
-        log_info "Checking init container logs for pod: $pod"
+    if [[ -z "$sql_pods" ]]; then
+        log_error "No SQL Gateway pods found"
+        return 1
+    fi
+    
+    local all_sql_ready=true
+    
+    for pod in $sql_pods; do
+        local ready=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+        local phase=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.phase}')
         
-        # Check if init container completed successfully
-        local init_status=$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.initContainerStatuses[0].state.terminated.exitCode}' 2>/dev/null || echo "unknown")
-        
-        if [[ "$init_status" == "0" ]]; then
-            log_success "Init container for pod '$pod' completed successfully"
+        if [[ "$ready" == "True" && "$phase" == "Running" ]]; then
+            log_success "SQL Gateway pod '$pod' is ready and running"
         else
-            log_warning "Init container for pod '$pod' may have issues (exit code: $init_status)"
+            log_error "SQL Gateway pod '$pod' is not ready (Ready: $ready, Phase: $phase)"
+            all_sql_ready=false
         fi
-        
-        # Show last few lines of init container logs
-        echo "Last 5 lines of init container logs for $pod:"
-        kubectl logs "$pod" -n "$NAMESPACE" -c flink-plugin-setup --tail=5 2>/dev/null || log_warning "Could not retrieve init container logs for $pod"
-        echo ""
     done
+    
+    if [[ "$all_sql_ready" == "true" ]]; then
+        log_success "All SQL Gateway pods are healthy"
+        return 0
+    else
+        log_error "Some SQL Gateway pods have issues"
+        return 1
+    fi
 }
 
 check_libraries() {
@@ -146,29 +155,25 @@ check_libraries() {
     local pods=$(kubectl get pods -n "$NAMESPACE" -l app="$DEPLOYMENT_NAME" -o jsonpath='{.items[*].metadata.name}')
     local all_libs_present=true
     
+    if [[ -z "$pods" ]]; then
+        log_error "No pods found for library check"
+        return 1
+    fi
+    
     for pod in $pods; do
         log_info "Checking libraries in pod: $pod"
         
-        # Check shared volume first
-        echo "Shared volume (/opt/flink/lib-extra/) contents:"
-        kubectl exec "$pod" -n "$NAMESPACE" -- ls -la /opt/flink/lib-extra/ 2>/dev/null || log_warning "Could not list shared volume for $pod"
-        
-        # Check main lib directory
-        echo "Main lib directory (/opt/flink/lib/) contents for critical libraries:"
+        # Check main lib directory for required libraries
         for lib in "${EXPECTED_LIBS[@]}"; do
-            if kubectl exec "$pod" -n "$NAMESPACE" -- test -f "/opt/flink/lib/$lib" 2>/dev/null; then
+            if kubectl exec "$pod" -n "$NAMESPACE" -c flink-main-container -- test -f "/opt/flink/lib/$lib" 2>/dev/null; then
                 log_success "Library '$lib' found in pod '$pod'"
             else
                 log_error "Library '$lib' NOT found in pod '$pod'"
                 all_libs_present=false
                 
-                # Try to copy from shared volume if missing
-                log_info "Attempting to copy missing library from shared volume..."
-                if kubectl exec "$pod" -n "$NAMESPACE" -- test -f "/opt/flink/lib-extra/$lib" 2>/dev/null; then
-                    kubectl exec "$pod" -n "$NAMESPACE" -- cp "/opt/flink/lib-extra/$lib" "/opt/flink/lib/" 2>/dev/null && \
-                    log_success "Successfully copied '$lib' from shared volume" || \
-                    log_error "Failed to copy '$lib' from shared volume"
-                fi
+                # Show what libraries are actually present
+                log_info "Available libraries in /opt/flink/lib/:"
+                kubectl exec "$pod" -n "$NAMESPACE" -c flink-main-container -- ls -1 /opt/flink/lib/ | grep -E "(kafka|avro|google)" | head -5 || true
             fi
         done
         echo ""
@@ -178,7 +183,7 @@ check_libraries() {
         log_success "All required libraries are present in all pods"
         return 0
     else
-        log_warning "Some libraries are missing. Check the logs above."
+        log_error "Some required libraries are missing"
         return 1
     fi
 }
@@ -275,11 +280,11 @@ test_kafka_connectivity() {
     fi
     
     # Check if Kafka connector libraries are available
-    if kubectl exec "$pod" -n "$NAMESPACE" -- find /opt/flink/lib -name "*kafka*" | grep -q kafka; then
+    if kubectl exec "$pod" -n "$NAMESPACE" -c flink-main-container -- find /opt/flink/lib -name "*kafka*" 2>/dev/null | grep -q kafka; then
         log_success "Kafka connector libraries are present"
         
         # Additional check: verify the exact Kafka connector jar
-        if kubectl exec "$pod" -n "$NAMESPACE" -- test -f "/opt/flink/lib/flink-sql-connector-kafka-4.0.0-2.0.jar" 2>/dev/null; then
+        if kubectl exec "$pod" -n "$NAMESPACE" -c flink-main-container -- test -f "/opt/flink/lib/flink-sql-connector-kafka-4.0.0-2.0.jar" 2>/dev/null; then
             log_success "Correct Kafka connector version found: flink-sql-connector-kafka-4.0.0-2.0.jar"
         else
             log_warning "Expected Kafka connector jar not found, but other Kafka libraries are present"
@@ -303,7 +308,7 @@ test_avro_support() {
     fi
     
     # Check if Avro classes are available
-    if kubectl exec "$pod" -n "$NAMESPACE" -- find /opt/flink/lib -name "*avro*" | grep -q avro; then
+    if kubectl exec "$pod" -n "$NAMESPACE" -c flink-main-container -- find /opt/flink/lib -name "*avro*" 2>/dev/null | grep -q avro; then
         log_success "Avro libraries are present"
         return 0
     else
@@ -325,7 +330,7 @@ generate_test_report() {
     echo ""
     
     # Summary of results
-    local total_tests=7
+    local total_tests=8
     local passed_tests=0
     
     echo "TEST RESULTS:"
@@ -343,6 +348,13 @@ generate_test_report() {
         ((passed_tests++))
     else
         echo "❌ Pod Status: FAILED"
+    fi
+    
+    if check_sql_gateway &>/dev/null; then
+        echo "✅ SQL Gateway: PASSED"
+        ((passed_tests++))
+    else
+        echo "❌ SQL Gateway: FAILED"
     fi
     
     if check_libraries &>/dev/null; then
@@ -366,11 +378,11 @@ generate_test_report() {
         echo "❌ TaskManager Connectivity: FAILED"
     fi
     
-    if check_init_containers &>/dev/null; then
-        echo "✅ Init Containers: PASSED"
+    if test_kafka_connectivity &>/dev/null; then
+        echo "✅ Kafka Support: PASSED"
         ((passed_tests++))
     else
-        echo "❌ Init Containers: FAILED"
+        echo "❌ Kafka Support: FAILED"
     fi
     
     if test_avro_support &>/dev/null; then
@@ -387,7 +399,7 @@ generate_test_report() {
         log_success "All tests passed! Deployment is healthy."
         return 0
     else
-        log_warning "Some tests failed. Check the detailed output above."
+        log_error "Some tests failed. Check the detailed output above."
         return 1
     fi
 }
@@ -408,7 +420,7 @@ main() {
     check_pods_status
     echo ""
     
-    check_init_containers
+    check_sql_gateway
     echo ""
     
     check_libraries
@@ -418,6 +430,9 @@ main() {
     echo ""
     
     check_taskmanagers
+    echo ""
+    
+    test_kafka_connectivity
     echo ""
     
     test_avro_support
