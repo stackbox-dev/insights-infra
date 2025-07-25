@@ -12,7 +12,7 @@ data:
     secret_key=hue-secret-key-change-in-production
     http_host=0.0.0.0
     http_port=8888
-    time_zone=America/Los_Angeles
+    time_zone=Asia/Kolkata
     django_debug_mode=false
     http_500_debug_mode=false
     memory_profiler=false
@@ -38,7 +38,7 @@ data:
     [[[flink-sql]]]
     name=Flink SQL
     interface=flink
-    options='{"url": "http://flink-sql-gateway.flink-studio.svc.cluster.local:8083"}'
+    options='{"url": "http://flink-sql-gateway.flink-studio.svc.cluster.local:80"}'
 
     [filebrowser]
     remote_storage_home=/tmp

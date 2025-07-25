@@ -199,11 +199,12 @@ for i in {1..12}; do
 done
 
 # Deploy cloud-specific configurations
+# Note: Hadoop config is needed for SQL Gateway to access GCS/Azure storage
 if [ "$CLOUD_PROVIDER" = "gcp" ]; then
-    print_status "Deploying Hadoop configuration for GCP..."
+    print_status "Deploying Hadoop configuration for SQL Gateway GCS access..."
     kubectl apply -f manifests/02-hadoop-config-gcp.yaml
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
-    print_status "Deploying Hadoop configuration for Azure..."
+    print_status "Deploying Hadoop configuration for SQL Gateway Azure storage access..."
     kubectl apply -f manifests/02-hadoop-config-aks.yaml
 fi
 
@@ -247,7 +248,7 @@ done
 # Additional verification that JobManager is accessible
 print_status "Verifying Flink JobManager is accessible..."
 for i in {1..30}; do
-    if kubectl get service flink-session-cluster-rest -n flink-studio >/dev/null 2>&1; then
+    if kubectl get service flink-session-cluster -n flink-studio >/dev/null 2>&1; then
         print_status "Flink JobManager service is ready"
         break
     fi
@@ -283,9 +284,9 @@ kubectl apply -f manifests/06-network-policies.yaml
 print_status "Deployment completed successfully!"
 print_status ""
 print_status "=== Access Information ==="
-print_status "Flink UI: kubectl port-forward svc/flink-session-cluster-rest 8081:8081 -n flink-studio"
+print_status "Flink UI: kubectl port-forward svc/flink-session-cluster 8081:80 -n flink-studio"
 print_status "Hue UI: kubectl port-forward svc/hue 8888:8888 -n flink-studio"
-print_status "SQL Gateway: kubectl port-forward svc/flink-sql-gateway 8083:8083 -n flink-studio"
+print_status "SQL Gateway: kubectl port-forward svc/flink-sql-gateway 8083:80 -n flink-studio"
 print_status ""
 print_status "Default Hue credentials: admin/admin"
 print_status ""
