@@ -28,37 +28,44 @@ spec:
             - |
               echo "Setting up Kafka connector for SQL Gateway..."
               # Download Kafka connector JAR
-              wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
-              # Copy to lib directory
-              cp /tmp/flink-sql-connector-kafka-2.0.0.jar /opt/flink/lib/ || echo "Failed to copy Kafka connector to lib"
+              wget -O /tmp/flink-sql-connector-kafka-4.0.0-2.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar || echo "Kafka connector download failed"
+              # Copy to shared lib directory
+              cp /tmp/flink-sql-connector-kafka-4.0.0-2.0.jar /mnt/lib/ || echo "Failed to copy Kafka connector to shared lib"
 
               # Download Google Cloud Managed Kafka client library
               echo "Setting up Google Cloud Managed Kafka client library..."
               wget -O /tmp/managedkafka-client-1.9.0.jar https://repo1.maven.org/maven2/com/google/cloud/managedkafka-client/1.9.0/managedkafka-client-1.9.0.jar || echo "Managed Kafka client download failed"
-              cp /tmp/managedkafka-client-1.9.0.jar /opt/flink/lib/ || echo "Failed to copy Managed Kafka client to lib"
+              cp /tmp/managedkafka-client-1.9.0.jar /mnt/lib/ || echo "Failed to copy Managed Kafka client to shared lib"
 
               # Download Google Auth Library for OAuth
               echo "Setting up Google Auth Library..."
               wget -O /tmp/google-auth-library-oauth2-http-1.19.0.jar https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.19.0/google-auth-library-oauth2-http-1.19.0.jar || echo "Google Auth Library download failed"
-              cp /tmp/google-auth-library-oauth2-http-1.19.0.jar /opt/flink/lib/ || echo "Failed to copy Google Auth Library to lib"
+              cp /tmp/google-auth-library-oauth2-http-1.19.0.jar /mnt/lib/ || echo "Failed to copy Google Auth Library to shared lib"
+
+              # Download Avro connector
+              echo "Setting up Avro connector..."
+              wget -O /tmp/flink-sql-avro-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-avro/2.0.0/flink-sql-avro-2.0.0.jar || echo "Avro connector download failed"
+              cp /tmp/flink-sql-avro-2.0.0.jar /mnt/lib/ || echo "Failed to copy Avro connector to shared lib"
 
               echo "Kafka connector setup complete"
-              ls -la /opt/flink/lib/flink-sql-connector-kafka*.jar
-              ls -la /opt/flink/lib/managedkafka-client*.jar
-              ls -la /opt/flink/lib/google-auth-library*.jar
+              ls -la /mnt/lib/
+          volumeMounts:
+            - name: flink-lib
+              mountPath: /mnt/lib
       containers:
         - name: flink-sql-gateway
           # Note: Using default Docker Hub Flink image
           # Both GCP and Azure will use the same base image
           # Cloud-specific configurations are handled through environment variables and volumes
           image: flink:2.0.0-scala_2.12-java21
-          command: ["/opt/flink/bin/sql-gateway.sh"]
-          args:
-            [
-              "start-foreground",
-              "-Dsql-gateway.endpoint.rest.address=0.0.0.0",
-              "-Dsql-gateway.endpoint.rest.port=80",
-            ]
+          command: 
+            - "sh"
+            - "-c"
+            - |
+              echo "Copying libraries from shared volume to Flink lib directory..."
+              cp /opt/flink/lib-extra/*.jar /opt/flink/lib/ 2>/dev/null || echo "No additional libraries to copy"
+              echo "Starting Flink SQL Gateway..."
+              exec /opt/flink/bin/sql-gateway.sh start-foreground -Dsql-gateway.endpoint.rest.address=0.0.0.0 -Dsql-gateway.endpoint.rest.port=80
           ports:
             - containerPort: 80
               name: rest-api
@@ -79,6 +86,8 @@ spec:
                 kafka.sasl.jaas.config: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;
                 kafka.sasl.login.callback.handler.class: com.google.cloud.kafka.OAuthBearerTokenCallbackHandler
           volumeMounts:
+            - name: flink-lib
+              mountPath: /opt/flink/lib-extra
             - name: gcp-service-account
               mountPath: /opt/flink/gcp
               readOnly: true
@@ -109,6 +118,8 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
       volumes:
+        - name: flink-lib
+          emptyDir: {}
         - name: gcp-service-account
           secret:
             secretName: gcp-service-account-key

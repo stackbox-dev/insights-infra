@@ -17,7 +17,7 @@ NAMESPACE="flink-studio"
 DEPLOYMENT_NAME="flink-session-cluster"
 EXPECTED_LIBS=(
     "flink-sql-avro-2.0.0.jar"
-    "flink-sql-connector-kafka-2.0.0.jar"
+    "flink-sql-connector-kafka-4.0.0-2.0.jar"
     "google-auth-library-oauth2-http-1.19.0.jar"
     "google-cloud-core-2.8.1.jar"
 )
@@ -186,12 +186,12 @@ check_libraries() {
 check_flink_ui() {
     log_info "Checking Flink UI accessibility..."
     
-    # Get JobManager service - using the direct service name since it's predictable
-    local service_name="$DEPLOYMENT_NAME-rest"
+    # Get JobManager service - using the actual service name from manifest
+    local service_name="flink-session-cluster"
     
     # Port forward in background
     log_info "Starting port forward to Flink UI (localhost:8081)..."
-    kubectl port-forward -n "$NAMESPACE" "svc/$service_name" 8081:8081 &
+    kubectl port-forward -n "$NAMESPACE" "svc/$service_name" 8081:80 &
     local port_forward_pid=$!
     
     # Wait a moment for port forward to establish
@@ -228,10 +228,10 @@ check_flink_ui() {
 check_taskmanagers() {
     log_info "Checking TaskManager connectivity..."
     
-    # Port forward to access Flink API - using the direct service name
-    local service_name="$DEPLOYMENT_NAME-rest"
+    # Port forward to access Flink API - using the actual service name
+    local service_name="flink-session-cluster"
     
-    kubectl port-forward -n "$NAMESPACE" "svc/$service_name" 8081:8081 &
+    kubectl port-forward -n "$NAMESPACE" "svc/$service_name" 8081:80 &
     local port_forward_pid=$!
     sleep 3
     
@@ -274,12 +274,19 @@ test_kafka_connectivity() {
         return 1
     fi
     
-    # Check if Kafka connector classes are available
-    if kubectl exec "$pod" -n "$NAMESPACE" -- java -cp "/opt/flink/lib/*" org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer --help &>/dev/null; then
-        log_success "Kafka connector classes are accessible"
+    # Check if Kafka connector libraries are available
+    if kubectl exec "$pod" -n "$NAMESPACE" -- find /opt/flink/lib -name "*kafka*" | grep -q kafka; then
+        log_success "Kafka connector libraries are present"
+        
+        # Additional check: verify the exact Kafka connector jar
+        if kubectl exec "$pod" -n "$NAMESPACE" -- test -f "/opt/flink/lib/flink-sql-connector-kafka-4.0.0-2.0.jar" 2>/dev/null; then
+            log_success "Correct Kafka connector version found: flink-sql-connector-kafka-4.0.0-2.0.jar"
+        else
+            log_warning "Expected Kafka connector jar not found, but other Kafka libraries are present"
+        fi
         return 0
     else
-        log_warning "Kafka connector classes may not be properly loaded (this might be expected for library-only check)"
+        log_error "Kafka connector libraries not found"
         return 1
     fi
 }

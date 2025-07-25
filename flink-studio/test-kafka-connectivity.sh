@@ -26,7 +26,7 @@ set -e
 cleanup() {
     # Kill any port-forward processes
     pkill -f "kubectl port-forward.*flink-sql-gateway" 2>/dev/null || true
-    pkill -f "kubectl port-forward.*flink-session-cluster-rest" 2>/dev/null || true
+    pkill -f "kubectl port-forward.*flink-session-cluster-web" 2>/dev/null || true
     
     # Remove only temporary service account key file (not local one)
     rm -f /tmp/gcp-service-account-key.json 2>/dev/null || true
@@ -75,8 +75,8 @@ print_status "=========================================="
 
 # Test 1: Check if pods are running
 print_test "1. Checking if Flink pods are running..."
-JOBMANAGER_PODS=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=flink-session-cluster -l component=jobmanager --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-TASKMANAGER_PODS=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=flink-session-cluster -l component=taskmanager --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+JOBMANAGER_PODS=$(kubectl get pods -n $NAMESPACE -l app=flink-session-cluster -l component=jobmanager --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+TASKMANAGER_PODS=$(kubectl get pods -n $NAMESPACE -l app=flink-session-cluster -l component=taskmanager --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
 SQL_GATEWAY_PODS=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=flink-sql-gateway --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
 
 if [ ! -z "$JOBMANAGER_PODS" ]; then
@@ -227,7 +227,7 @@ pkill -f "kubectl port-forward.*flink-sql-gateway" 2>/dev/null || true
 sleep 2
 
 # Start port-forward in background
-kubectl port-forward svc/flink-sql-gateway 8083:8083 -n $NAMESPACE >/dev/null 2>&1 &
+kubectl port-forward svc/flink-sql-gateway 8083:80 -n $NAMESPACE >/dev/null 2>&1 &
 PF_PID=$!
 sleep 5
 
@@ -340,7 +340,7 @@ kill $PF_PID 2>/dev/null || true
 
 # Test 7: Check Flink cluster health
 print_test "7. Checking Flink cluster health..."
-kubectl port-forward svc/flink-session-cluster-rest 8081:8081 -n $NAMESPACE >/dev/null 2>&1 &
+kubectl port-forward svc/flink-session-cluster-web 8081:80 -n $NAMESPACE >/dev/null 2>&1 &
 PF_PID=$!
 sleep 5
 
@@ -369,8 +369,8 @@ if [ "$TOPIC_CREATED" = true ]; then
 fi
 print_status ""
 print_status "Next steps:"
-print_status "1. Use 'kubectl port-forward svc/flink-sql-gateway 8083:8083 -n flink-studio' to access SQL Gateway"
-print_status "2. Use 'kubectl port-forward svc/flink-session-cluster-rest 8081:8081 -n flink-studio' to access Flink UI"
+print_status "1. Use 'kubectl port-forward svc/flink-sql-gateway 8083:80 -n flink-studio' to access SQL Gateway"
+print_status "2. Use 'kubectl port-forward svc/flink-session-cluster-web 8081:80 -n flink-studio' to access Flink UI"
 print_status "3. Test Kafka connectivity with your actual topics and data"
 print_status ""
 print_status "Example Kafka table creation SQL (JSON format):"

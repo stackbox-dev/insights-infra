@@ -74,7 +74,7 @@ spec:
                 # Copy Kafka connector to lib directory (not plugins)
                 echo "Setting up Kafka connector..."
                 # For Flink 2.0, we need to download the Kafka connector
-                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
+                wget -O /tmp/flink-sql-connector-kafka-4.0.0-2.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
                 if [ $? -ne 0 ]; then
                   echo "ERROR: Failed to download Kafka connector"
                   exit 1
@@ -199,7 +199,7 @@ spec:
                 # Copy Kafka connector to lib directory (not plugins)
                 echo "Setting up Kafka connector..."
                 # For Flink 2.0, we need to download the Kafka connector
-                wget -O /tmp/flink-sql-connector-kafka-2.0.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
+                wget -O /tmp/flink-sql-connector-kafka-4.0.0-2.0.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar
                 if [ $? -ne 0 ]; then
                   echo "ERROR: Failed to download Kafka connector"
                   exit 1
@@ -297,7 +297,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: flink-session-cluster-web
+  name: flink-session-cluster
   namespace: flink-studio
   labels:
     app.kubernetes.io/name: flink-session-cluster
