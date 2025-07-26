@@ -38,6 +38,10 @@ download_jar "flink-avro-2.0.0.jar" \
     "https://repo1.maven.org/maven2/org/apache/flink/flink-avro/2.0.0/flink-avro-2.0.0.jar" \
     "Flink Avro Connector"
 
+download_jar "flink-sql-avro-2.0.0.jar" \
+    "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-avro/2.0.0/flink-sql-avro-2.0.0.jar" \
+    "Flink SQL Avro Connector"
+
 download_jar "avro-1.11.4.jar" \
     "https://repo1.maven.org/maven2/org/apache/avro/avro/1.11.4/avro-1.11.4.jar" \
     "Apache Avro Core Library"
