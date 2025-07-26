@@ -307,8 +307,8 @@ class FlinkSQLExecutor:
                     
                     self.logger.info(f"✓ {statement_name or 'Statement'} completed successfully ({duration:.1f}s)")
                     
-                    # Print results if available
-                    if result_data and result_data.get('results', {}).get('data'):
+                    # Print results - always show row count summary, even for 0 rows
+                    if result_data and result_data.get('results'):
                         self._print_query_results(result_data, statement_name)
                     
                     return True, {
@@ -404,26 +404,73 @@ class FlinkSQLExecutor:
             results = result_data.get('results', {})
             if not results:
                 self.logger.info(f"No results structure returned for {statement_name}")
+                print(f"\n📊 Results for {statement_name}:")
+                print("=" * 60)
+                print("❌ No results structure returned")
+                print("=" * 60)
+                print()
                 return
-            
+
             print(f"\n📊 Results for {statement_name}:")
             print("=" * 60)
-            
+
             # Get column information and data
             columns = results.get('columns', [])
             data_rows = results.get('data', [])
             
+            # Enhanced debugging for Kafka streaming queries
+            result_type = result_data.get('resultType', 'UNKNOWN')
+            is_query_result = result_data.get('isQueryResult', False)
+            result_kind = result_data.get('resultKind', 'UNKNOWN')
+            job_id = result_data.get('jobID', 'N/A')
+            
+            # Count actual data rows (excluding metadata)
+            actual_data_rows = [row for row in data_rows if row.get('kind') == 'INSERT'] if data_rows else []
+            total_rows_returned = len(data_rows) if data_rows else 0
+            data_rows_count = len(actual_data_rows)
+            
+            print(f"📈 Row Summary:")
+            print(f"  • Total rows returned: {total_rows_returned}")
+            print(f"  • Data rows (INSERT): {data_rows_count}")
+            print(f"  • Columns: {len(columns)}")
+            print(f"  • Result Type: {result_type}")
+            print(f"  • Is Query Result: {is_query_result}")
+            print(f"  • Result Kind: {result_kind}")
+            print(f"  • Job ID: {job_id}")
+            print()
+
             if not data_rows:
-                print("No data returned - the query executed successfully but returned 0 rows.")
+                print("❌ No data returned - the query executed successfully but returned 0 rows.")
                 print("This could mean:")
                 print("  • The Kafka topic is empty")
                 print("  • No data matches the query criteria")
                 print("  • The table source is not producing data yet")
+                print("  • Schema registry issues preventing deserialization")
+                print("  • Avro schema mismatch")
+                print("  • Authentication working but no read permissions")
+                print("  • Topic exists but partitions are empty")
+                print("  • Watermark configuration preventing data from being read")
+                
+                # For streaming queries, suggest checking the Flink job
+                if is_query_result and job_id != 'N/A':
+                    print(f"  • Check Flink job status: {job_id}")
+                    print("  • The streaming job may still be starting up")
+                    print("  • Consider increasing the query timeout or checking job metrics")
+                
                 print("=" * 60)
                 print()
                 return
             
-            if columns and data_rows:
+            if not actual_data_rows:
+                print("❌ No INSERT data rows found.")
+                print("Raw data structure received:")
+                for i, row in enumerate(data_rows[:3]):  # Show first 3 rows for debugging
+                    print(f"  Row {i+1}: kind='{row.get('kind', 'UNKNOWN')}', fields={len(row.get('fields', []))}")
+                print("=" * 60)
+                print()
+                return
+
+            if columns and actual_data_rows:
                 # Print column headers
                 headers = [col.get('name', f'col_{i}') for i, col in enumerate(columns)]
                 col_widths = [max(20, len(header)) for header in headers]
@@ -434,20 +481,22 @@ class FlinkSQLExecutor:
                 print("-" * len(header_row))
                 
                 # Print data rows
-                for row_data in data_rows:
-                    if row_data.get('kind') == 'INSERT':
-                        fields = row_data.get('fields', [])
-                        # Format each cell and pad to column width
-                        formatted_cells = []
-                        for i, cell in enumerate(fields):
-                            cell_str = str(cell) if cell is not None else 'NULL'
-                            width = col_widths[i] if i < len(col_widths) else 20
-                            formatted_cells.append(cell_str.ljust(width))
-                        print(" | ".join(formatted_cells))
+                for row_data in actual_data_rows:
+                    fields = row_data.get('fields', [])
+                    # Format each cell and pad to column width
+                    formatted_cells = []
+                    for i, cell in enumerate(fields):
+                        cell_str = str(cell) if cell is not None else 'NULL'
+                        width = col_widths[i] if i < len(col_widths) else 20
+                        formatted_cells.append(cell_str.ljust(width))
+                    print(" | ".join(formatted_cells))
+                
+                print()
+                print(f"✅ Displayed {data_rows_count} data rows")
             else:
                 # Fallback: print raw data
                 print("Raw result data:")
-                for row in data_rows:
+                for row in data_rows[:5]:  # Show first 5 rows for debugging
                     print(f"  {row}")
             
             print("=" * 60)

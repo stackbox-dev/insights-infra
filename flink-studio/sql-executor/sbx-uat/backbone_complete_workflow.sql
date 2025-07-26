@@ -1,3 +1,5 @@
+-- Complete backbone public node workflow: Create, Test, and Query
+-- First create the table
 CREATE TABLE `sbx-uat_backbone_public_node` (
     id BIGINT,
     parentId BIGINT,
@@ -25,9 +27,15 @@ CREATE TABLE `sbx-uat_backbone_public_node` (
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'OAUTHBEARER',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler',
+    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.group.id' = 'flink-backbone-public-node',
     'scan.startup.mode' = 'earliest-offset',
     'value.format' = 'avro-confluent',
     'value.avro-confluent.schema-registry.url' = 'http://cp-schema-registry.kafka:80'
 );
+
+-- Test query to describe the node table structure
+DESCRIBE `sbx-uat_backbone_public_node`;
+
+-- Query the table data
+SELECT * FROM `sbx-uat_backbone_public_node` LIMIT 10;
