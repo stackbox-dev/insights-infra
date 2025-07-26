@@ -24,12 +24,12 @@ spec:
           image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:latest
           imagePullPolicy: Always
           command: ["/opt/flink/bin/sql-gateway.sh"]
-          args:
-            [
-              "start-foreground",
-              "-Dsql-gateway.endpoint.rest.address=0.0.0.0",
-              "-Dsql-gateway.endpoint.rest.port=80",
-            ]
+          args: 
+            - "start-foreground"
+            - "-Dsql-gateway.endpoint.rest.address=0.0.0.0"
+            - "-Dsql-gateway.endpoint.rest.port=80"
+            - "-Drest.address=flink-session-cluster-rest"
+            - "-Drest.port=8081"
           ports:
             - containerPort: 80
               name: rest-api
@@ -42,8 +42,8 @@ spec:
               value: sbx-stag
             - name: FLINK_PROPERTIES
               value: |
-                jobmanager.rpc.address: flink-session-cluster-rest
-                jobmanager.rpc.port: 6123
+                rest.address: flink-session-cluster-rest
+                rest.port: 8081
                 kafka.bootstrap.servers: bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092
                 kafka.security.protocol: SASL_SSL
                 kafka.sasl.mechanism: OAUTHBEARER

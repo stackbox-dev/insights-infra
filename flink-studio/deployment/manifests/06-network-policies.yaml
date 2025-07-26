@@ -27,7 +27,7 @@ spec:
   - to:
     - podSelector:
         matchLabels:
-          app.kubernetes.io/name: flink-session-cluster
+          app: flink-session-cluster
     ports:
     - protocol: TCP
       port: 6123
@@ -59,7 +59,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: flink-session-cluster
+      app: flink-session-cluster
   policyTypes:
   - Ingress
   - Egress
@@ -93,7 +93,7 @@ spec:
   - to:
     - podSelector:
         matchLabels:
-          app.kubernetes.io/name: flink-session-cluster
+          app: flink-session-cluster
     ports:
     - protocol: TCP
       port: 6121
