@@ -6,10 +6,6 @@ This repository contains the complete deployment manifests and instructions for 
 
 - 📚 [Architecture Overview](ARCH.md) - System design and components
 - 🔧 [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
-- 📁 [Documentation](docs/) - Complete guides and examples
-  - ☸️ [Kafka Integration](docs/KAFKA_HUE_INTEGRATION.md) - How to work with Kafka topics in Hue
-  - ⚡ [Quick Reference](docs/QUICK_REFERENCE.md) - Essential commands and templates
-  - 🗃️ [SQL Examples](docs/kafka-table-examples.sql) - Ready-to-use Kafka table templates
 
 ## Architecture Overview
 
@@ -505,8 +501,6 @@ CREATE TABLE orders_avro (
 );
 ```
 
-For more examples, see [docs/kafka-table-examples.sql](docs/kafka-table-examples.sql).
-
 ## Monitoring and Troubleshooting
 
 ### Deployment Testing and Validation
@@ -722,8 +716,6 @@ The comprehensive test script provides detailed diagnostics:
 # Debug mode with verbose output
 ./test-deployment.sh --debug
 ```
-
-For detailed test script documentation, see [TEST-DEPLOYMENT.md](TEST-DEPLOYMENT.md).
 
 ## Contributing
 

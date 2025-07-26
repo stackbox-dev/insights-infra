@@ -5,13 +5,14 @@ This directory contains tools for executing SQL files and inline queries against
 ## Directory Structure
 
 ```
-landscape/
+sql-executor/
 ├── README.md                    # This file
 ├── config.yaml                  # Configuration file
 ├── requirements.txt             # Python dependencies
 ├── flink_sql_executor.py        # Main Python executor script
 ├── run_sql_executor.sh          # Bash wrapper script
-└── scripts/                     # Additional utility scripts
+├── test.sql                     # Test SQL file
+└── sbx-uat/                     # Environment-specific configurations
 ```
 
 ## Features
@@ -322,7 +323,7 @@ The SQL executor can be integrated into CI/CD pipelines:
     sleep 5
 
     # Execute SQL files
-    ./landscape/run_sql_executor.sh --file my_deployment_queries.sql
+    ./flink-studio/sql-executor/run_sql_executor.sh --file my_deployment_queries.sql
 ```
 
 ## Contributing
