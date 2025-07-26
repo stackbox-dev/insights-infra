@@ -173,6 +173,7 @@ class FlinkSQLExecutor:
                     error_info = status_result.get('errorMessage', {})
                     self.logger.debug(f"Full error response: {json.dumps(status_result, indent=2)}")
                     
+                    detailed_error = None
                     # Try to fetch the operation result for more detailed error info
                     try:
                         result_url = f"{self.sql_gateway_url}/v1/sessions/{self.session_handle}/operations/{operation_handle}/result/0"
@@ -183,19 +184,28 @@ class FlinkSQLExecutor:
                         elif result_response.status_code >= 400:
                             # The error details are likely in the response text
                             error_text = result_response.text
-                            self.logger.error(f"Detailed error from result endpoint: {error_text}")
-                            if "Exception" in error_text or "Error" in error_text:
-                                # Extract the meaningful error message
-                                lines = error_text.split('\n')
-                                for line in lines:
-                                    if 'Exception' in line or 'Error' in line:
-                                        error_msg = line.strip()
-                                        break
+                            self.logger.debug(f"Detailed error from result endpoint: {error_text}")
+                            detailed_error = error_text
+                            
+                            # Try to parse the JSON to get the actual error
+                            try:
+                                error_json = json.loads(error_text)
+                                if 'errors' in error_json and len(error_json['errors']) > 1:
+                                    # The second element often contains the detailed error
+                                    detailed_error = error_json['errors'][1]
+                            except:
+                                pass  # Use raw error_text if JSON parsing fails
+                                
                     except Exception as e:
                         self.logger.debug(f"Could not fetch error result: {e}")
                     
-                    error_msg = error_info.get('errorMessage', status_result.get('errorMessage', 'SQL execution failed'))
-                    self.logger.error(f"✗ {statement_name or 'Statement'} failed: {error_msg}")
+                    # Use detailed error if available, otherwise fall back to basic error message
+                    if detailed_error:
+                        error_msg = detailed_error
+                    else:
+                        error_msg = error_info.get('errorMessage', status_result.get('errorMessage', 'SQL execution failed'))
+                    
+                    self.logger.error(f"✗ {statement_name or 'Statement'} failed")
                     return False, {
                         "status": status,
                         "error": error_msg,
@@ -291,7 +301,7 @@ class FlinkSQLExecutor:
             print(json.dumps(result_data, indent=2))
 
 
-def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None):
+def setup_logging(log_level: str, log_file: Optional[str] = None):
     """Setup logging configuration"""
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     
@@ -316,7 +326,161 @@ def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None):
         logger.addHandler(file_handler)
 
 
+def load_config(config_file: str = "config.yaml") -> Dict:
+    """Load configuration from YAML file"""
+    config_path = Path(config_file)
+    
+    # Try to find config.yaml in the same directory as the script if not found
+    if not config_path.exists():
+        script_dir = Path(__file__).parent
+        config_path = script_dir / "config.yaml"
+    
+    # Return default config if file doesn't exist
+    if not config_path.exists():
+        return {
+            "sql_gateway": {
+                "url": "http://localhost:8083",
+                "session_timeout": 300,
+                "poll_interval": 2,
+                "max_wait_time": 60
+            },
+            "logging": {
+                "level": "INFO",
+                "format": "%(asctime)s - %(levelname)s - %(message)s"
+            },
+            "execution": {
+                "continue_on_error": True
+            },
+            "connection": {
+                "timeout": 30,
+                "retry_count": 3,
+                "retry_delay": 5
+            }
+        }
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            return config if config else {}
+    except Exception as e:
+        print(f"Warning: Could not load config file {config_path}: {e}")
+        return {}
+
+
+def format_sql_error(error_message: str, debug_mode: bool = False) -> str:
+    """Format SQL error message for better readability"""
+    if not error_message:
+        return "Unknown error occurred"
+    
+    # Look for SQL parse errors specifically - they can be deeply nested
+    if "SQL parse failed" in error_message or "SqlParseException" in error_message:
+        # Extract the SQL parse error line
+        lines = error_message.split('\n')
+        parse_error_line = None
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith("SQL parse failed"):
+                parse_error_line = line
+                break
+            elif "SqlParseException:" in line and "Encountered" in line:
+                # Extract from nested exception
+                parse_error_line = line.split("SqlParseException: ")[-1]
+                break
+            elif line.startswith("Encountered") and ("at line" in line or "column" in line):
+                parse_error_line = f"SQL parse failed. {line}"
+                break
+        
+        if parse_error_line:
+            if debug_mode:
+                return f"""
+╭─ SQL Parse Error ─────────────────────────────────────────────────────────╮
+│ {parse_error_line}
+│ 
+│ This usually means:
+│ • Invalid SQL syntax
+│ • Reserved keyword used as identifier (try adding quotes)
+│ • Missing quotes around string literals
+│ • Incorrect table/column names
+│ 
+│ Suggestion: Check your SQL syntax and ensure all identifiers are properly quoted
+╰───────────────────────────────────────────────────────────────────────────╯"""
+            else:
+                return f"❌ {parse_error_line}"
+    
+    # Look for table not found errors
+    if "Table" in error_message and "not found" in error_message:
+        lines = error_message.split('\n')
+        for line in lines:
+            if "not found" in line.lower() and "Table" in line:
+                if debug_mode:
+                    return f"""
+╭─ Table Not Found Error ───────────────────────────────────────────────────╮
+│ {line.strip()}
+│ 
+│ This usually means:
+│ • Table doesn't exist in the catalog
+│ • Incorrect table name or schema
+│ • Table not registered in Flink
+│ 
+│ Suggestion: Check available tables with 'SHOW TABLES;'
+╰───────────────────────────────────────────────────────────────────────────╯"""
+                else:
+                    return f"❌ {line.strip()}"
+    
+    # For other errors, try to extract the most relevant line
+    lines = error_message.split('\n')
+    relevant_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('at ') and not line.startswith('Caused by:'):
+            # Look for lines that contain error information
+            if any(keyword in line.lower() for keyword in ['error', 'failed', 'exception', 'invalid']) and len(line) < 200:
+                relevant_lines.append(line)
+    
+    if relevant_lines:
+        main_error = relevant_lines[0]
+        if debug_mode:
+            debug_info = '\n'.join(lines[:15])  # First 15 lines for context
+            return f"""
+╭─ SQL Execution Error ─────────────────────────────────────────────────────╮
+│ {main_error}
+│ 
+│ Full error details:
+│ {debug_info}
+╰───────────────────────────────────────────────────────────────────────────╯"""
+        else:
+            return f"❌ {main_error}"
+    
+    # Fallback: return first non-empty line
+    for line in lines:
+        line = line.strip()
+        if line and len(line) > 10:  # Skip very short lines
+            return f"❌ {line}" if not debug_mode else f"""
+╭─ Error Details ───────────────────────────────────────────────────────────╮
+│ {line}
+│ 
+│ Full error message:
+│ {error_message[:500]}{'...' if len(error_message) > 500 else ''}
+╰───────────────────────────────────────────────────────────────────────────╯"""
+    
+    return f"❌ {error_message[:100]}{'...' if len(error_message) > 100 else ''}"
+
+
 def main():
+    # First, create a parser to check if a custom config file is specified
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--config", default="config.yaml")
+    pre_args, _ = pre_parser.parse_known_args()
+    
+    # Load configuration using the specified config file
+    config = load_config(pre_args.config)
+    
+    # Extract default values from config
+    default_sql_gateway_url = config.get("sql_gateway", {}).get("url", "http://localhost:8083")
+    default_log_level = config.get("logging", {}).get("level", "INFO")
+    
     parser = argparse.ArgumentParser(
         description="Execute Flink SQL files for landscape environments",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -351,8 +515,8 @@ Examples:
     
     parser.add_argument(
         "--sql-gateway-url",
-        default="http://localhost:8083",
-        help="Flink SQL Gateway URL (default: http://localhost:8083)"
+        default=default_sql_gateway_url,
+        help=f"Flink SQL Gateway URL (default: {default_sql_gateway_url})"
     )
     
     parser.add_argument(
@@ -362,15 +526,27 @@ Examples:
     )
     
     parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode with detailed error information"
+    )
+    
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)"
+        default=default_log_level,
+        help=f"Logging level (default: {default_log_level})"
     )
     
     parser.add_argument(
         "--log-file",
         help="Log file path (optional)"
+    )
+    
+    parser.add_argument(
+        "--config",
+        default="config.yaml",
+        help="Configuration file path (default: config.yaml)"
     )
     
     args = parser.parse_args()
@@ -411,7 +587,8 @@ Examples:
                     else:
                         logger.error("💥 Inline SQL execution failed!")
                         if "error" in result:
-                            logger.error(f"Error: {result['error']}")
+                            formatted_error = format_sql_error(result['error'], args.debug)
+                            logger.error(formatted_error)
                         sys.exit(1)
             finally:
                 if not args.dry_run:
@@ -461,7 +638,8 @@ Examples:
                     else:
                         logger.error(f"💥 SQL file {file_path.name} execution failed!")
                         if "error" in result:
-                            logger.error(f"Error: {result['error']}")
+                            formatted_error = format_sql_error(result['error'], args.debug)
+                            logger.error(formatted_error)
                         sys.exit(1)
             finally:
                 if not args.dry_run:

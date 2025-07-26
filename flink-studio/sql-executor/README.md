@@ -91,12 +91,14 @@ python3 flink_sql_executor.py --file my_query.sql --dry-run --log-level DEBUG
 Options:
     -f, --file FILE           SQL file to execute
     -s, --sql QUERY          Inline SQL query to execute
-    -u, --url URL            SQL Gateway URL (default: http://localhost:8083)
+    -u, --url URL            SQL Gateway URL (overrides config.yaml)
     -d, --dry-run            Show what would be executed without running
     -v, --verbose            Enable verbose logging (DEBUG level)
     -l, --log-file FILE      Log to file
     -h, --help               Show help message
 ```
+
+**Note**: If `--url` is not specified, the runner script will use the URL from `config.yaml`.
 
 #### Python Script (`flink_sql_executor.py`)
 
@@ -106,22 +108,97 @@ Options:
     --sql, -s               Inline SQL query to execute
     --sql-gateway-url        Flink SQL Gateway URL
     --dry-run               Preview mode without execution
+    --debug                 Enable debug mode with detailed error information
     --log-level             Logging level (DEBUG, INFO, WARNING, ERROR)
     --log-file              Log file path
+    --config                Configuration file path (default: config.yaml)
 ```
 
 ### Configuration File (`config.yaml`)
 
-The script supports configuration via `config.yaml` file:
+The script automatically loads configuration from `config.yaml` in the same directory. Configuration values serve as defaults that can be overridden by command-line arguments.
+
+**Current configuration** (as loaded from your `config.yaml`):
 
 ```yaml
 sql_gateway:
-  url: "http://localhost:8083"
+  # Flink SQL Gateway URL - used as default if not specified via --url
+  url: "http://flink-sql-gateway.flink-studio.api.staging.stackbox.internal"
+  
+  # Session timeout in seconds
   session_timeout: 300
+  
+  # Operation polling settings
+  poll_interval: 2
+  max_wait_time: 60
 
 logging:
+  # Default logging level
   level: "INFO"
+  
+  # Log format
   format: "%(asctime)s - %(levelname)s - %(message)s"
+
+execution:
+  # Continue executing if errors occur
+  continue_on_error: true
+
+connection:
+  # Request timeout in seconds
+  timeout: 30
+  
+  # Number of retries for failed requests
+  retry_count: 3
+  
+  # Retry delay in seconds
+  retry_delay: 5
+```
+
+**Configuration Priority** (highest to lowest):
+1. Command-line arguments (e.g., `--sql-gateway-url`, `--log-level`)
+2. Configuration file values (`config.yaml`)
+3. Built-in defaults
+
+## Error Handling
+
+The SQL executor provides enhanced error formatting to help debug SQL issues:
+
+### Normal Error Mode (Default)
+Shows concise, user-friendly error messages:
+
+```
+❌ Encountered "current_time" at line 3, column 29.
+```
+
+### Debug Mode (`--debug` flag)
+Shows detailed error information with suggestions:
+
+```
+╭─ SQL Parse Error ─────────────────────────────────────────────────────────╮
+│ Encountered "current_time" at line 3, column 29.
+│ 
+│ This usually means:
+│ • Invalid SQL syntax
+│ • Reserved keyword used as identifier (try adding quotes)
+│ • Missing quotes around string literals
+│ • Incorrect table/column names
+│ 
+│ Suggestion: Check your SQL syntax and ensure all identifiers are properly quoted
+╰───────────────────────────────────────────────────────────────────────────╯
+```
+
+### Error Types Detected
+- **SQL Parse Errors**: Syntax issues, reserved keywords, etc.
+- **Table Not Found**: Missing or incorrectly named tables
+- **General SQL Errors**: Connection issues, data type mismatches, etc.
+
+### Usage
+```bash
+# Basic error reporting
+./run_sql_executor.sh --file problematic_query.sql
+
+# Detailed error debugging  
+./run_sql_executor.sh --file problematic_query.sql --debug
 ```
 
 ## Examples
@@ -129,7 +206,7 @@ logging:
 ### Basic SQL File Execution
 
 ```bash
-# Execute SQL from a file
+# Execute SQL from a file (uses config.yaml URL automatically)
 ./run_sql_executor.sh --file my_query.sql
 ```
 
@@ -137,7 +214,7 @@ Expected output:
 
 ```
 ℹ Starting Flink SQL Executor for SQL file: /path/to/my_query.sql
-ℹ SQL Gateway URL: http://localhost:8083
+ℹ SQL Gateway URL: http://flink-sql-gateway.flink-studio.api.staging.stackbox.internal
 ℹ Creating Python virtual environment...
 ✓ Virtual environment created
 ✓ Dependencies installed

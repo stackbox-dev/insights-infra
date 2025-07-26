@@ -74,8 +74,9 @@ This script runs the Flink SQL Executor with proper Python environment setup.
 Options:
     -f, --file FILE           SQL file to execute
     -s, --sql QUERY          Inline SQL query to execute
-    -u, --url URL            SQL Gateway URL (default: http://localhost:8083)
+    -u, --url URL            SQL Gateway URL (overrides config.yaml)
     -d, --dry-run            Show what would be executed without running
+    --debug                  Enable debug mode with detailed error information
     -v, --verbose            Enable verbose logging (DEBUG level)
     -l, --log-file FILE      Log to file
     -h, --help               Show this help message
@@ -84,6 +85,7 @@ Examples:
     $0 --file /path/to/my_query.sql
     $0 --sql "SELECT * FROM my_table LIMIT 10"
     $0 --file my_query.sql --dry-run
+    $0 --file my_query.sql --debug
     $0 --file my_query.sql --url http://flink-sql-gateway.default:8083
     $0 --file my_query.sql --verbose --log-file execution.log
 
@@ -94,7 +96,9 @@ EOF
 SQL_FILE=""
 SQL_QUERY=""
 SQL_GATEWAY_URL="http://localhost:8083"
+SQL_GATEWAY_URL_EXPLICIT=""  # Track if user explicitly set the URL
 DRY_RUN=""
+DEBUG_MODE=""
 LOG_LEVEL="INFO"
 LOG_FILE=""
 EXTRA_ARGS=()
@@ -111,10 +115,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         -u|--url)
             SQL_GATEWAY_URL="$2"
+            SQL_GATEWAY_URL_EXPLICIT="true"
             shift 2
             ;;
         -d|--dry-run)
             DRY_RUN="--dry-run"
+            shift
+            ;;
+        --debug)
+            DEBUG_MODE="--debug"
             shift
             ;;
         -v|--verbose)
@@ -163,33 +172,45 @@ if [ -n "$SQL_FILE" ]; then
     fi
 fi
 
+# Get the actual SQL Gateway URL that will be used (from config if not explicitly set)
+ACTUAL_SQL_GATEWAY_URL="$SQL_GATEWAY_URL"
+if [ -z "$SQL_GATEWAY_URL_EXPLICIT" ] && [ -f "$SCRIPT_DIR/config.yaml" ]; then
+    # Try to extract URL from config.yaml if it exists
+    CONFIG_URL=$(python3 -c "import yaml; config=yaml.safe_load(open('$SCRIPT_DIR/config.yaml')); print(config.get('sql_gateway', {}).get('url', '$SQL_GATEWAY_URL'))" 2>/dev/null || echo "$SQL_GATEWAY_URL")
+    ACTUAL_SQL_GATEWAY_URL="$CONFIG_URL"
+fi
+
 if [ -n "$SQL_QUERY" ]; then
     log_info "Starting Flink SQL Executor for inline query"
     log_info "SQL: $SQL_QUERY"
 elif [ -n "$SQL_FILE" ]; then
     log_info "Starting Flink SQL Executor for SQL file: $SQL_FILE"
 fi
-log_info "SQL Gateway URL: $SQL_GATEWAY_URL"
+log_info "SQL Gateway URL: $ACTUAL_SQL_GATEWAY_URL"
 
 # Setup Python environment
 setup_venv
 
 # Check SQL Gateway connectivity (optional - don't fail if not accessible for dry runs)
 if [ -z "$DRY_RUN" ]; then
-    if ! check_sql_gateway "$SQL_GATEWAY_URL"; then
+    if ! check_sql_gateway "$ACTUAL_SQL_GATEWAY_URL"; then
         log_error "Cannot proceed without accessible SQL Gateway"
         exit 1
     fi
 else
-    check_sql_gateway "$SQL_GATEWAY_URL" || true
+    check_sql_gateway "$ACTUAL_SQL_GATEWAY_URL" || true
 fi
 
 # Build Python command
 PYTHON_CMD=(
     python3 "$SCRIPT_DIR/flink_sql_executor.py"
-    --sql-gateway-url "$SQL_GATEWAY_URL"
     --log-level "$LOG_LEVEL"
 )
+
+# Only add SQL Gateway URL if explicitly provided by user
+if [ -n "$SQL_GATEWAY_URL_EXPLICIT" ]; then
+    PYTHON_CMD+=("--sql-gateway-url" "$SQL_GATEWAY_URL")
+fi
 
 if [ -n "$SQL_QUERY" ]; then
     PYTHON_CMD+=("--sql" "$SQL_QUERY")
@@ -199,6 +220,10 @@ fi
 
 if [ -n "$DRY_RUN" ]; then
     PYTHON_CMD+=("$DRY_RUN")
+fi
+
+if [ -n "$DEBUG_MODE" ]; then
+    PYTHON_CMD+=("$DEBUG_MODE")
 fi
 
 if [ -n "$LOG_FILE" ]; then
