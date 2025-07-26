@@ -46,18 +46,18 @@ download_jar "avro-1.11.4.jar" \
     "https://repo1.maven.org/maven2/org/apache/avro/avro/1.11.4/avro-1.11.4.jar" \
     "Apache Avro Core Library"
 
-# Confluent Schema Registry support
+# Confluent Schema Registry support - Updated for managed-kafka-auth-login-handler compatibility
 download_jar "flink-avro-confluent-registry-2.0.0.jar" \
     "https://repo1.maven.org/maven2/org/apache/flink/flink-avro-confluent-registry/2.0.0/flink-avro-confluent-registry-2.0.0.jar" \
     "Flink Confluent Avro Registry Connector"
 
-download_jar "kafka-schema-registry-client-7.5.3.jar" \
-    "https://packages.confluent.io/maven/io/confluent/kafka-schema-registry-client/7.5.3/kafka-schema-registry-client-7.5.3.jar" \
+download_jar "kafka-schema-registry-client-7.6.1.jar" \
+    "https://packages.confluent.io/maven/io/confluent/kafka-schema-registry-client/7.6.1/kafka-schema-registry-client-7.6.1.jar" \
     "Kafka Schema Registry Client"
 
-# Kafka client libraries
-download_jar "kafka-clients-3.4.1.jar" \
-    "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar" \
+# Kafka client libraries - Updated for managed-kafka-auth-login-handler compatibility
+download_jar "kafka-clients-3.7.1.jar" \
+    "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.7.1/kafka-clients-3.7.1.jar" \
     "Kafka Clients Library"
 
 # Google libraries (required by schema registry client)
@@ -69,17 +69,17 @@ download_jar "jsr305-1.3.9.jar" \
     "https://repo1.maven.org/maven2/com/google/code/findbugs/jsr305/1.3.9/jsr305-1.3.9.jar" \
     "JSR305 Annotations"
 
-# Jackson libraries (required by Avro and Schema Registry)
-download_jar "jackson-core-2.15.2.jar" \
-    "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.15.2/jackson-core-2.15.2.jar" \
+# Jackson libraries (required by Avro and Schema Registry) - Updated for managed-kafka-auth-login-handler compatibility
+download_jar "jackson-core-2.17.1.jar" \
+    "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.17.1/jackson-core-2.17.1.jar" \
     "Jackson Core"
 
-download_jar "jackson-databind-2.15.2.jar" \
-    "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.15.2/jackson-databind-2.15.2.jar" \
+download_jar "jackson-databind-2.17.1.jar" \
+    "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.17.1/jackson-databind-2.17.1.jar" \
     "Jackson Databind"
 
-download_jar "jackson-annotations-2.15.2.jar" \
-    "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.15.2/jackson-annotations-2.15.2.jar" \
+download_jar "jackson-annotations-2.17.1.jar" \
+    "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.17.1/jackson-annotations-2.17.1.jar" \
     "Jackson Annotations"
 
 # Apache Commons (required by Avro and Schema Registry)
@@ -109,14 +109,24 @@ download_jar "swagger-annotations-2.2.15.jar" \
     "https://repo1.maven.org/maven2/io/swagger/core/v3/swagger-annotations/2.2.15/swagger-annotations-2.2.15.jar" \
     "Swagger Annotations"
 
-# Google Cloud libraries (for GCP integration)
-download_jar "google-auth-library-oauth2-http-1.19.0.jar" \
-    "https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.19.0/google-auth-library-oauth2-http-1.19.0.jar" \
+# Google Cloud libraries (for GCP integration) - Updated for managed-kafka-auth-login-handler compatibility
+download_jar "google-auth-library-oauth2-http-1.23.0.jar" \
+    "https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.23.0/google-auth-library-oauth2-http-1.23.0.jar" \
     "Google Auth Library OAuth2 HTTP"
 
 download_jar "google-cloud-core-2.8.1.jar" \
     "https://repo1.maven.org/maven2/com/google/cloud/google-cloud-core/2.8.1/google-cloud-core-2.8.1.jar" \
     "Google Cloud Core Library"
+
+# Google Cloud Managed Kafka auth login handler for OAuth authentication
+download_jar "managed-kafka-auth-login-handler-1.0.6.jar" \
+    "https://repo1.maven.org/maven2/com/google/cloud/hosted/kafka/managed-kafka-auth-login-handler/1.0.6/managed-kafka-auth-login-handler-1.0.6.jar" \
+    "Google Cloud Managed Kafka Auth Login Handler"
+
+# Google API Client (required by managed-kafka-auth-login-handler)
+download_jar "google-api-client-1.32.1.jar" \
+    "https://repo1.maven.org/maven2/com/google/api-client/google-api-client/1.32.1/google-api-client-1.32.1.jar" \
+    "Google API Client"
 
 echo "=== All dependencies downloaded successfully ==="
 
@@ -153,7 +163,7 @@ echo "=== Verification ==="
 
 # List all downloaded libraries for verification
 echo "=== Installed Libraries ===" 
-ls -la "${FLINK_LIB_DIR}/" | grep -E "(kafka|avro|google|jsr305|jackson|commons|snappy|lz4|zstd|yaml|swagger)"
+ls -la "${FLINK_LIB_DIR}/" | grep -E "(kafka|avro|google|jsr305|jackson|commons|snappy|lz4|zstd|yaml|swagger|managed-kafka-auth)"
 
 # Final verification of installed plugins
 echo "=== Installed Plugins ==="
