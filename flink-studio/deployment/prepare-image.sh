@@ -110,6 +110,10 @@ download_jar "swagger-annotations-2.2.15.jar" \
     "Swagger Annotations"
 
 # Google Cloud libraries (for GCP integration) - Updated for managed-kafka-auth-login-handler compatibility
+download_jar "google-auth-library-credentials-1.23.0.jar" \
+    "https://repo1.maven.org/maven2/com/google/auth/google-auth-library-credentials/1.23.0/google-auth-library-credentials-1.23.0.jar" \
+    "Google Auth Library Credentials"
+
 download_jar "google-auth-library-oauth2-http-1.23.0.jar" \
     "https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.23.0/google-auth-library-oauth2-http-1.23.0.jar" \
     "Google Auth Library OAuth2 HTTP"
@@ -127,6 +131,24 @@ download_jar "managed-kafka-auth-login-handler-1.0.6.jar" \
 download_jar "google-api-client-1.32.1.jar" \
     "https://repo1.maven.org/maven2/com/google/api-client/google-api-client/1.32.1/google-api-client-1.32.1.jar" \
     "Google API Client"
+
+# Google HTTP Client JSON libraries (required by google-api-client for JsonFactory)
+download_jar "google-http-client-1.42.3.jar" \
+    "https://repo1.maven.org/maven2/com/google/http-client/google-http-client/1.42.3/google-http-client-1.42.3.jar" \
+    "Google HTTP Client"
+
+download_jar "google-http-client-jackson2-1.42.3.jar" \
+    "https://repo1.maven.org/maven2/com/google/http-client/google-http-client-jackson2/1.42.3/google-http-client-jackson2-1.42.3.jar" \
+    "Google HTTP Client Jackson2"
+
+download_jar "google-http-client-gson-1.42.3.jar" \
+    "https://repo1.maven.org/maven2/com/google/http-client/google-http-client-gson/1.42.3/google-http-client-gson-1.42.3.jar" \
+    "Google HTTP Client Gson"
+
+# Google Gson library (required by Google HTTP Client)
+download_jar "gson-2.10.1.jar" \
+    "https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar" \
+    "Google Gson JSON Library"
 
 echo "=== All dependencies downloaded successfully ==="
 

@@ -7,7 +7,9 @@ with comprehensive status checking and error reporting.
 
 Features:
 - Executes SQL from individual files or inline queries
+- Supports multiple SQL statements in a single file or string
 - Provides detailed status monitoring and error reporting
+- Configurable error handling (continue on error or stop on first error)
 - Supports configuration via command line arguments
 - Handles Flink SQL Gateway session management
 - Comprehensive logging and debug information
@@ -15,6 +17,7 @@ Features:
 Usage:
     python flink_sql_executor.py --file /path/to/my_query.sql
     python flink_sql_executor.py --sql "SELECT * FROM my_table LIMIT 10"
+    python flink_sql_executor.py --sql "CREATE TABLE test AS SELECT 1; SELECT * FROM test;"
     python flink_sql_executor.py --file /path/to/my_query.sql --sql-gateway-url http://localhost:8083
 """
 
@@ -22,6 +25,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -59,6 +63,7 @@ class FlinkSQLExecutor:
                 result = response.json()
                 self.session_handle = result.get('sessionHandle')
                 self.logger.info(f"✓ SQL Gateway session created: {self.session_handle}")
+                self.logger.debug(f"Session will be reused for all SQL statements in this execution")
                 return True
             else:
                 self.logger.error(f"✗ Failed to create session: {response.status_code} - {response.text}")
@@ -88,6 +93,149 @@ class FlinkSQLExecutor:
         except requests.RequestException as e:
             self.logger.error(f"✗ Error closing session: {e}")
             return False
+    
+    def parse_sql_statements(self, sql_content: str) -> List[str]:
+        """
+        Parse multiple SQL statements from a string, handling comments and semicolons properly
+        
+        Args:
+            sql_content: Raw SQL content that may contain multiple statements
+            
+        Returns:
+            List of individual SQL statements
+        """
+        if not sql_content.strip():
+            return []
+        
+        # Remove SQL comments (both -- and /* */ style)
+        # Handle -- comments
+        lines = sql_content.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            # Find -- comments, but ignore them inside string literals
+            in_string = False
+            quote_char = None
+            comment_pos = -1
+            
+            for i, char in enumerate(line):
+                if not in_string:
+                    if char in ('"', "'"):
+                        in_string = True
+                        quote_char = char
+                    elif char == '-' and i < len(line) - 1 and line[i + 1] == '-':
+                        comment_pos = i
+                        break
+                else:
+                    if char == quote_char and (i == 0 or line[i - 1] != '\\'):
+                        in_string = False
+                        quote_char = None
+            
+            if comment_pos >= 0:
+                line = line[:comment_pos]
+            
+            cleaned_lines.append(line)
+        
+        sql_content = '\n'.join(cleaned_lines)
+        
+        # Remove /* */ comments
+        sql_content = re.sub(r'/\*.*?\*/', '', sql_content, flags=re.DOTALL)
+        
+        # Split by semicolons, but be careful about semicolons in string literals
+        statements = []
+        current_statement = ""
+        in_string = False
+        quote_char = None
+        
+        for char in sql_content:
+            if not in_string:
+                if char in ('"', "'"):
+                    in_string = True
+                    quote_char = char
+                    current_statement += char
+                elif char == ';':
+                    # End of statement
+                    if current_statement.strip():
+                        statements.append(current_statement.strip())
+                    current_statement = ""
+                else:
+                    current_statement += char
+            else:
+                current_statement += char
+                if char == quote_char:
+                    # Check if it's escaped
+                    if len(current_statement) < 2 or current_statement[-2] != '\\':
+                        in_string = False
+                        quote_char = None
+        
+        # Add the last statement if it doesn't end with semicolon
+        if current_statement.strip():
+            statements.append(current_statement.strip())
+        
+        # Filter out empty statements
+        statements = [stmt for stmt in statements if stmt and not stmt.isspace()]
+        
+        return statements
+    
+    def execute_multiple_statements(
+        self, 
+        sql_content: str, 
+        source_name: str = "",
+        continue_on_error: bool = True
+    ) -> Tuple[bool, List[Dict]]:
+        """
+        Execute multiple SQL statements from a string
+        
+        Args:
+            sql_content: Raw SQL content containing multiple statements
+            source_name: Name/description of the source (file name, etc.)
+            continue_on_error: Whether to continue executing remaining statements after an error
+            
+        Returns:
+            Tuple[bool, List[Dict]]: (overall_success, list_of_results)
+        """
+        statements = self.parse_sql_statements(sql_content)
+        
+        if not statements:
+            self.logger.warning(f"No SQL statements found in {source_name or 'input'}")
+            return True, []
+        
+        self.logger.info(f"Found {len(statements)} SQL statement(s) in {source_name or 'input'}")
+        self.logger.info(f"Using session {self.session_handle} for all statements")
+        
+        results = []
+        overall_success = True
+        
+        for i, statement in enumerate(statements, 1):
+            self.logger.info(f"Executing statement {i}/{len(statements)} using session {self.session_handle}")
+            self.logger.debug(f"Statement {i}: {statement[:100]}{'...' if len(statement) > 100 else ''}")
+            
+            statement_name = f"{source_name}_stmt_{i}" if source_name else f"statement_{i}"
+            success, result = self.execute_statement(statement, statement_name)
+            
+            result['statement_number'] = i
+            result['statement'] = statement
+            result['success'] = success
+            results.append(result)
+            
+            if not success:
+                overall_success = False
+                self.logger.error(f"Statement {i} failed")
+                
+                if not continue_on_error:
+                    self.logger.info(f"Stopping execution due to error (continue_on_error=False)")
+                    break
+                else:
+                    self.logger.info(f"Continuing with remaining statements (continue_on_error=True)")
+        
+        if overall_success:
+            self.logger.info(f"✅ All {len(statements)} statements executed successfully")
+        else:
+            failed_count = sum(1 for r in results if not r.get('success', False))
+            success_count = len(results) - failed_count
+            self.logger.warning(f"⚠️ {success_count}/{len(statements)} statements succeeded, {failed_count} failed")
+        
+        return overall_success, results
     
     def execute_statement(self, sql_statement: str, statement_name: str = "") -> Tuple[bool, Dict]:
         """
@@ -254,15 +402,26 @@ class FlinkSQLExecutor:
         try:
             # Check if there are results to display
             results = result_data.get('results', {})
-            if not results or not results.get('data'):
+            if not results:
+                self.logger.info(f"No results structure returned for {statement_name}")
                 return
             
             print(f"\n📊 Results for {statement_name}:")
             print("=" * 60)
             
-            # Get column information
+            # Get column information and data
             columns = results.get('columns', [])
             data_rows = results.get('data', [])
+            
+            if not data_rows:
+                print("No data returned - the query executed successfully but returned 0 rows.")
+                print("This could mean:")
+                print("  • The Kafka topic is empty")
+                print("  • No data matches the query criteria")
+                print("  • The table source is not producing data yet")
+                print("=" * 60)
+                print()
+                return
             
             if columns and data_rows:
                 # Print column headers
@@ -486,11 +645,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Execute SQL from a specific file
+    # Execute SQL from a specific file (supports multiple statements)
     python flink_sql_executor.py --file /path/to/my_query.sql
     
-    # Execute inline SQL query
-    python flink_sql_executor.py --sql "SELECT * FROM my_table LIMIT 10"
+    # Execute multiple inline SQL statements
+    python flink_sql_executor.py --sql "CREATE TABLE test AS SELECT 1; SELECT * FROM test;"
+    
+    # Execute as single statement (disable multi-statement parsing)
+    python flink_sql_executor.py --file /path/to/my_query.sql --single-statement
+    
+    # Stop on first error instead of continuing
+    python flink_sql_executor.py --file /path/to/my_query.sql --stop-on-error
     
     # Dry run to check what would be executed
     python flink_sql_executor.py --file /path/to/my_query.sql --dry-run
@@ -544,12 +709,36 @@ Examples:
     )
     
     parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        default=True,
+        help="Continue executing remaining statements when one fails (default: True)"
+    )
+    
+    parser.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="Stop execution on first error (overrides --continue-on-error)"
+    )
+    
+    parser.add_argument(
+        "--single-statement",
+        action="store_true",
+        help="Treat input as a single statement (don't parse multiple statements)"
+    )
+    
+    parser.add_argument(
         "--config",
         default="config.yaml",
         help="Configuration file path (default: config.yaml)"
     )
     
     args = parser.parse_args()
+    
+    # Process error handling arguments
+    continue_on_error = args.continue_on_error
+    if args.stop_on_error:
+        continue_on_error = False
     
     # Setup logging
     setup_logging(args.log_level, args.log_file)
@@ -578,18 +767,49 @@ Examples:
             
             try:
                 if args.dry_run:
-                    logger.info(f"DRY RUN: Would execute SQL: {args.sql}")
+                    # Show what would be executed
+                    if args.single_statement:
+                        logger.info(f"DRY RUN: Would execute single SQL statement: {args.sql}")
+                    else:
+                        statements = executor.parse_sql_statements(args.sql)
+                        logger.info(f"DRY RUN: Would execute {len(statements)} SQL statement(s)")
+                        for i, stmt in enumerate(statements, 1):
+                            logger.info(f"  Statement {i}: {stmt[:100]}{'...' if len(stmt) > 100 else ''}")
                     logger.info("🎉 Dry run completed successfully!")
                 else:
-                    success, result = executor.execute_statement(args.sql, "inline-query")
-                    if success:
-                        logger.info("🎉 Inline SQL executed successfully!")
+                    if args.single_statement:
+                        # Execute as single statement
+                        success, result = executor.execute_statement(args.sql, "inline-query")
+                        if success:
+                            logger.info("🎉 Inline SQL executed successfully!")
+                        else:
+                            logger.error("💥 Inline SQL execution failed!")
+                            if "error" in result:
+                                formatted_error = format_sql_error(result['error'], args.debug)
+                                logger.error(formatted_error)
+                            sys.exit(1)
                     else:
-                        logger.error("💥 Inline SQL execution failed!")
-                        if "error" in result:
-                            formatted_error = format_sql_error(result['error'], args.debug)
-                            logger.error(formatted_error)
-                        sys.exit(1)
+                        # Execute as multiple statements
+                        success, results = executor.execute_multiple_statements(
+                            args.sql, 
+                            "inline-query", 
+                            continue_on_error
+                        )
+                        
+                        if success:
+                            logger.info("🎉 All inline SQL statements executed successfully!")
+                        else:
+                            logger.error("💥 Some inline SQL statements failed!")
+                            
+                            # Show detailed error information
+                            failed_statements = [r for r in results if not r.get('success', True)]
+                            for failed in failed_statements:
+                                stmt_num = failed.get('statement_number', '?')
+                                error_msg = failed.get('error', 'Unknown error')
+                                formatted_error = format_sql_error(error_msg, args.debug)
+                                logger.error(f"Statement {stmt_num} error: {formatted_error}")
+                            
+                            sys.exit(1)
             finally:
                 if not args.dry_run:
                     executor.close_session()
@@ -627,20 +847,51 @@ Examples:
                     sys.exit(1)
                 
                 if args.dry_run:
-                    logger.info(f"DRY RUN: Would execute SQL from {file_path}")
-                    logger.info(f"SQL content ({len(sql_content)} characters):")
-                    logger.info(f"{sql_content[:500]}{'...' if len(sql_content) > 500 else ''}")
+                    # Show what would be executed
+                    if args.single_statement:
+                        logger.info(f"DRY RUN: Would execute SQL from {file_path} as single statement")
+                        logger.info(f"SQL content ({len(sql_content)} characters):")
+                        logger.info(f"{sql_content[:500]}{'...' if len(sql_content) > 500 else ''}")
+                    else:
+                        statements = executor.parse_sql_statements(sql_content)
+                        logger.info(f"DRY RUN: Would execute {len(statements)} SQL statement(s) from {file_path}")
+                        for i, stmt in enumerate(statements, 1):
+                            logger.info(f"  Statement {i}: {stmt[:100]}{'...' if len(stmt) > 100 else ''}")
                     logger.info("🎉 Dry run completed successfully!")
                 else:
-                    success, result = executor.execute_statement(sql_content, file_path.name)
-                    if success:
-                        logger.info(f"🎉 SQL file {file_path.name} executed successfully!")
+                    if args.single_statement:
+                        # Execute as single statement
+                        success, result = executor.execute_statement(sql_content, file_path.name)
+                        if success:
+                            logger.info(f"🎉 SQL file {file_path.name} executed successfully!")
+                        else:
+                            logger.error(f"💥 SQL file {file_path.name} execution failed!")
+                            if "error" in result:
+                                formatted_error = format_sql_error(result['error'], args.debug)
+                                logger.error(formatted_error)
+                            sys.exit(1)
                     else:
-                        logger.error(f"💥 SQL file {file_path.name} execution failed!")
-                        if "error" in result:
-                            formatted_error = format_sql_error(result['error'], args.debug)
-                            logger.error(formatted_error)
-                        sys.exit(1)
+                        # Execute as multiple statements
+                        success, results = executor.execute_multiple_statements(
+                            sql_content, 
+                            file_path.name, 
+                            continue_on_error
+                        )
+                        
+                        if success:
+                            logger.info(f"🎉 All statements in {file_path.name} executed successfully!")
+                        else:
+                            logger.error(f"💥 Some statements in {file_path.name} failed!")
+                            
+                            # Show detailed error information
+                            failed_statements = [r for r in results if not r.get('success', True)]
+                            for failed in failed_statements:
+                                stmt_num = failed.get('statement_number', '?')
+                                error_msg = failed.get('error', 'Unknown error')
+                                formatted_error = format_sql_error(error_msg, args.debug)
+                                logger.error(f"Statement {stmt_num} error: {formatted_error}")
+                            
+                            sys.exit(1)
             finally:
                 if not args.dry_run:
                     executor.close_session()

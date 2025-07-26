@@ -44,6 +44,15 @@ spec:
               value: |
                 rest.address: flink-session-cluster-rest
                 rest.port: 8081
+                # Hive Catalog Configuration
+                table.sql-dialect: default
+                # GCS Configuration for Hive warehouse
+                fs.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
+                fs.AbstractFileSystem.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS
+                fs.gs.project.id: sbx-stag
+                fs.gs.auth.service.account.enable: true
+                fs.gs.auth.service.account.json.keyfile: /opt/flink/gcp/service-account.json
+                # Kafka Configuration
                 kafka.bootstrap.servers: bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092
                 kafka.security.protocol: SASL_SSL
                 kafka.sasl.mechanism: OAUTHBEARER
@@ -55,6 +64,9 @@ spec:
               readOnly: true
             - name: hadoop-config
               mountPath: /opt/hadoop/conf
+              readOnly: true
+            - name: hive-config
+              mountPath: /opt/hive-conf
               readOnly: true
           resources:
             requests:
@@ -86,6 +98,9 @@ spec:
         - name: hadoop-config
           configMap:
             name: hadoop-config
+        - name: hive-config
+          configMap:
+            name: hive-config
 ---
 apiVersion: v1
 kind: Service

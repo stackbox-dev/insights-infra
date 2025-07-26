@@ -26,10 +26,94 @@ A comprehensive Python script that:
 - ✅ **Error Handling**: Comprehensive error reporting with debug information
 - ✅ **File Execution**: Execute SQL from individual file paths
 - ✅ **Inline Queries**: Execute SQL queries directly from command line
+- ✅ **Multi-Statement Support**: Execute multiple SQL statements from a single file or string
+- ✅ **Smart SQL Parsing**: Handles comments, string literals, and semicolon separators intelligently
+- ✅ **Flexible Error Handling**: Continue on error or stop on first failure
 - ✅ **Dry Run Support**: Preview what would be executed without running SQL
 - ✅ **Flexible Configuration**: Command-line arguments and config file support
 - ✅ **Logging**: Configurable logging levels with optional file output
 - ✅ **Timeout Handling**: Configurable timeouts for long-running operations
+
+## Multi-Statement Support
+
+The Flink SQL Executor now supports executing multiple SQL statements from a single file or inline string. This is particularly useful for:
+
+- **Database setup scripts** with table creation and data population
+- **Complex data pipelines** requiring multiple transformation steps  
+- **Batch processing** of related SQL operations
+
+### How it works
+
+- **Single session**: Creates one Flink SQL Gateway session and reuses it for all statements
+- **Smart parsing**: Automatically splits SQL content on semicolons while respecting string literals and comments
+- **Comment handling**: Removes both `--` single-line and `/* */` multi-line comments
+- **String literal safety**: Preserves semicolons inside quoted strings (`'text; with semicolon'`)
+- **Error handling**: Configurable behavior when individual statements fail
+- **State preservation**: Variables, temporary tables, and session configuration persist across statements
+
+### Examples
+
+```sql
+-- Example multi-statement file (setup.sql)
+-- All statements run in the same session, preserving state
+
+-- Set session configuration
+SET 'sql-client.execution.result-mode' = 'table';
+
+-- Create a source table
+CREATE TABLE orders (
+    order_id INT,
+    customer_id INT,
+    amount DOUBLE
+) WITH (
+    'connector' = 'datagen'
+);
+
+-- Create an aggregation table (references the table created above)
+CREATE TABLE daily_totals AS
+SELECT 
+    DATE_FORMAT(NOW(), 'yyyy-MM-dd') as date,
+    COUNT(*) as order_count,
+    SUM(amount) as total_amount
+FROM orders;
+
+-- Query the results (uses both tables created in the same session)
+SELECT * FROM daily_totals;
+```
+
+```bash
+# Execute multiple statements (default behavior)
+python flink_sql_executor.py --file setup.sql
+
+# Execute as single statement (legacy mode)
+python flink_sql_executor.py --file setup.sql --single-statement
+
+# Stop on first error instead of continuing
+python flink_sql_executor.py --file setup.sql --stop-on-error
+
+# Execute multiple inline statements
+python flink_sql_executor.py --sql "CREATE TABLE test AS SELECT 1; SELECT * FROM test;"
+```
+
+### Session Advantages
+
+Using a single session for all statements provides several benefits:
+
+1. **State Preservation**: Variables, temporary tables, and configurations persist across statements
+2. **Performance**: Eliminates overhead of creating/destroying sessions for each statement  
+3. **Dependencies**: Later statements can reference objects created by earlier statements
+4. **Consistency**: All statements execute in the same Flink execution environment
+5. **Resource Efficiency**: Reduces load on the Flink SQL Gateway
+
+### Execution Flow
+
+```
+1. Create single Flink SQL Gateway session
+2. Parse SQL file/string into individual statements  
+3. Execute each statement sequentially using the same session
+4. Collect results and handle errors per statement
+5. Close session when all statements complete
+```
 
 ### Runner Script (`run_sql_executor.sh`)
 
@@ -68,11 +152,17 @@ A bash wrapper that:
 # Install dependencies first
 pip install -r requirements.txt
 
-# Execute SQL from a specific file
+# Execute SQL from a specific file (supports multiple statements)
 python3 flink_sql_executor.py --file /path/to/my_query.sql
 
-# Execute inline SQL query
-python3 flink_sql_executor.py --sql "SELECT * FROM my_table LIMIT 10"
+# Execute multiple inline SQL statements
+python3 flink_sql_executor.py --sql "CREATE TABLE test AS SELECT 1; SELECT * FROM test;"
+
+# Execute as single statement (disable multi-statement parsing)
+python3 flink_sql_executor.py --file my_query.sql --single-statement
+
+# Stop on first error instead of continuing
+python3 flink_sql_executor.py --file my_query.sql --stop-on-error
 
 # With custom SQL Gateway URL
 python3 flink_sql_executor.py --file my_query.sql --sql-gateway-url http://localhost:8083
@@ -111,6 +201,9 @@ Options:
     --debug                 Enable debug mode with detailed error information
     --log-level             Logging level (DEBUG, INFO, WARNING, ERROR)
     --log-file              Log file path
+    --continue-on-error     Continue executing remaining statements when one fails (default: True)
+    --stop-on-error         Stop execution on first error (overrides --continue-on-error)
+    --single-statement      Treat input as a single statement (don't parse multiple statements)
     --config                Configuration file path (default: config.yaml)
 ```
 

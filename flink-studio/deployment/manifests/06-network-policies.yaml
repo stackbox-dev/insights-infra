@@ -101,6 +101,20 @@ spec:
       port: 6122
     - protocol: TCP
       port: 6123
+  # Access to schema registry in kafka namespace
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8081
+  # Access to Kafka brokers (external managed Kafka)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 9092
+    - protocol: TCP
+      port: 9093
   # DNS resolution
   - to: []
     ports:
