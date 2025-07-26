@@ -9,6 +9,10 @@ FLINK_LIB_DIR="/opt/flink/lib"
 
 echo "=== Starting Flink image preparation ==="
 
+# Install unzip for JAR verification
+echo "Installing unzip for JAR verification..."
+apt-get update -qq && apt-get install -y unzip
+
 # Function to download and verify JAR
 download_jar() {
     local filename="$1"
@@ -29,7 +33,12 @@ download_jar() {
 
 echo "=== Downloading dependencies ==="
 
-# Core Kafka and Avro connectors
+# Core Kafka and Avro connectors - Using universal connector without shading
+download_jar "flink-connector-kafka-4.0.0-2.0.jar" \
+    "https://repo1.maven.org/maven2/org/apache/flink/flink-connector-kafka/4.0.0-2.0/flink-connector-kafka-4.0.0-2.0.jar" \
+    "Flink Kafka Connector (Universal)"
+
+# Also keep the SQL connector but try the universal one first
 download_jar "flink-sql-connector-kafka-4.0.0-2.0.jar" \
     "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar" \
     "Flink SQL Kafka Connector"
@@ -56,14 +65,21 @@ download_jar "kafka-schema-registry-client-7.6.1.jar" \
     "Kafka Schema Registry Client"
 
 # Kafka client libraries - Updated for managed-kafka-auth-login-handler compatibility
+# Adding both regular and additional Kafka clients for OAuth compatibility
 download_jar "kafka-clients-3.7.1.jar" \
     "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.7.1/kafka-clients-3.7.1.jar" \
     "Kafka Clients Library"
 
+# Additional Kafka dependencies for unshaded OAuth support
+download_jar "kafka_2.13-3.7.1.jar" \
+    "https://repo1.maven.org/maven2/org/apache/kafka/kafka_2.13/3.7.1/kafka_2.13-3.7.1.jar" \
+    "Kafka Core Library"
+
 # Google libraries (required by schema registry client)
-download_jar "guava-32.1.2-jre.jar" \
-    "https://repo1.maven.org/maven2/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar" \
-    "Google Guava Library"
+# Using updated Guava version below instead
+# download_jar "guava-32.1.2-jre.jar" \
+#     "https://repo1.maven.org/maven2/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar" \
+#     "Google Guava Library"
 
 download_jar "jsr305-1.3.9.jar" \
     "https://repo1.maven.org/maven2/com/google/code/findbugs/jsr305/1.3.9/jsr305-1.3.9.jar" \
@@ -150,6 +166,54 @@ download_jar "gson-2.10.1.jar" \
     "https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar" \
     "Google Gson JSON Library"
 
+# Add missing Guava internal dependencies
+download_jar "guava-33.2.1-jre.jar" \
+    "https://repo1.maven.org/maven2/com/google/guava/guava/33.2.1-jre/guava-33.2.1-jre.jar" \
+    "Google Guava Library (Latest)"
+
+download_jar "failureaccess-1.0.2.jar" \
+    "https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar" \
+    "Google Guava Failure Access"
+
+download_jar "listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar" \
+    "https://repo1.maven.org/maven2/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar" \
+    "Google Guava ListenableFuture"
+
+# OpenCensus dependencies (required by Google HTTP Client for tracing)
+download_jar "opencensus-api-0.31.1.jar" \
+    "https://repo1.maven.org/maven2/io/opencensus/opencensus-api/0.31.1/opencensus-api-0.31.1.jar" \
+    "OpenCensus API"
+
+download_jar "opencensus-contrib-http-util-0.31.1.jar" \
+    "https://repo1.maven.org/maven2/io/opencensus/opencensus-contrib-http-util/0.31.1/opencensus-contrib-http-util-0.31.1.jar" \
+    "OpenCensus HTTP Util"
+
+# gRPC dependencies (required by OpenCensus for context management)
+download_jar "grpc-api-1.73.0.jar" \
+    "https://repo1.maven.org/maven2/io/grpc/grpc-api/1.73.0/grpc-api-1.73.0.jar" \
+    "gRPC API (contains io.grpc.Context)"
+
+download_jar "grpc-core-1.73.0.jar" \
+    "https://repo1.maven.org/maven2/io/grpc/grpc-core/1.73.0/grpc-core-1.73.0.jar" \
+    "gRPC Core"
+
+download_jar "grpc-stub-1.73.0.jar" \
+    "https://repo1.maven.org/maven2/io/grpc/grpc-stub/1.73.0/grpc-stub-1.73.0.jar" \
+    "gRPC Stub"
+
+download_jar "grpc-protobuf-1.73.0.jar" \
+    "https://repo1.maven.org/maven2/io/grpc/grpc-protobuf/1.73.0/grpc-protobuf-1.73.0.jar" \
+    "gRPC Protobuf"
+
+download_jar "grpc-protobuf-lite-1.73.0.jar" \
+    "https://repo1.maven.org/maven2/io/grpc/grpc-protobuf-lite/1.73.0/grpc-protobuf-lite-1.73.0.jar" \
+    "gRPC Protobuf Lite"
+
+# Additional gRPC dependencies for completeness
+download_jar "perfmark-api-0.27.0.jar" \
+    "https://repo1.maven.org/maven2/io/perfmark/perfmark-api/0.27.0/perfmark-api-0.27.0.jar" \
+    "PerfMark API (required by gRPC)"
+
 echo "=== All dependencies downloaded successfully ==="
 
 echo "=== Setting up filesystem plugins ==="
@@ -185,7 +249,24 @@ echo "=== Verification ==="
 
 # List all downloaded libraries for verification
 echo "=== Installed Libraries ===" 
-ls -la "${FLINK_LIB_DIR}/" | grep -E "(kafka|avro|google|jsr305|jackson|commons|snappy|lz4|zstd|yaml|swagger|managed-kafka-auth)"
+ls -la "${FLINK_LIB_DIR}/" | grep -E "(kafka|avro|google|jsr305|jackson|commons|snappy|lz4|zstd|yaml|swagger|managed-kafka-auth|grpc|opencensus)"
+
+# Verify critical gRPC API JAR contents
+echo "=== Verifying gRPC API JAR ==="
+if [[ -f "${FLINK_LIB_DIR}/grpc-api-1.73.0.jar" ]]; then
+    echo "Checking for io.grpc.Context class in grpc-api JAR:"
+    if unzip -l "${FLINK_LIB_DIR}/grpc-api-1.73.0.jar" | grep -q "io/grpc/Context.class"; then
+        echo "  ✓ io.grpc.Context class found in grpc-api JAR"
+    else
+        echo "  ERROR: io.grpc.Context class NOT found in grpc-api JAR!"
+        echo "  JAR contents:"
+        unzip -l "${FLINK_LIB_DIR}/grpc-api-1.73.0.jar" | head -20
+        exit 1
+    fi
+else
+    echo "  ERROR: gRPC API JAR not found!"
+    exit 1
+fi
 
 # Final verification of installed plugins
 echo "=== Installed Plugins ==="
