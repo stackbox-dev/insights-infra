@@ -72,7 +72,7 @@ Usage: $0 [OPTIONS]
 This script runs the Flink SQL Executor with proper Python environment setup.
 
 Options:
-    -e, --environment ENV     Environment to execute (optional if using --sql)
+    -f, --file FILE           SQL file to execute
     -s, --sql QUERY          Inline SQL query to execute
     -u, --url URL            SQL Gateway URL (default: http://localhost:8083)
     -d, --dry-run            Show what would be executed without running
@@ -81,17 +81,17 @@ Options:
     -h, --help               Show this help message
 
 Examples:
-    $0 --environment sbx-uat
+    $0 --file /path/to/my_query.sql
     $0 --sql "SELECT * FROM my_table LIMIT 10"
-    $0 --environment sbx-uat --dry-run
-    $0 --environment sbx-uat --url http://flink-sql-gateway.default:8083
-    $0 --environment sbx-uat --verbose --log-file execution.log
+    $0 --file my_query.sql --dry-run
+    $0 --file my_query.sql --url http://flink-sql-gateway.default:8083
+    $0 --file my_query.sql --verbose --log-file execution.log
 
 EOF
 }
 
 # Parse command line arguments
-ENVIRONMENT=""
+SQL_FILE=""
 SQL_QUERY=""
 SQL_GATEWAY_URL="http://localhost:8083"
 DRY_RUN=""
@@ -101,8 +101,8 @@ EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -e|--environment)
-            ENVIRONMENT="$2"
+        -f|--file)
+            SQL_FILE="$2"
             shift 2
             ;;
         -s|--sql)
@@ -137,32 +137,37 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [ -z "$ENVIRONMENT" ] && [ -z "$SQL_QUERY" ]; then
-    log_error "Either --environment or --sql must be specified."
+if [ -z "$SQL_QUERY" ] && [ -z "$SQL_FILE" ]; then
+    log_error "Either --sql or --file must be specified."
     show_usage
     exit 1
 fi
 
-# Check if environment directory exists (only if environment is specified)
-if [ -n "$ENVIRONMENT" ]; then
-    ENV_DIR="$SCRIPT_DIR/$ENVIRONMENT"
-    if [ ! -d "$ENV_DIR" ]; then
-        log_error "Environment directory not found: $ENV_DIR"
-        log_info "Available environments:"
-        for dir in "$SCRIPT_DIR"/*/; do
-            if [ -d "$dir" ] && [ "$(basename "$dir")" != ".venv" ] && [ "$(basename "$dir")" != "scripts" ]; then
-                echo "  - $(basename "$dir")"
-            fi
-        done
+# Ensure only one execution mode is specified
+if [ -n "$SQL_QUERY" ] && [ -n "$SQL_FILE" ]; then
+    log_error "Only one of --sql or --file can be specified at a time."
+    show_usage
+    exit 1
+fi
+
+# Check if SQL file exists (only if file is specified)
+if [ -n "$SQL_FILE" ]; then
+    if [ ! -f "$SQL_FILE" ]; then
+        log_error "SQL file not found: $SQL_FILE"
         exit 1
+    fi
+    
+    # Convert to absolute path if not already
+    if [[ "$SQL_FILE" != /* ]]; then
+        SQL_FILE="$(cd "$(dirname "$SQL_FILE")" && pwd)/$(basename "$SQL_FILE")"
     fi
 fi
 
 if [ -n "$SQL_QUERY" ]; then
     log_info "Starting Flink SQL Executor for inline query"
     log_info "SQL: $SQL_QUERY"
-else
-    log_info "Starting Flink SQL Executor for environment: $ENVIRONMENT"
+elif [ -n "$SQL_FILE" ]; then
+    log_info "Starting Flink SQL Executor for SQL file: $SQL_FILE"
 fi
 log_info "SQL Gateway URL: $SQL_GATEWAY_URL"
 
@@ -186,13 +191,10 @@ PYTHON_CMD=(
     --log-level "$LOG_LEVEL"
 )
 
-if [ -n "$ENVIRONMENT" ]; then
-    PYTHON_CMD+=("--environment" "$ENVIRONMENT")
-    PYTHON_CMD+=("--landscape-path" "$SCRIPT_DIR")
-fi
-
 if [ -n "$SQL_QUERY" ]; then
     PYTHON_CMD+=("--sql" "$SQL_QUERY")
+else
+    PYTHON_CMD+=("--file" "$SQL_FILE")
 fi
 
 if [ -n "$DRY_RUN" ]; then
@@ -209,7 +211,7 @@ PYTHON_CMD+=("${EXTRA_ARGS[@]}")
 if [ -n "$SQL_QUERY" ]; then
     log_info "Executing inline SQL query..."
 else
-    log_info "Executing SQL files..."
+    log_info "Executing SQL file..."
 fi
 log_info "Command: ${PYTHON_CMD[*]}"
 

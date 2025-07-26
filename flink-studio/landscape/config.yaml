@@ -14,17 +14,6 @@ sql_gateway:
   poll_interval: 2
   max_wait_time: 60
 
-environments:
-  # Environment-specific settings
-  sbx-uat:
-    description: "Sandbox UAT environment"
-    # Optional environment-specific overrides
-    # sql_gateway_url: "http://flink-sql-gateway.flink-studio.api.staging.stackbox.internal"
-
-  prod:
-    description: "Production environment"
-    # sql_gateway_url: "http://flink-sql-gateway.prod:8083"
-
 logging:
   # Logging configuration
   level: "INFO" # DEBUG, INFO, WARNING, ERROR
@@ -38,13 +27,8 @@ logging:
 execution:
   # Execution behavior settings
 
-  # Continue executing other files if one fails
+  # Continue executing if errors occur
   continue_on_error: true
-
-  # File execution order (files are sorted within each category)
-  file_order:
-    - "*ddl*.sql" # DDL files first
-    - "*.sql" # All other SQL files
 
 # Connection settings
 connection:

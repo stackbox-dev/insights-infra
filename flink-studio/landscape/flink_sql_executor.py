@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """
-Flink SQL Executor for Landscape Management
+Flink SQL Executor
 
-This script reads SQL files from environment-specific directories and executes them
-against the Flink SQL Gateway with comprehensive status checking and error reporting.
+This script executes SQL files or inline queries against the Flink SQL Gateway 
+with comprehensive status checking and error reporting.
 
 Features:
-- Executes DDL and INSERT statements from SQL files
+- Executes SQL from individual files or inline queries
 - Provides detailed status monitoring and error reporting
-- Supports configuration via command line arguments or config file
+- Supports configuration via command line arguments
 - Handles Flink SQL Gateway session management
 - Comprehensive logging and debug information
 
 Usage:
-    python flink_sql_executor.py --environment sbx-uat
-    python flink_sql_executor.py --environment sbx-uat --sql-gateway-url http://localhost:8083
+    python flink_sql_executor.py --file /path/to/my_query.sql
+    python flink_sql_executor.py --sql "SELECT * FROM my_table LIMIT 10"
+    python flink_sql_executor.py --file /path/to/my_query.sql --sql-gateway-url http://localhost:8083
 """
 
 import argparse
@@ -290,154 +291,6 @@ class FlinkSQLExecutor:
             print(json.dumps(result_data, indent=2))
 
 
-class LandscapeManager:
-    """
-    Manages SQL file execution for different environments
-    """
-    
-    def __init__(self, base_path: str, sql_gateway_url: str):
-        self.base_path = Path(base_path)
-        self.sql_gateway_url = sql_gateway_url
-        self.executor = FlinkSQLExecutor(sql_gateway_url)
-        self.logger = logging.getLogger(__name__)
-        
-    def get_environment_path(self, environment: str) -> Path:
-        """Get the path for a specific environment"""
-        env_path = self.base_path / environment
-        if not env_path.exists():
-            raise ValueError(f"Environment '{environment}' not found at {env_path}")
-        return env_path
-    
-    def list_sql_files(self, environment: str) -> List[Path]:
-        """List all SQL files in an environment directory"""
-        env_path = self.get_environment_path(environment)
-        sql_files = list(env_path.glob("*.sql"))
-        
-        # Sort files: DDL first, then others
-        ddl_files = [f for f in sql_files if 'ddl' in f.name.lower()]
-        other_files = [f for f in sql_files if 'ddl' not in f.name.lower()]
-        
-        # Sort each group alphabetically
-        ddl_files.sort()
-        other_files.sort()
-        
-        return ddl_files + other_files
-    
-    def read_sql_file(self, file_path: Path) -> str:
-        """Read SQL content from a file"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-            
-            if not content:
-                raise ValueError(f"Empty SQL file: {file_path}")
-            
-            return content
-            
-        except Exception as e:
-            self.logger.error(f"Error reading {file_path}: {e}")
-            raise
-    
-    def execute_environment(self, environment: str, dry_run: bool = False) -> Dict:
-        """
-        Execute all SQL files for a specific environment
-        
-        Returns:
-            Dict: Execution summary with results
-        """
-        self.logger.info(f"{'DRY RUN: ' if dry_run else ''}Executing SQL files for environment: {environment}")
-        
-        try:
-            sql_files = self.list_sql_files(environment)
-            if not sql_files:
-                self.logger.warning(f"No SQL files found for environment: {environment}")
-                return {"success": True, "files": [], "message": "No files to execute"}
-            
-            self.logger.info(f"Found {len(sql_files)} SQL files to execute")
-            
-            # Create session
-            if not dry_run:
-                if not self.executor.create_session():
-                    return {"success": False, "error": "Failed to create SQL Gateway session"}
-            
-            results = []
-            success_count = 0
-            
-            try:
-                for file_path in sql_files:
-                    file_result = self._execute_sql_file(file_path, dry_run)
-                    results.append(file_result)
-                    
-                    if file_result["success"]:
-                        success_count += 1
-                    else:
-                        self.logger.error(f"Failed to execute {file_path.name}")
-                        if not dry_run:
-                            # Continue with other files but log the failure
-                            pass
-                
-            finally:
-                # Always try to close session
-                if not dry_run:
-                    self.executor.close_session()
-            
-            # Summary
-            total_files = len(sql_files)
-            summary = {
-                "success": success_count == total_files,
-                "environment": environment,
-                "total_files": total_files,
-                "successful": success_count,
-                "failed": total_files - success_count,
-                "files": results
-            }
-            
-            if success_count == total_files:
-                self.logger.info(f"✓ All {total_files} SQL files executed successfully")
-            else:
-                self.logger.error(f"✗ {total_files - success_count} of {total_files} files failed")
-            
-            return summary
-            
-        except Exception as e:
-            self.logger.error(f"Error executing environment {environment}: {e}")
-            return {"success": False, "error": str(e)}
-    
-    def _execute_sql_file(self, file_path: Path, dry_run: bool) -> Dict:
-        """Execute a single SQL file"""
-        file_info = {
-            "file": file_path.name,
-            "path": str(file_path),
-            "success": False,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        try:
-            # Read SQL content
-            sql_content = self.read_sql_file(file_path)
-            file_info["sql_length"] = len(sql_content)
-            
-            if dry_run:
-                self.logger.info(f"DRY RUN: Would execute {file_path.name} ({len(sql_content)} chars)")
-                file_info["success"] = True
-                file_info["dry_run"] = True
-                return file_info
-            
-            # Execute SQL
-            success, result = self.executor.execute_statement(sql_content, file_path.name)
-            
-            file_info["success"] = success
-            file_info["execution_result"] = result
-            
-            return file_info
-            
-        except Exception as e:
-            error_msg = f"Error processing {file_path.name}: {e}"
-            self.logger.error(error_msg)
-            file_info["error"] = error_msg
-            return file_info
-
-
 def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None):
     """Setup logging configuration"""
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
@@ -469,43 +322,37 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Execute SQL files for sbx-uat environment
-    python flink_sql_executor.py --environment sbx-uat
+    # Execute SQL from a specific file
+    python flink_sql_executor.py --file /path/to/my_query.sql
     
     # Execute inline SQL query
     python flink_sql_executor.py --sql "SELECT * FROM my_table LIMIT 10"
     
     # Dry run to check what would be executed
-    python flink_sql_executor.py --environment sbx-uat --dry-run
+    python flink_sql_executor.py --file /path/to/my_query.sql --dry-run
     
     # Use custom SQL Gateway URL
-    python flink_sql_executor.py --environment sbx-uat --sql-gateway-url http://localhost:8083
+    python flink_sql_executor.py --file /path/to/my_query.sql --sql-gateway-url http://localhost:8083
     
     # Enable debug logging
-    python flink_sql_executor.py --environment sbx-uat --log-level DEBUG
+    python flink_sql_executor.py --file /path/to/my_query.sql --log-level DEBUG
         """
     )
     
     parser.add_argument(
-        "--environment", "-e",
-        help="Environment name (e.g., sbx-uat, prod). Required unless using --sql option"
+        "--file", "-f",
+        help="Path to SQL file to execute"
     )
     
     parser.add_argument(
         "--sql", "-s",
-        help="Inline SQL query to execute instead of files from environment"
+        help="Inline SQL query to execute"
     )
     
     parser.add_argument(
         "--sql-gateway-url",
         default="http://localhost:8083",
         help="Flink SQL Gateway URL (default: http://localhost:8083)"
-    )
-    
-    parser.add_argument(
-        "--landscape-path",
-        default="./landscape",
-        help="Path to landscape directory (default: ./landscape)"
     )
     
     parser.add_argument(
@@ -534,8 +381,13 @@ Examples:
     
     try:
         # Validate arguments
-        if not args.sql and not args.environment:
-            logger.error("Either --environment or --sql must be specified")
+        if not args.sql and not args.file:
+            logger.error("Either --sql or --file must be specified")
+            sys.exit(1)
+        
+        # Ensure only one execution mode is specified
+        if args.sql and args.file:
+            logger.error("Only one of --sql or --file can be specified at a time")
             sys.exit(1)
         
         if args.sql:
@@ -565,22 +417,55 @@ Examples:
                 if not args.dry_run:
                     executor.close_session()
         else:
-            # Execute environment files
-            manager = LandscapeManager(args.landscape_path, args.sql_gateway_url)
-            result = manager.execute_environment(args.environment, args.dry_run)
+            # Execute SQL from file
+            file_path = Path(args.file)
+            if not file_path.exists():
+                logger.error(f"SQL file not found: {file_path}")
+                sys.exit(1)
             
-            # Print summary
-            if result["success"]:
-                logger.info("🎉 Execution completed successfully!")
-                if not args.dry_run:
-                    logger.info(f"Successfully executed {result.get('successful', 0)} SQL files")
-            else:
-                logger.error("💥 Execution failed!")
-                if "error" in result:
-                    logger.error(f"Error: {result['error']}")
-                else:
-                    logger.error(f"Failed files: {result.get('failed', 0)} of {result.get('total_files', 0)}")
+            if not file_path.is_file():
+                logger.error(f"Path is not a file: {file_path}")
+                sys.exit(1)
+            
+            logger.info(f"Executing SQL from file: {file_path}")
+            executor = FlinkSQLExecutor(args.sql_gateway_url)
+            
+            if not args.dry_run:
+                if not executor.create_session():
+                    logger.error("Failed to create SQL Gateway session")
                     sys.exit(1)
+            
+            try:
+                # Read SQL content from file
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        sql_content = f.read().strip()
+                    
+                    if not sql_content:
+                        logger.error(f"Empty SQL file: {file_path}")
+                        sys.exit(1)
+                        
+                except Exception as e:
+                    logger.error(f"Error reading SQL file {file_path}: {e}")
+                    sys.exit(1)
+                
+                if args.dry_run:
+                    logger.info(f"DRY RUN: Would execute SQL from {file_path}")
+                    logger.info(f"SQL content ({len(sql_content)} characters):")
+                    logger.info(f"{sql_content[:500]}{'...' if len(sql_content) > 500 else ''}")
+                    logger.info("🎉 Dry run completed successfully!")
+                else:
+                    success, result = executor.execute_statement(sql_content, file_path.name)
+                    if success:
+                        logger.info(f"🎉 SQL file {file_path.name} executed successfully!")
+                    else:
+                        logger.error(f"💥 SQL file {file_path.name} execution failed!")
+                        if "error" in result:
+                            logger.error(f"Error: {result['error']}")
+                        sys.exit(1)
+            finally:
+                if not args.dry_run:
+                    executor.close_session()
         
         sys.exit(0)
             
