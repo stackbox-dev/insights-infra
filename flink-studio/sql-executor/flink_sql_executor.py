@@ -205,6 +205,7 @@ class FlinkSQLExecutor:
         
         results = []
         overall_success = True
+        has_streaming_queries = False
         
         for i, statement in enumerate(statements, 1):
             self.logger.info(f"Executing statement {i}/{len(statements)} using session {self.session_handle}")
@@ -212,6 +213,10 @@ class FlinkSQLExecutor:
             
             statement_name = f"{source_name}_stmt_{i}" if source_name else f"statement_{i}"
             success, result = self.execute_statement(statement, statement_name)
+            
+            # Track if we have streaming queries
+            if success and result.get('is_streaming', False):
+                has_streaming_queries = True
             
             result['statement_number'] = i
             result['statement'] = statement
@@ -227,6 +232,11 @@ class FlinkSQLExecutor:
                     break
                 else:
                     self.logger.info(f"Continuing with remaining statements (continue_on_error=True)")
+        
+        # Add delay before session closure if we had streaming queries
+        if has_streaming_queries:
+            self.logger.info("Waiting additional 3 seconds before closing session for streaming query cleanup...")
+            time.sleep(3)
         
         if overall_success:
             self.logger.info(f"✅ All {len(statements)} statements executed successfully")
@@ -305,7 +315,18 @@ class FlinkSQLExecutor:
                     # Fetch results for queries that return data
                     result_data = self._fetch_operation_result(operation_handle)
                     
-                    self.logger.info(f"✓ {statement_name or 'Statement'} completed successfully ({duration:.1f}s)")
+                    # Check if this is a streaming query that needs more time to collect results
+                    is_streaming_query = result_data and result_data.get('jobID') is not None
+                    
+                    if is_streaming_query:
+                        self.logger.info(f"✓ {statement_name or 'Statement'} streaming job submitted successfully ({duration:.1f}s)")
+                        self.logger.info(f"Waiting 5 seconds for streaming job to collect initial results...")
+                        time.sleep(5)  # Give streaming job time to collect results
+                        
+                        # Re-fetch results after waiting
+                        result_data = self._fetch_operation_result(operation_handle)
+                    else:
+                        self.logger.info(f"✓ {statement_name or 'Statement'} completed successfully ({duration:.1f}s)")
                     
                     # Print results - always show row count summary, even for 0 rows
                     if result_data and result_data.get('results'):
@@ -315,7 +336,8 @@ class FlinkSQLExecutor:
                         "status": status,
                         "duration": duration,
                         "polls": poll_count,
-                        "result": result_data
+                        "result": result_data,
+                        "is_streaming": is_streaming_query
                     }
                 elif status == 'ERROR':
                     error_info = status_result.get('errorMessage', {})
@@ -377,21 +399,85 @@ class FlinkSQLExecutor:
         self.logger.error(f"✗ {statement_name or 'Statement'} {error_msg}")
         return False, {"error": error_msg, "timeout": True}
     
-    def _fetch_operation_result(self, operation_handle: str) -> Optional[Dict]:
-        """Fetch the result data from a completed operation"""
+    def _fetch_operation_result(self, operation_handle: str, max_fetch_attempts: int = 100) -> Optional[Dict]:
+        """Fetch the result data from a completed operation using proper pagination protocol"""
+        all_results = {
+            'results': {
+                'columns': [],
+                'data': []
+            },
+            'resultType': None,
+            'isQueryResult': False,
+            'resultKind': None,
+            'jobID': None
+        }
+        
+        # Start with token 0 as per Flink documentation
+        next_result_uri = f"/v1/sessions/{self.session_handle}/operations/{operation_handle}/result/0"
+        fetch_attempts = 0
+        
         try:
-            url = f"{self.sql_gateway_url}/v1/sessions/{self.session_handle}/operations/{operation_handle}/result/0"
-            response = requests.get(url, timeout=10)
+            while next_result_uri and fetch_attempts < max_fetch_attempts:
+                fetch_attempts += 1
+                url = f"{self.sql_gateway_url}{next_result_uri}"
+                
+                self.logger.debug(f"🔄 Fetching results (attempt {fetch_attempts}): {url}")
+                response = requests.get(url, timeout=10)
+                
+                if response.status_code != 200:
+                    self.logger.debug(f"No result data available: {response.status_code}")
+                    if fetch_attempts == 1:
+                        return None  # No results at all
+                    else:
+                        break  # Stop fetching but return what we have
+                
+                result_data = response.json()
+                
+                # Initialize all_results with metadata from first response
+                if fetch_attempts == 1:
+                    all_results['resultType'] = result_data.get('resultType')
+                    all_results['isQueryResult'] = result_data.get('isQueryResult', False)
+                    all_results['resultKind'] = result_data.get('resultKind')
+                    all_results['jobID'] = result_data.get('jobID')
+                    
+                    # Set columns from first response
+                    results = result_data.get('results', {})
+                    if results.get('columns'):
+                        all_results['results']['columns'] = results['columns']
+                
+                # Accumulate data from each response
+                results = result_data.get('results', {})
+                if results.get('data'):
+                    all_results['results']['data'].extend(results['data'])
+                
+                # Check for nextResultUri to continue pagination
+                next_result_uri = result_data.get('nextResultUri')
+                
+                self.logger.debug(f"📦 Fetched {len(results.get('data', []))} rows, nextResultUri: {next_result_uri}")
+                
+                # For streaming queries, if we get some data but no nextResultUri, 
+                # we might need to wait a bit for more data
+                if not next_result_uri and all_results['isQueryResult'] and len(all_results['results']['data']) == 0:
+                    self.logger.debug("🕐 No data yet for streaming query, waiting...")
+                    time.sleep(5)
+                    # Reset to try fetching from current position again
+                    next_result_uri = f"/v1/sessions/{self.session_handle}/operations/{operation_handle}/result/{fetch_attempts - 1}"
+                    continue
+                
+                # If we have data and no more nextResultUri, we're done
+                if not next_result_uri:
+                    break
+                    
+                # Longer delay between fetches to give streaming data time to arrive
+                time.sleep(5)
             
-            if response.status_code != 200:
-                self.logger.debug(f"No result data available: {response.status_code}")
+            total_rows = len(all_results['results']['data'])
+            self.logger.debug(f"✅ Total rows fetched: {total_rows} in {fetch_attempts} attempts")
+            
+            if total_rows > 0 or fetch_attempts == 1:
+                return all_results
+            else:
                 return None
-            
-            result_data = response.json()
-            self.logger.debug(f"Result data keys: {list(result_data.keys())}")
-            self.logger.debug(f"Result data structure: {json.dumps(result_data, indent=2)[:500]}...")
-            
-            return result_data
             
         except requests.RequestException as e:
             self.logger.debug(f"Error fetching result: {e}")

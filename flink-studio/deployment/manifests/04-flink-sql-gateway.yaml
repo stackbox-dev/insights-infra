@@ -24,12 +24,20 @@ spec:
           image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:latest
           imagePullPolicy: Always
           command: ["/opt/flink/bin/sql-gateway.sh"]
-          args: 
+          args:
             - "start-foreground"
             - "-Dsql-gateway.endpoint.rest.address=0.0.0.0"
             - "-Dsql-gateway.endpoint.rest.port=80"
             - "-Drest.address=flink-session-cluster-rest"
             - "-Drest.port=8081"
+            # SQL Gateway Session Configuration
+            - "-Dsql-gateway.session.idle-timeout=10min"
+            - "-Dsql-gateway.session.check-interval=1min"
+            - "-Dsql-gateway.session.max-num=1000000"
+            # SQL Gateway Worker Configuration
+            - "-Dsql-gateway.worker.threads.min=5"
+            - "-Dsql-gateway.worker.threads.max=500"
+            - "-Dsql-gateway.worker.keepalive-time=5min"
           ports:
             - containerPort: 80
               name: rest-api
@@ -40,24 +48,6 @@ spec:
               value: /opt/flink/gcp/service-account.json
             - name: GOOGLE_CLOUD_PROJECT
               value: sbx-stag
-            - name: FLINK_PROPERTIES
-              value: |
-                rest.address: flink-session-cluster-rest
-                rest.port: 8081
-                # Hive Catalog Configuration
-                table.sql-dialect: default
-                # GCS Configuration for Hive warehouse
-                fs.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
-                fs.AbstractFileSystem.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS
-                fs.gs.project.id: sbx-stag
-                fs.gs.auth.service.account.enable: true
-                fs.gs.auth.service.account.json.keyfile: /opt/flink/gcp/service-account.json
-                # Kafka Configuration
-                kafka.bootstrap.servers: bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092
-                kafka.security.protocol: SASL_SSL
-                kafka.sasl.mechanism: OAUTHBEARER
-                kafka.sasl.jaas.config: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;
-                kafka.sasl.login.callback.handler.class: com.google.cloud.kafka.OAuthBearerTokenCallbackHandler
           volumeMounts:
             - name: gcp-service-account
               mountPath: /opt/flink/gcp
