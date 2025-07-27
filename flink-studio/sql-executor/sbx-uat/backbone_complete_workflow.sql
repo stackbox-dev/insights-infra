@@ -31,11 +31,11 @@ CREATE TABLE `sbx-uat_backbone_public_node` (
     'properties.group.id' = 'flink-backbone-public-node',
     'scan.startup.mode' = 'earliest-offset',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.schema-registry.url' = 'http://cp-schema-registry.kafka:80'
+    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka:80'
 );
-
 -- Test query to describe the node table structure
-DESCRIBE `sbx-uat_backbone_public_node`;
-
+-- DESCRIBE `sbx-uat_backbone_public_node`;
 -- Query the table data
-SELECT * FROM `sbx-uat_backbone_public_node` LIMIT 10;
+SELECT *
+FROM `sbx-uat_backbone_public_node`
+LIMIT 1;

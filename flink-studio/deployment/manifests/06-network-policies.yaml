@@ -15,38 +15,9 @@ spec:
   - Ingress
   - Egress
   ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: hue
-    - namespaceSelector: {}  # Allow access from all namespaces
-    ports:
-    - protocol: TCP
-      port: 80
+  - {}
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: flink-session-cluster
-    ports:
-    - protocol: TCP
-      port: 6123
-    - protocol: TCP
-      port: 8081
-  # DNS resolution
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 53
-    - protocol: UDP
-      port: 53
-  # Cloud storage access (if needed by SQL Gateway)
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 443
-    - protocol: TCP
-      port: 80
+  - {}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -64,76 +35,9 @@ spec:
   - Ingress
   - Egress
   ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: flink-sql-gateway
-    - namespaceSelector: {}  # Allow access from all namespaces
-    ports:
-    - protocol: TCP
-      port: 6123
-    - protocol: TCP
-      port: 8081
-    - protocol: TCP
-      port: 80  # Allow access to web UI on port 80
-  - from:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: flink-session-cluster
-    ports:
-    - protocol: TCP
-      port: 6121
-    - protocol: TCP
-      port: 6122
-    - protocol: TCP
-      port: 6123
-    - protocol: TCP
-      port: 8081
+  - {}
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: flink-session-cluster
-    ports:
-    - protocol: TCP
-      port: 6121
-    - protocol: TCP
-      port: 6122
-    - protocol: TCP
-      port: 6123
-  # Access to schema registry in kafka namespace
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 80
-    - protocol: TCP
-      port: 8081
-  # Access to Kafka brokers (external managed Kafka)
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 9092
-    - protocol: TCP
-      port: 9093
-  # DNS resolution
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 53
-    - protocol: UDP
-      port: 53
-  # Cloud storage access (GCS and Azure Blob Storage)
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 443  # HTTPS for cloud storage
-    - protocol: TCP
-      port: 80   # HTTP fallback
-  # Kubernetes API server access
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 6443
+  - {}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -151,30 +55,6 @@ spec:
   - Ingress
   - Egress
   ingress:
-  - from:
-    - namespaceSelector: {}  # Allow access from all namespaces
-    ports:
-    - protocol: TCP
-      port: 8888  # Hue web UI port
+  - {}
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: flink-sql-gateway
-    ports:
-    - protocol: TCP
-      port: 80  # SQL Gateway port
-  # DNS resolution
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 53
-    - protocol: UDP
-      port: 53
-  # Allow outbound HTTPS/HTTP for any external dependencies
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 443
-    - protocol: TCP
-      port: 80
+  - {}

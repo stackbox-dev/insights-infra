@@ -399,7 +399,7 @@ class FlinkSQLExecutor:
         self.logger.error(f"✗ {statement_name or 'Statement'} {error_msg}")
         return False, {"error": error_msg, "timeout": True}
     
-    def _fetch_operation_result(self, operation_handle: str, max_fetch_attempts: int = 100) -> Optional[Dict]:
+    def _fetch_operation_result(self, operation_handle: str, max_fetch_attempts: int = 20) -> Optional[Dict]:
         """Fetch the result data from a completed operation using proper pagination protocol"""
         all_results = {
             'results': {
@@ -422,7 +422,7 @@ class FlinkSQLExecutor:
                 url = f"{self.sql_gateway_url}{next_result_uri}"
                 
                 self.logger.debug(f"🔄 Fetching results (attempt {fetch_attempts}): {url}")
-                response = requests.get(url, timeout=10)
+                response = requests.get(url, timeout=5)
                 
                 if response.status_code != 200:
                     self.logger.debug(f"No result data available: {response.status_code}")
@@ -447,37 +447,39 @@ class FlinkSQLExecutor:
                 
                 # Accumulate data from each response
                 results = result_data.get('results', {})
-                if results.get('data'):
-                    all_results['results']['data'].extend(results['data'])
+                data_in_batch = results.get('data', [])
+                if data_in_batch:
+                    all_results['results']['data'].extend(data_in_batch)
                 
                 # Check for nextResultUri to continue pagination
                 next_result_uri = result_data.get('nextResultUri')
                 
-                self.logger.debug(f"📦 Fetched {len(results.get('data', []))} rows, nextResultUri: {next_result_uri}")
+                self.logger.debug(f"📦 Fetched {len(data_in_batch)} rows, nextResultUri: {'Present' if next_result_uri else 'None'}")
+                if data_in_batch:
+                    self.logger.debug(f"📊 Sample data: {data_in_batch[:1]}")
+                self.logger.debug(f"📊 Total accumulated rows: {len(all_results['results']['data'])}")
                 
-                # For streaming queries, if we get some data but no nextResultUri, 
-                # we might need to wait a bit for more data
-                if not next_result_uri and all_results['isQueryResult'] and len(all_results['results']['data']) == 0:
-                    self.logger.debug("🕐 No data yet for streaming query, waiting...")
-                    time.sleep(5)
-                    # Reset to try fetching from current position again
-                    next_result_uri = f"/v1/sessions/{self.session_handle}/operations/{operation_handle}/result/{fetch_attempts - 1}"
-                    continue
-                
-                # If we have data and no more nextResultUri, we're done
+                # If we are done, stop.
                 if not next_result_uri:
+                    self.logger.debug(f"🏁 Stopping fetch: nextResultUri is None, total data rows: {len(all_results['results']['data'])}")
                     break
+                
+                # If we received no data in this batch, wait before polling again.
+                # Otherwise, poll immediately.
+                if not data_in_batch:
+                    # If we keep getting nextResultUri but no data for too many attempts, stop
+                    if len(all_results['results']['data']) == 0 and fetch_attempts >= 10:
+                        self.logger.debug(f"🛑 Stopping after {fetch_attempts} attempts with no data - likely empty result set")
+                        break
                     
-                # Longer delay between fetches to give streaming data time to arrive
-                time.sleep(5)
+                    self.logger.debug("No data in this batch, waiting before next poll...")
+                    time.sleep(2) # Wait for a short time if the page was empty
             
             total_rows = len(all_results['results']['data'])
             self.logger.debug(f"✅ Total rows fetched: {total_rows} in {fetch_attempts} attempts")
             
-            if total_rows > 0 or fetch_attempts == 1:
-                return all_results
-            else:
-                return None
+            # Return results even if empty (let the caller decide how to handle)
+            return all_results if total_rows > 0 or fetch_attempts <= 2 else None
             
         except requests.RequestException as e:
             self.logger.debug(f"Error fetching result: {e}")
