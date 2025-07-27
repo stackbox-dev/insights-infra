@@ -33,6 +33,7 @@ from typing import Dict, List, Optional, Tuple
 import requests
 import yaml
 from datetime import datetime
+from tabulate import tabulate
 
 
 class FlinkSQLExecutor:
@@ -181,7 +182,8 @@ class FlinkSQLExecutor:
         self, 
         sql_content: str, 
         source_name: str = "",
-        continue_on_error: bool = True
+        continue_on_error: bool = True,
+        format_style: str = "table"
     ) -> Tuple[bool, List[Dict]]:
         """
         Execute multiple SQL statements from a string
@@ -212,7 +214,7 @@ class FlinkSQLExecutor:
             self.logger.debug(f"Statement {i}: {statement[:100]}{'...' if len(statement) > 100 else ''}")
             
             statement_name = f"{source_name}_stmt_{i}" if source_name else f"statement_{i}"
-            success, result = self.execute_statement(statement, statement_name)
+            success, result = self.execute_statement(statement, statement_name, format_style)
             
             # Track if we have streaming queries
             if success and result.get('is_streaming', False):
@@ -247,7 +249,7 @@ class FlinkSQLExecutor:
         
         return overall_success, results
     
-    def execute_statement(self, sql_statement: str, statement_name: str = "") -> Tuple[bool, Dict]:
+    def execute_statement(self, sql_statement: str, statement_name: str = "", format_style: str = "table") -> Tuple[bool, Dict]:
         """
         Execute a SQL statement and return success status with details
         
@@ -281,14 +283,14 @@ class FlinkSQLExecutor:
                 return False, {"error": error_msg}
             
             # Poll for completion
-            return self._poll_operation_status(operation_handle, statement_name)
+            return self._poll_operation_status(operation_handle, statement_name, format_style)
             
         except requests.RequestException as e:
             error_msg = f"Connection error executing statement: {e}"
             self.logger.error(f"✗ {error_msg}")
             return False, {"error": error_msg}
     
-    def _poll_operation_status(self, operation_handle: str, statement_name: str, max_wait: int = 60) -> Tuple[bool, Dict]:
+    def _poll_operation_status(self, operation_handle: str, statement_name: str, format_style: str = "table", max_wait: int = 60) -> Tuple[bool, Dict]:
         """Poll operation status until completion"""
         url = f"{self.sql_gateway_url}/v1/sessions/{self.session_handle}/operations/{operation_handle}/status"
         
@@ -320,17 +322,13 @@ class FlinkSQLExecutor:
                     
                     if is_streaming_query:
                         self.logger.info(f"✓ {statement_name or 'Statement'} streaming job submitted successfully ({duration:.1f}s)")
-                        self.logger.info(f"Waiting 5 seconds for streaming job to collect initial results...")
-                        time.sleep(5)  # Give streaming job time to collect results
-                        
-                        # Re-fetch results after waiting
-                        result_data = self._fetch_operation_result(operation_handle)
+                        # For streaming queries, we already have the initial results, don't re-fetch
                     else:
                         self.logger.info(f"✓ {statement_name or 'Statement'} completed successfully ({duration:.1f}s)")
                     
                     # Print results - always show row count summary, even for 0 rows
                     if result_data and result_data.get('results'):
-                        self._print_query_results(result_data, statement_name)
+                        self._print_query_results(result_data, statement_name, format_style)
                     
                     return True, {
                         "status": status,
@@ -413,7 +411,8 @@ class FlinkSQLExecutor:
         }
         
         # Start with token 0 as per Flink documentation
-        next_result_uri = f"/v1/sessions/{self.session_handle}/operations/{operation_handle}/result/0"
+        # Use JSON row format for proper data parsing
+        next_result_uri = f"/v1/sessions/{self.session_handle}/operations/{operation_handle}/result/0?rowFormat=JSON"
         fetch_attempts = 0
         
         try:
@@ -422,16 +421,17 @@ class FlinkSQLExecutor:
                 url = f"{self.sql_gateway_url}{next_result_uri}"
                 
                 self.logger.debug(f"🔄 Fetching results (attempt {fetch_attempts}): {url}")
-                response = requests.get(url, timeout=5)
+                response = requests.get(url, timeout=10)
                 
                 if response.status_code != 200:
-                    self.logger.debug(f"No result data available: {response.status_code}")
+                    self.logger.debug(f"No result data available: {response.status_code} - {response.text}")
                     if fetch_attempts == 1:
                         return None  # No results at all
                     else:
                         break  # Stop fetching but return what we have
                 
                 result_data = response.json()
+                self.logger.debug(f"Raw API response: {json.dumps(result_data, indent=2)}")
                 
                 # Initialize all_results with metadata from first response
                 if fetch_attempts == 1:
@@ -440,10 +440,18 @@ class FlinkSQLExecutor:
                     all_results['resultKind'] = result_data.get('resultKind')
                     all_results['jobID'] = result_data.get('jobID')
                     
-                    # Set columns from first response
+                    # Set columns from first response - API uses 'columns'
                     results = result_data.get('results', {})
                     if results.get('columns'):
                         all_results['results']['columns'] = results['columns']
+                
+                # Check resultType first - if EOS, we're done
+                current_result_type = result_data.get('resultType')
+                self.logger.debug(f"📋 Result type: {current_result_type}")
+                
+                if current_result_type == 'EOS':
+                    self.logger.debug(f"🏁 Reached End of Stream (EOS) - stopping fetch")
+                    break
                 
                 # Accumulate data from each response
                 results = result_data.get('results', {})
@@ -455,146 +463,179 @@ class FlinkSQLExecutor:
                 next_result_uri = result_data.get('nextResultUri')
                 
                 self.logger.debug(f"📦 Fetched {len(data_in_batch)} rows, nextResultUri: {'Present' if next_result_uri else 'None'}")
-                if data_in_batch:
-                    self.logger.debug(f"📊 Sample data: {data_in_batch[:1]}")
+                if data_in_batch and len(data_in_batch) > 0:
+                    self.logger.debug(f"📊 Sample data: {data_in_batch[0]}")
                 self.logger.debug(f"📊 Total accumulated rows: {len(all_results['results']['data'])}")
                 
-                # If we are done, stop.
+                # If we are done (no nextResultUri), stop
                 if not next_result_uri:
-                    self.logger.debug(f"🏁 Stopping fetch: nextResultUri is None, total data rows: {len(all_results['results']['data'])}")
+                    self.logger.debug(f"🏁 No more nextResultUri - stopping fetch")
                     break
                 
-                # If we received no data in this batch, wait before polling again.
-                # Otherwise, poll immediately.
-                if not data_in_batch:
+                # For NOT_READY results, wait before polling again
+                if current_result_type == 'NOT_READY':
+                    self.logger.debug("⏳ Results not ready, waiting before next poll...")
+                    time.sleep(1)
+                    continue
+                
+                # If we received no data in this batch but have nextResultUri, wait briefly
+                if not data_in_batch and next_result_uri:
                     # If we keep getting nextResultUri but no data for too many attempts, stop
-                    if len(all_results['results']['data']) == 0 and fetch_attempts >= 10:
+                    if len(all_results['results']['data']) == 0 and fetch_attempts >= 5:
                         self.logger.debug(f"🛑 Stopping after {fetch_attempts} attempts with no data - likely empty result set")
                         break
                     
-                    self.logger.debug("No data in this batch, waiting before next poll...")
-                    time.sleep(2) # Wait for a short time if the page was empty
+                    self.logger.debug("No data in this batch but nextResultUri present, waiting...")
+                    time.sleep(1)
             
             total_rows = len(all_results['results']['data'])
             self.logger.debug(f"✅ Total rows fetched: {total_rows} in {fetch_attempts} attempts")
             
             # Return results even if empty (let the caller decide how to handle)
-            return all_results if total_rows > 0 or fetch_attempts <= 2 else None
+            return all_results
             
         except requests.RequestException as e:
             self.logger.debug(f"Error fetching result: {e}")
             return None
     
-    def _print_query_results(self, result_data: Dict, statement_name: str):
-        """Print formatted query results"""
+    def _print_query_results(self, result_data: Dict, statement_name: str = "", format_style: str = "table"):
+        """Print formatted query results using tabulate for better presentation"""
         try:
             # Check if there are results to display
             results = result_data.get('results', {})
             if not results:
-                self.logger.info(f"No results structure returned for {statement_name}")
                 print(f"\n📊 Results for {statement_name}:")
                 print("=" * 60)
                 print("❌ No results structure returned")
                 print("=" * 60)
-                print()
                 return
 
-            print(f"\n📊 Results for {statement_name}:")
-            print("=" * 60)
-
             # Get column information and data
-            columns = results.get('columns', [])
+            columns = results.get('columns', results.get('columns', []))  # Support both API field names
             data_rows = results.get('data', [])
             
-            # Enhanced debugging for Kafka streaming queries
+            # Enhanced debugging info (only show if debug logging enabled)
             result_type = result_data.get('resultType', 'UNKNOWN')
-            is_query_result = result_data.get('isQueryResult', False)
-            result_kind = result_data.get('resultKind', 'UNKNOWN')
+            is_query_result = result_data.get('isQueryResult', result_data.get('isQueryResult', False))  # Support both field names
             job_id = result_data.get('jobID', 'N/A')
             
             # Count actual data rows (excluding metadata)
-            actual_data_rows = [row for row in data_rows if row.get('kind') == 'INSERT'] if data_rows else []
-            total_rows_returned = len(data_rows) if data_rows else 0
+            actual_data_rows = [row for row in data_rows if row.get('kind') == 'INSERT'] if data_rows else []  # API uses 'kind' not 'kind'
             data_rows_count = len(actual_data_rows)
             
-            print(f"📈 Row Summary:")
-            print(f"  • Total rows returned: {total_rows_returned}")
-            print(f"  • Data rows (INSERT): {data_rows_count}")
-            print(f"  • Columns: {len(columns)}")
-            print(f"  • Result Type: {result_type}")
-            print(f"  • Is Query Result: {is_query_result}")
-            print(f"  • Result Kind: {result_kind}")
-            print(f"  • Job ID: {job_id}")
-            print()
+            if self.logger.isEnabledFor(logging.DEBUG):
+                print(f"\n� Results for {statement_name}:")
+                print("=" * 60)
+                print(f"📈 Debug Info: Total rows: {len(data_rows)}, Data rows: {data_rows_count}, Columns: {len(columns)}")
+                print(f"📈 Result Type: {result_type}, Job ID: {job_id}")
+                print()
 
             if not data_rows:
-                print("❌ No data returned - the query executed successfully but returned 0 rows.")
-                print("This could mean:")
-                print("  • The Kafka topic is empty")
-                print("  • No data matches the query criteria")
-                print("  • The table source is not producing data yet")
-                print("  • Schema registry issues preventing deserialization")
-                print("  • Avro schema mismatch")
-                print("  • Authentication working but no read permissions")
-                print("  • Topic exists but partitions are empty")
-                print("  • Watermark configuration preventing data from being read")
-                
-                # For streaming queries, suggest checking the Flink job
-                if is_query_result and job_id != 'N/A':
-                    print(f"  • Check Flink job status: {job_id}")
-                    print("  • The streaming job may still be starting up")
-                    print("  • Consider increasing the query timeout or checking job metrics")
-                
+                print(f"\n📊 Results for {statement_name}:")
                 print("=" * 60)
-                print()
+                print("❌ No data returned - the query executed successfully but returned 0 rows.")
+                if is_query_result and job_id != 'N/A':
+                    print(f"💡 Streaming job ID: {job_id} (may still be collecting data)")
+                print("=" * 60)
                 return
             
             if not actual_data_rows:
-                print("❌ No INSERT data rows found.")
-                print("Raw data structure received:")
-                for i, row in enumerate(data_rows[:3]):  # Show first 3 rows for debugging
-                    print(f"  Row {i+1}: kind='{row.get('kind', 'UNKNOWN')}', fields={len(row.get('fields', []))}")
+                print(f"\n📊 Results for {statement_name}:")
                 print("=" * 60)
-                print()
+                print("❌ No INSERT data rows found.")
+                print("=" * 60)
                 return
 
             if columns and actual_data_rows:
-                # Print column headers
+                print(f"\n📊 Results for {statement_name}:")
+                print("=" * 60)
+                
+                # Prepare headers
                 headers = [col.get('name', f'col_{i}') for i, col in enumerate(columns)]
-                col_widths = [max(20, len(header)) for header in headers]
                 
-                # Print header row
-                header_row = " | ".join(header.ljust(width) for header, width in zip(headers, col_widths))
-                print(header_row)
-                print("-" * len(header_row))
-                
-                # Print data rows
+                # Prepare data for tabulate
+                table_data = []
                 for row_data in actual_data_rows:
-                    fields = row_data.get('fields', [])
-                    # Format each cell and pad to column width
-                    formatted_cells = []
-                    for i, cell in enumerate(fields):
-                        cell_str = str(cell) if cell is not None else 'NULL'
-                        width = col_widths[i] if i < len(col_widths) else 20
-                        formatted_cells.append(cell_str.ljust(width))
-                    print(" | ".join(formatted_cells))
+                    # The actual row data might be in different fields depending on the RowFormat
+                    if isinstance(row_data, dict):
+                        # For structured data, extract the actual field values
+                        if 'fields' in row_data:
+                            fields = row_data['fields']
+                        else:
+                            # Direct field access for some formats
+                            fields = [row_data.get(col.get('name', f'col_{i}'), None) for i, col in enumerate(columns)]
+                    else:
+                        # For array-like data
+                        fields = row_data if isinstance(row_data, list) else [row_data]
+                    
+                    # Convert None values to 'NULL' for better display
+                    formatted_row = [str(cell) if cell is not None else 'NULL' for cell in fields]
+                    table_data.append(formatted_row)
+                
+                # Print the table using tabulate
+                if format_style == "table":
+                    table_format = "grid"
+                elif format_style == "simple":
+                    table_format = "simple"
+                elif format_style == "plain":
+                    table_format = "plain"
+                else:
+                    table_format = "grid"
+                
+                try:
+                    formatted_table = tabulate(table_data, headers=headers, tablefmt=table_format, 
+                                             numalign="left", stralign="left")
+                    print(formatted_table)
+                except Exception as e:
+                    # Fallback to simple format if tabulate fails
+                    self.logger.debug(f"Tabulate formatting failed: {e}, using simple format")
+                    self._print_simple_table(headers, table_data)
                 
                 print()
-                print(f"✅ Displayed {data_rows_count} data rows")
+                print(f"✅ Displayed {data_rows_count} row(s)")
+                print("=" * 60)
             else:
                 # Fallback: print raw data
-                print("Raw result data:")
-                for row in data_rows[:5]:  # Show first 5 rows for debugging
-                    print(f"  {row}")
-            
-            print("=" * 60)
-            print()
+                print(f"\n📊 Raw results for {statement_name}:")
+                print("=" * 60)
+                for i, row in enumerate(data_rows[:5]):  # Show first 5 rows
+                    print(f"  Row {i+1}: {row}")
+                if len(data_rows) > 5:
+                    print(f"  ... and {len(data_rows) - 5} more rows")
+                print("=" * 60)
             
         except Exception as e:
             self.logger.debug(f"Error printing results: {e}")
             # Print raw results as fallback
             print(f"\n📊 Raw results for {statement_name}:")
+            print("=" * 60)
             print(json.dumps(result_data, indent=2))
+            print("=" * 60)
+
+    def _print_simple_table(self, headers: List[str], data: List[List[str]]):
+        """Simple table printing fallback when tabulate is not available"""
+        if not headers or not data:
+            return
+        
+        # Calculate column widths
+        col_widths = [len(header) for header in headers]
+        for row in data:
+            for i, cell in enumerate(row):
+                if i < len(col_widths):
+                    col_widths[i] = max(col_widths[i], len(str(cell)))
+        
+        # Print header
+        header_row = " | ".join(header.ljust(width) for header, width in zip(headers, col_widths))
+        print(header_row)
+        print("-" * len(header_row))
+        
+        # Print data rows
+        for row in data:
+            formatted_cells = []
+            for i, cell in enumerate(row):
+                width = col_widths[i] if i < len(col_widths) else 20
+                formatted_cells.append(str(cell).ljust(width))
+            print(" | ".join(formatted_cells))
 
 
 def setup_logging(log_level: str, log_file: Optional[str] = None):
@@ -802,6 +843,9 @@ Examples:
     
     # Enable debug logging
     python flink_sql_executor.py --file /path/to/my_query.sql --log-level DEBUG
+    
+    # Use different table formats
+    python flink_sql_executor.py --sql "SELECT * FROM my_table" --format simple
         """
     )
     
@@ -870,6 +914,13 @@ Examples:
         help="Configuration file path (default: config.yaml)"
     )
     
+    parser.add_argument(
+        "--format",
+        choices=["table", "simple", "plain"],
+        default="table",
+        help="Output format for query results (default: table)"
+    )
+    
     args = parser.parse_args()
     
     # Process error handling arguments
@@ -916,7 +967,7 @@ Examples:
                 else:
                     if args.single_statement:
                         # Execute as single statement
-                        success, result = executor.execute_statement(args.sql, "inline-query")
+                        success, result = executor.execute_statement(args.sql, "inline-query", args.format)
                         if success:
                             logger.info("🎉 Inline SQL executed successfully!")
                         else:
@@ -930,7 +981,8 @@ Examples:
                         success, results = executor.execute_multiple_statements(
                             args.sql, 
                             "inline-query", 
-                            continue_on_error
+                            continue_on_error,
+                            args.format
                         )
                         
                         if success:
@@ -998,7 +1050,7 @@ Examples:
                 else:
                     if args.single_statement:
                         # Execute as single statement
-                        success, result = executor.execute_statement(sql_content, file_path.name)
+                        success, result = executor.execute_statement(sql_content, file_path.name, args.format)
                         if success:
                             logger.info(f"🎉 SQL file {file_path.name} executed successfully!")
                         else:
@@ -1012,7 +1064,8 @@ Examples:
                         success, results = executor.execute_multiple_statements(
                             sql_content, 
                             file_path.name, 
-                            continue_on_error
+                            continue_on_error,
+                            args.format
                         )
                         
                         if success:
