@@ -31,8 +31,8 @@ spec:
             - "-Drest.address=flink-session-cluster-rest"
             - "-Drest.port=8081"
             # SQL Gateway Session Configuration
-            - "-Dsql-gateway.session.idle-timeout=10min"
-            - "-Dsql-gateway.session.check-interval=1min"
+            - "-Dsql-gateway.session.idle-timeout=60min"
+            - "-Dsql-gateway.session.check-interval=5min"
             - "-Dsql-gateway.session.max-num=1000000"
             # SQL Gateway Worker Configuration
             - "-Dsql-gateway.worker.threads.min=5"

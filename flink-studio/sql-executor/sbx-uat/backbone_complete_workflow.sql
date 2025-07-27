@@ -38,4 +38,4 @@ CREATE TABLE `sbx-uat_backbone_public_node` (
 -- Query the table data
 SELECT *
 FROM `sbx-uat_backbone_public_node`
-LIMIT 10;
+LIMIT 100;

@@ -13,9 +13,27 @@ spec:
   imagePullPolicy: Always
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "4"
-    state.backend: "hashmap"
+    # State backend optimized for maximum GCS storage, minimal local storage
+    state.backend.type: "rocksdb"
+    state.backend.incremental: "true"
+    state.backend.rocksdb.memory.managed: "true"
+    # Minimize local memory usage to force more data to GCS
+    state.backend.rocksdb.memory.fixed-per-slot: "256mb"
+    # Smaller write buffers = more frequent flushes to GCS
+    state.backend.rocksdb.writebuffer.size: "32mb"
+    state.backend.rocksdb.writebuffer.count: "2"
+    # Smaller block cache = less local caching, more GCS reads
+    state.backend.rocksdb.block.cache-size: "128mb"
+    state.backend.rocksdb.thread.num: "2"
+    # Configure memory ratios to minimize local buffering
+    state.backend.rocksdb.memory.write-buffer-ratio: "0.3"
+    state.backend.rocksdb.memory.high-prio-pool-ratio: "0.05"
+    # Enable changelog for continuous state uploading to GCS
+    state.changelog.enabled: true
+    state.changelog.storage: filesystem
+    state.changelog.dstl.dfs.base-path: gs://sbx-stag-flink-storage/changelog
     # Force session cluster to start TaskManager pods immediately
-    slotmanager.number-of-slots.min: "8"
+    slotmanager.number-of-slots.min: "4"
     # GCS paths for Flink state management
     state.checkpoints.dir: gs://sbx-stag-flink-storage/checkpoints
     state.savepoints.dir: gs://sbx-stag-flink-storage/savepoints
@@ -25,10 +43,27 @@ spec:
     restart-strategy.failure-rate.max-failures-per-interval: "10"
     restart-strategy.failure-rate.failure-rate-interval: "10 min"
     restart-strategy.failure-rate.delay: "30 s"
-    execution.checkpointing.interval: "30 s"
+    execution.checkpointing.interval: "15 s"
     execution.checkpointing.mode: EXACTLY_ONCE
     execution.checkpointing.timeout: "10 min"
+    execution.checkpointing.incremental: true
+    execution.checkpointing.dir: gs://sbx-stag-flink-storage/flink-checkpoints
+    # Additional checkpoint settings for maximum GCS usage
+    execution.checkpointing.max-concurrent-checkpoints: 1
+    execution.checkpointing.min-pause: "5 s"
+    execution.checkpointing.tolerable-failure-number: 3
+    # Reduce local state TTL to force more frequent GCS writes
+    table.exec.state.ttl: "1 h"
     table.exec.source.idle-timeout: "30 s"
+    # Job History and Archive Settings
+    jobmanager.archive.fs.dir: gs://sbx-stag-flink-storage/archived-jobs
+    web.history: 50
+    web.checkpoints.history: 100
+    web.exception-history-size: 50
+    jobstore.cache-size: 104857600
+    jobstore.expiration-time: 86400
+    jobstore.max-capacity: 1000
+    jobstore.type: File
     # Hadoop configuration for GCS
     fs.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
     fs.AbstractFileSystem.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS
@@ -69,7 +104,7 @@ spec:
     resource:
       memory: "3072m"
       cpu: 1
-    replicas: 2
+    replicas: 1
     podTemplate:
       spec:
         serviceAccountName: flink
