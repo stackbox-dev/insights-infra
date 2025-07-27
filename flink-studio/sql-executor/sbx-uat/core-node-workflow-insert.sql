@@ -70,7 +70,12 @@ CREATE TABLE `sbx-uat.backbone.public.node2` (
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka:80'
 );
 --
-INSERT INTO `sbx-uat.backbone.public.node2`
-SELECT *
+INSERT INTO `sbx-uat.backbone.public.node2` (
+    id, parentId, `group`, code, name, type, data, 
+    createdAt, updatedAt, active, hasLocations, platform, is_deleted
+)
+SELECT 
+    id, parentId, `group`, code, name, type, data, 
+    createdAt, updatedAt, active, hasLocations, platform, is_deleted
 FROM `sbx-uat.backbone.public.node`;
 --

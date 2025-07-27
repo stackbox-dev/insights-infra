@@ -921,6 +921,12 @@ Examples:
         help="Output format for query results (default: table)"
     )
     
+    parser.add_argument(
+        "--keep-session",
+        action="store_true",
+        help="Keep the SQL Gateway session open after execution (don't close it)"
+    )
+    
     args = parser.parse_args()
     
     # Process error handling arguments
@@ -1000,8 +1006,10 @@ Examples:
                             
                             sys.exit(1)
             finally:
-                if not args.dry_run:
+                if not args.dry_run and not args.keep_session:
                     executor.close_session()
+                elif not args.dry_run and args.keep_session:
+                    logger.info(f"🔄 Keeping session open: {executor.session_handle}")
         else:
             # Execute SQL from file
             file_path = Path(args.file)
@@ -1083,8 +1091,10 @@ Examples:
                             
                             sys.exit(1)
             finally:
-                if not args.dry_run:
+                if not args.dry_run and not args.keep_session:
                     executor.close_session()
+                elif not args.dry_run and args.keep_session:
+                    logger.info(f"🔄 Keeping session open: {executor.session_handle}")
         
         sys.exit(0)
             
