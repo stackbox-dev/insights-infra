@@ -22,18 +22,21 @@ The platform consists of four main components:
 The Flink deployment includes the following pre-installed connectors and libraries:
 
 #### Core Connectors
+
 - **Kafka Connector** (`flink-sql-connector-kafka-4.0.0-2.0.jar`) - 9.7MB
   - Full Apache Kafka integration for streaming data
   - Supports SASL/SSL authentication for managed Kafka services
   - Compatible with Confluent, Azure Event Hubs, and GCP Managed Kafka
 
 #### Data Formats & Serialization
+
 - **Avro Connector** (`flink-sql-avro-2.0.0.jar`) - 4.3MB
   - Native Avro schema support for structured data processing
   - Schema registry integration capabilities
   - Efficient binary serialization/deserialization
 
 #### Cloud Authentication
+
 - **Google Auth Library** (`google-auth-library-oauth2-http-1.19.0.jar`) - 247KB
   - OAuth2 authentication for GCP services
   - Required for GCP Managed Kafka connectivity
@@ -41,6 +44,7 @@ The Flink deployment includes the following pre-installed connectors and librari
   - Core GCP service integration libraries
 
 #### File System Connectors
+
 - **Google Cloud Storage (GCS)**: Native Hadoop filesystem support
 - **Amazon S3**: Both Hadoop and Presto filesystem implementations
 - **Azure Blob Storage**: Hadoop filesystem integration
@@ -196,7 +200,8 @@ Use the comprehensive test script to validate the deployment:
 ```
 
 The test script validates:
-- ✅ **Deployment Status**: FlinkDeployment resource is STABLE  
+
+- ✅ **Deployment Status**: FlinkDeployment resource is STABLE
 - ✅ **Pod Health**: All pods running and ready (JobManager + TaskManagers)
 - ✅ **Init Containers**: Library downloads completed successfully
 - ✅ **Library Validation**: All required connectors present in all pods
@@ -229,9 +234,10 @@ kubectl exec -n flink-studio deployment/flink-session-cluster -- ls -la /opt/fli
 ```
 
 Expected library output:
+
 ```
 -rw-r--r-- 1 root root  4342426 Jul 25 07:28 flink-sql-avro-2.0.0.jar
--rw-r--r-- 1 root root  9765334 Jul 25 07:28 flink-sql-connector-kafka-2.0.0.jar  
+-rw-r--r-- 1 root root  9765334 Jul 25 07:28 flink-sql-connector-kafka-2.0.0.jar
 -rw-r--r-- 1 root root   247870 Jul 25 07:28 google-auth-library-oauth2-http-1.19.0.jar
 -rw-r--r-- 1 root root   131444 Jul 25 07:28 google-cloud-core-2.8.1.jar
 ```
@@ -402,6 +408,7 @@ Customize Hue settings in `manifests/07-hue-config.yaml`:
 ### 3. Example Queries
 
 #### Basic Data Generation and Processing
+
 ```sql
 -- Create a simple data generation table
 CREATE TABLE example_table (
@@ -423,6 +430,7 @@ SELECT * FROM example_table LIMIT 10;
 ```
 
 #### Kafka Integration Examples
+
 ```sql
 -- Create a Kafka source table with Avro format
 CREATE TABLE kafka_avro_source (
@@ -465,7 +473,7 @@ CREATE TABLE kafka_json_sink (
 
 -- Stream processing with windowed aggregation
 INSERT INTO kafka_json_sink
-SELECT 
+SELECT
     user_id,
     COUNT(*) as item_count,
     FIRST_VALUE(behavior) as last_behavior,
@@ -476,7 +484,8 @@ GROUP BY user_id, TUMBLE(ts, INTERVAL '1' MINUTE);
 ```
 
 #### Working with Avro Schemas
-```sql  
+
+```sql
 -- Create table using Avro schema registry
 CREATE TABLE orders_avro (
     order_id STRING,
@@ -494,7 +503,7 @@ CREATE TABLE orders_avro (
         "name": "Order",
         "fields": [
             {"name": "order_id", "type": "string"},
-            {"name": "customer_id", "type": "string"}, 
+            {"name": "customer_id", "type": "string"},
             {"name": "order_amount", "type": {"type": "bytes", "logicalType": "decimal", "precision": 10, "scale": 2}},
             {"name": "order_timestamp", "type": {"type": "long", "logicalType": "timestamp-millis"}}
         ]
@@ -502,102 +511,8 @@ CREATE TABLE orders_avro (
 );
 ```
 
-## Scaling Your Flink Cluster
-
-The `safe-scale.sh` script provides intelligent, zero-downtime scaling with automatic job rebalancing. The script has been enhanced to never interrupt running jobs - Flink automatically rebalances workloads across the new cluster size.
-
-### 🚀 Quick Start
-
-```bash
-# Make the script executable
-chmod +x safe-scale.sh
-
-# Scale to 5 TaskManager replicas
-./safe-scale.sh 5
-
-# Scale to 10 TaskManager replicas with debug output
-./safe-scale.sh 10 debug
-
-# The script will prompt for confirmation of your Kubernetes context
-```
-
-### 📊 How Smart Scaling Works
-
-The enhanced script provides **zero-downtime scaling** for all scenarios:
-
-#### ✅ **Always Zero-Downtime** (Jobs never interrupted)
-
-**Scaling UP** - Adding TaskManagers:
-```bash
-./safe-scale.sh 8  # Current: 5 TMs → Target: 8 TMs
-# ✅ Jobs continue running - Flink automatically uses new resources
-```
-
-**Scaling DOWN** - Reducing TaskManagers:
-```bash
-./safe-scale.sh 4  # Current: 8 TMs → Target: 4 TMs
-# ✅ Jobs continue running - Flink automatically rebalances to remaining resources
-```
-
-**Key Improvements:**
-- **No Job Interruption**: Jobs are never stopped or restarted during scaling
-- **Automatic Rebalancing**: Flink handles workload redistribution seamlessly
-- **Context Safety**: Prompts for Kubernetes context confirmation
-- **Debug Mode**: Enhanced logging with `./safe-scale.sh <replicas> debug`
-
-### 📋 Understanding the Output
-
-When you run the scaling script, you'll see enhanced analysis and real-time progress:
-
-```bash
-./safe-scale.sh 6
-
-🔍 Checking Kubernetes context...
-📍 Current Kubernetes context: my-cluster-context
-⚠️  Are you sure you want to scale the Flink cluster in this context? (y/N): y
-
-🎯 Scaling Flink cluster to 6 TaskManager replicas...
-🔍 Checking for running jobs...
-📊 Current cluster state:
-   TaskManagers: 4
-   Total slots: 16
-   Used slots: 8
-   Available slots: 8
-
-🚀 Scaling UP detected (16 → 24 slots)
-✅ Flink will automatically rebalance jobs to use new resources!
-🔧 Scaling Flink cluster...
-📊 Target: 6 TaskManagers (24 slots total)
-🎉 Jobs will continue running and rebalance automatically!
-
-⏳ Waiting for Flink to scale TaskManagers (timeout: 5 minutes)...
-   Progress: 6 TaskManagers (24 slots) - Target: 6 TMs (24 slots)
-✅ Scaling completed successfully!
-🔄 All jobs have been automatically rebalanced across the new cluster size
-```
-
-### 🆕 New Features
-
-- **Context Verification**: Always confirms your Kubernetes context before scaling
-- **Debug Mode**: Use `./safe-scale.sh <replicas> debug` for detailed logging
-- **Enhanced Progress Tracking**: Real-time updates during the scaling process
-- **Automatic Job Rebalancing**: Never interrupts jobs - Flink handles everything
-- **Improved Error Handling**: Better timeout management and failure recovery
-
-### 🛠️ Advanced Usage
-
-**Using Debug Mode for Troubleshooting:**
-```bash
-# Enable detailed logging to debug scaling issues
-./safe-scale.sh 5 debug
-
-# Debug output includes:
-# - Full REST API responses
-# - Detailed cluster state information
-# - Step-by-step execution details
-```
-
 **Check current cluster state before scaling:**
+
 ```bash
 # Check cluster capacity
 kubectl exec -n flink-studio deployment/flink-session-cluster -- \
@@ -614,6 +529,7 @@ kubectl config current-context
 ```
 
 **Monitor scaling progress manually:**
+
 ```bash
 # Watch pods during scaling
 kubectl get pods -n flink-studio -l app=flink-session-cluster -w
@@ -626,6 +542,7 @@ watch "kubectl exec -n flink-studio deployment/flink-session-cluster -- \
 ### 🔧 Configuration
 
 Default settings (customizable in the script):
+
 - **Namespace**: `flink-studio`
 - **Deployment**: `flink-session-cluster`
 - **Slots per TaskManager**: 4
@@ -635,13 +552,13 @@ Default settings (customizable in the script):
 
 **Common issues and solutions:**
 
-| Issue | Solution |
-|-------|----------|
-| Permission denied | `chmod +x safe-scale.sh` |
-| Wrong Kubernetes context | Check with `kubectl config current-context`, switch with `kubectl config use-context <name>` |
-| Cannot connect to Flink API | Check pods: `kubectl get pods -n flink-studio` |
-| Scaling timeout (5 min) | Check node resources and TaskManager pod logs |
-| Debug information needed | Run with debug: `./safe-scale.sh <replicas> debug` |
+| Issue                       | Solution                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| Permission denied           | `chmod +x safe-scale.sh`                                                                     |
+| Wrong Kubernetes context    | Check with `kubectl config current-context`, switch with `kubectl config use-context <name>` |
+| Cannot connect to Flink API | Check pods: `kubectl get pods -n flink-studio`                                               |
+| Scaling timeout (5 min)     | Check node resources and TaskManager pod logs                                                |
+| Debug information needed    | Run with debug: `./safe-scale.sh <replicas> debug`                                           |
 
 **Detailed troubleshooting steps:**
 
@@ -666,6 +583,7 @@ kubectl logs -n flink-studio -l component=taskmanager --tail=50
 ```
 
 **Access Flink UI for manual job management:**
+
 ```bash
 kubectl port-forward -n flink-studio service/flink-session-cluster-rest 8081:8081
 # Then open: http://localhost:8081
@@ -685,12 +603,13 @@ kubectl port-forward -n flink-studio service/flink-session-cluster-rest 8081:808
 The enhanced scaling script leverages Flink's native capabilities:
 
 - **Automatic Redistribution**: Flink automatically redistributes tasks across available slots
-- **No Downtime**: Jobs continue processing during the entire scaling operation  
+- **No Downtime**: Jobs continue processing during the entire scaling operation
 - **State Preservation**: All job state is preserved during rebalancing
 - **Backpressure Handling**: Flink manages backpressure during resource changes
 - **Slot Allocation**: The script sets minimum slots to ensure proper resource allocation
 
 **Example of seamless rebalancing:**
+
 ```bash
 # Before scaling: 4 TaskManagers, 16 slots, 12 slots used
 ./safe-scale.sh 6
@@ -714,8 +633,9 @@ Use the comprehensive test script to validate deployment health:
 ```
 
 The test script provides detailed validation of:
+
 - Kubernetes prerequisites and cluster connectivity
-- Flink deployment status and pod health  
+- Flink deployment status and pod health
 - Init container execution and library downloads
 - Required connector libraries in all pods
 - Flink UI accessibility and cluster topology
@@ -749,6 +669,7 @@ kubectl logs deployment/hue -n flink-studio
 **Symptoms**: Pods stuck in `Pending` or `Init:0/1` state
 
 **Solutions**:
+
 - Check resource availability: `kubectl describe nodes`
 - Verify cloud storage access permissions
 - Check operator logs: `kubectl logs -n flink-system deployment/flink-kubernetes-operator`
@@ -761,6 +682,7 @@ kubectl logs deployment/hue -n flink-studio
 **Symptoms**: Init containers failing with download errors
 
 **Solutions**:
+
 - Verify internet connectivity from cluster nodes
 - Check Maven Central accessibility: `kubectl exec <pod> -- curl -I https://repo1.maven.org/maven2/`
 - Review init container logs for specific download failures
@@ -771,6 +693,7 @@ kubectl logs deployment/hue -n flink-studio
 **Symptoms**: Avro/Kafka connectors not available in Flink jobs
 
 **Solutions**:
+
 - Run library validation: `./test-deployment.sh --libs-only`
 - Check shared volume contents: `kubectl exec <pod> -- ls -la /opt/flink/lib-extra/`
 - Manually copy libraries if needed: `kubectl exec <pod> -- cp /opt/flink/lib-extra/*.jar /opt/flink/lib/`
@@ -781,6 +704,7 @@ kubectl logs deployment/hue -n flink-studio
 **Symptoms**: Hue cannot connect to SQL Gateway, queries fail
 
 **Solutions**:
+
 - Verify Flink cluster is ready: `kubectl get flinkdeployment -n flink-studio`
 - Check service endpoints: `kubectl get endpoints -n flink-studio`
 - Test gateway directly: `curl http://localhost:8083/v1/info` (via port-forward)
@@ -791,6 +715,7 @@ kubectl logs deployment/hue -n flink-studio
 **Symptoms**: Kafka table creation fails, authentication errors
 
 **Solutions**:
+
 - Verify Kafka bootstrap servers configuration
 - Check authentication credentials (OAuth tokens, certificates)
 - Test connectivity from Flink pods: `kubectl exec <pod> -- telnet <kafka-server> 9092`
@@ -802,8 +727,9 @@ kubectl logs deployment/hue -n flink-studio
 **Symptoms**: Avro deserialization failures, schema compatibility errors
 
 **Solutions**:
+
 - Validate Avro schema format and syntax
-- Check schema registry connectivity if using external registry  
+- Check schema registry connectivity if using external registry
 - Verify schema evolution compatibility
 - Test with simple Avro schemas first
 - Enable Avro debugging: Add `'avro.decode-error-policy' = 'fail'` to table options
@@ -876,26 +802,26 @@ kubectl delete namespace flink-system
 
 ### Deployment Issues
 
-| Issue                              | Solution                                             |
-| ---------------------------------- | ---------------------------------------------------- |
-| Insufficient resources             | Check cluster capacity with `kubectl describe nodes` |
-| Cloud storage access issues        | Verify GCS bucket/Azure storage account permissions  |
-| Image pull failures                | Check internet connectivity and image availability   |
-| Workload Identity issues (GCP)     | Verify service account binding and permissions       |
-| Storage account key issues (Azure) | Check secret creation and validity                   |
-| Library download failures          | Run `./test-deployment.sh --libs-only` to diagnose  |
+| Issue                              | Solution                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| Insufficient resources             | Check cluster capacity with `kubectl describe nodes`                      |
+| Cloud storage access issues        | Verify GCS bucket/Azure storage account permissions                       |
+| Image pull failures                | Check internet connectivity and image availability                        |
+| Workload Identity issues (GCP)     | Verify service account binding and permissions                            |
+| Storage account key issues (Azure) | Check secret creation and validity                                        |
+| Library download failures          | Run `./test-deployment.sh --libs-only` to diagnose                        |
 | Init container errors              | Check init container logs with `kubectl logs <pod> -c flink-plugin-setup` |
 
 ### Runtime Issues
 
-| Issue                  | Solution                                           |
-| ---------------------- | -------------------------------------------------- |
-| Jobs fail to start     | Check Flink logs and resource allocation          |
-| SQL queries timeout    | Increase gateway timeout settings                  |
-| Hue login issues       | Verify Hue database and configuration             |
-| Kafka connector issues | Validate connectivity and authentication settings  |
+| Issue                  | Solution                                            |
+| ---------------------- | --------------------------------------------------- |
+| Jobs fail to start     | Check Flink logs and resource allocation            |
+| SQL queries timeout    | Increase gateway timeout settings                   |
+| Hue login issues       | Verify Hue database and configuration               |
+| Kafka connector issues | Validate connectivity and authentication settings   |
 | Avro format errors     | Check schema compatibility and format configuration |
-| Missing connectors     | Run comprehensive test: `./test-deployment.sh`    |
+| Missing connectors     | Run comprehensive test: `./test-deployment.sh`      |
 
 ### Using the Test Script for Diagnostics
 
@@ -907,7 +833,7 @@ The comprehensive test script provides detailed diagnostics:
 
 # Focus on specific issues
 ./test-deployment.sh --libs-only      # Library validation only
-./test-deployment.sh --pods-only      # Pod status only  
+./test-deployment.sh --pods-only      # Pod status only
 ./test-deployment.sh --connectivity   # Network connectivity only
 ./test-deployment.sh --monitor        # Continuous monitoring mode
 
@@ -942,7 +868,7 @@ For issues and questions:
 
 1. **Use the test script first**: Run `./test-deployment.sh` for comprehensive diagnostics
 2. **Check troubleshooting guide**: Review the expanded troubleshooting section above
-3. **Review component logs**: 
+3. **Review component logs**:
    - Flink logs: `kubectl logs <flink-pod> -n flink-studio`
    - Init container logs: `kubectl logs <pod> -c flink-plugin-setup -n flink-studio`
    - Operator logs: `kubectl logs -n flink-system deployment/flink-kubernetes-operator`

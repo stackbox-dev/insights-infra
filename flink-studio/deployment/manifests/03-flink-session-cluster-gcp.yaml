@@ -33,7 +33,7 @@ spec:
     state.changelog.storage: filesystem
     state.changelog.dstl.dfs.base-path: gs://sbx-stag-flink-storage/changelog
     # Force session cluster to start TaskManager pods immediately
-    slotmanager.number-of-slots.min: "4"
+    slotmanager.number-of-slots.min: "8"
     # GCS paths for Flink state management
     state.checkpoints.dir: gs://sbx-stag-flink-storage/checkpoints
     state.savepoints.dir: gs://sbx-stag-flink-storage/savepoints
