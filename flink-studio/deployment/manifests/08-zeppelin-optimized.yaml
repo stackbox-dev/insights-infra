@@ -1,0 +1,200 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zeppelin
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: zeppelin
+    app.kubernetes.io/component: web-ui
+spec:
+  serviceName: zeppelin
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zeppelin
+      app.kubernetes.io/component: web-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zeppelin
+        app.kubernetes.io/component: web-ui
+    spec:
+      serviceAccountName: flink
+      securityContext:
+        fsGroup: 1000
+      # No init containers needed - Flink is embedded in the custom image
+      containers:
+        - name: zeppelin
+          # Custom image with embedded Flink 2.0
+          image: gcr.io/sbx-stag/zeppelin-flink:2.0.0-zeppelin-0.12.0
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: ZEPPELIN_CONF_DIR
+              value: "/opt/zeppelin/conf"
+            - name: ZEPPELIN_NOTEBOOK_DIR
+              value: "/opt/zeppelin/notebook"
+            - name: ZEPPELIN_LOG_DIR
+              value: "/opt/zeppelin/logs"
+            - name: ZEPPELIN_MEM
+              value: "-Xmx2g -Xms1g"
+            - name: ZEPPELIN_JAVA_OPTS
+              value: "-Dfile.encoding=UTF-8"
+            # Flink configuration (already embedded in image)
+            - name: FLINK_HOME
+              value: "/opt/flink"
+            - name: FLINK_CONF_DIR
+              value: "/opt/flink/conf"
+            # Flink Session cluster connectivity
+            - name: FLINK_SESSION_CLUSTER_ENDPOINT
+              value: "http://flink-session-cluster:80"
+            # GCP Configuration for Flink compatibility
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /opt/flink/gcp/service-account.json
+            - name: GOOGLE_CLOUD_PROJECT
+              value: sbx-stag
+          volumeMounts:
+            - name: zeppelin-config
+              mountPath: /opt/zeppelin/conf/zeppelin-site.xml
+              subPath: zeppelin-site.xml
+              readOnly: true
+            - name: zeppelin-config
+              mountPath: /opt/zeppelin/conf/interpreter.json
+              subPath: interpreter.json
+              readOnly: true
+            - name: zeppelin-data
+              mountPath: /opt/zeppelin/notebook
+              subPath: notebook
+            - name: zeppelin-data
+              mountPath: /opt/zeppelin/logs
+              subPath: logs
+            - name: zeppelin-data
+              mountPath: /opt/zeppelin/local-repo
+              subPath: local-repo
+            - name: gcp-service-account
+              mountPath: /opt/flink/gcp
+              readOnly: true
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 60  # Reduced since no init container
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30  # Reduced since no init container
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Startup probe to handle initial boot time
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12  # Allow up to 2 minutes for startup
+      volumes:
+        - name: zeppelin-config
+          configMap:
+            name: zeppelin-config
+            defaultMode: 0755
+        - name: gcp-service-account
+          secret:
+            secretName: gcp-service-account-key
+  volumeClaimTemplates:
+  - metadata:
+      name: zeppelin-data
+      labels:
+        app.kubernetes.io/name: zeppelin
+        app.kubernetes.io/component: storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: standard-rwo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zeppelin
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: zeppelin
+    app.kubernetes.io/component: web-ui
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: zeppelin
+    app.kubernetes.io/component: web-ui
+---
+# Regular service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: zeppelin-service
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: zeppelin
+    app.kubernetes.io/component: web-ui-external
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: zeppelin
+    app.kubernetes.io/component: web-ui
+---
+# Optional: Ingress for external access
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: zeppelin-ingress
+#   namespace: flink-studio
+#   labels:
+#     app.kubernetes.io/name: zeppelin
+#     app.kubernetes.io/component: ingress
+#   annotations:
+#     nginx.ingress.kubernetes.io/rewrite-target: /
+#     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+# spec:
+#   ingressClassName: nginx
+#   tls:
+#   - hosts:
+#     - zeppelin.flink-studio.local
+#     secretName: zeppelin-tls
+#   rules:
+#   - host: zeppelin.flink-studio.local
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: zeppelin
+#             port:
+#               number: 8080

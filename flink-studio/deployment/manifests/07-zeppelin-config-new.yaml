@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zeppelin-config
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: zeppelin
+    app.kubernetes.io/component: config
+data:
+  zeppelin-site.xml: |
+    <?xml version="1.0"?>
+    <configuration>
+      <property>
+        <name>zeppelin.server.addr</name>
+        <value>0.0.0.0</value>
+      </property>
+      <property>
+        <name>zeppelin.server.port</name>
+        <value>8080</value>
+      </property>
+      <property>
+        <name>zeppelin.notebook.dir</name>
+        <value>/opt/zeppelin/notebook</value>
+      </property>
+      <property>
+        <name>zeppelin.interpreter.dir</name>
+        <value>/opt/zeppelin/interpreter</value>
+      </property>
+      <property>
+        <name>zeppelin.interpreter.localRepo</name>
+        <value>/opt/zeppelin/local-repo</value>
+      </property>
+      <property>
+        <name>zeppelin.anonymous.allowed</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>zeppelin.notebook.public</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>zeppelin.websocket.max.text.message.size</name>
+        <value>1024000</value>
+      </property>
+      <property>
+        <name>zeppelin.server.default.dir.allowed</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>zeppelin.interpreter.connect.timeout</name>
+        <value>60000</value>
+      </property>
+      <property>
+        <name>zeppelin.interpreter.output.limit</name>
+        <value>102400</value>
+      </property>
+    </configuration>
+  interpreter.json: |
+    {
+      "interpreterSettings": {
+        "jdbc": {
+          "id": "jdbc",
+          "name": "jdbc",
+          "group": "jdbc",
+          "properties": {
+            "default.url": {
+              "name": "default.url",
+              "value": "jdbc:flink://flink-sql-gateway:80",
+              "type": "string"
+            },
+            "default.driver": {
+              "name": "default.driver", 
+              "value": "org.apache.flink.table.jdbc.FlinkDriver",
+              "type": "string"
+            },
+            "default.user": {
+              "name": "default.user",
+              "value": "",
+              "type": "string"
+            },
+            "default.password": {
+              "name": "default.password",
+              "value": "",
+              "type": "password"
+            },
+            "common.max_count": {
+              "name": "common.max_count",
+              "value": "1000",
+              "type": "number"
+            }
+          },
+          "status": "READY",
+          "interpreterGroup": [
+            {
+              "name": "sql",
+              "class": "org.apache.zeppelin.jdbc.JDBCInterpreter",
+              "defaultInterpreter": true,
+              "editor": {
+                "language": "sql",
+                "editOnDblClick": false
+              }
+            }
+          ],
+          "dependencies": [
+            {
+              "groupArtifactVersion": "org.apache.flink:flink-sql-jdbc-driver-bundle:1.18.0",
+              "local": false
+            }
+          ],
+          "option": {
+            "remote": true,
+            "port": -1,
+            "isExistingProcess": false,
+            "setPermission": false,
+            "owners": [],
+            "isUserImpersonate": false
+          }
+        },
+        "flink": {
+          "id": "flink",
+          "name": "flink", 
+          "group": "flink",
+          "properties": {
+            "flink.execution.mode": {
+              "name": "flink.execution.mode",
+              "value": "sql-gateway",
+              "type": "string"
+            },
+            "flink.sql-gateway.endpoint": {
+              "name": "flink.sql-gateway.endpoint", 
+              "value": "http://flink-sql-gateway:80",
+              "type": "string"
+            },
+            "flink.sql-gateway.session.check-interval": {
+              "name": "flink.sql-gateway.session.check-interval",
+              "value": "60000",
+              "type": "number"
+            },
+            "flink.sql-gateway.session.idle-timeout": {
+              "name": "flink.sql-gateway.session.idle-timeout", 
+              "value": "60min",
+              "type": "string"
+            },
+            "flink.execution.runtime-mode": {
+              "name": "flink.execution.runtime-mode",
+              "value": "streaming",
+              "type": "string" 
+            }
+          },
+          "status": "READY",
+          "interpreterGroup": [
+            {
+              "name": "ssql",
+              "class": "org.apache.zeppelin.flink.FlinkStreamSqlInterpreter",
+              "defaultInterpreter": true,
+              "editor": {
+                "language": "sql",
+                "editOnDblClick": false
+              }
+            }
+          ],
+          "dependencies": [
+            {
+              "groupArtifactVersion": "org.apache.flink:flink-sql-client:1.18.1",
+              "local": false
+            },
+            {
+              "groupArtifactVersion": "org.apache.flink:flink-connector-kafka:3.0.2-1.18",
+              "local": false
+            }
+          ],
+          "option": {
+            "remote": true,
+            "port": -1,
+            "isExistingProcess": false,
+            "setPermission": false,
+            "owners": [],
+            "isUserImpersonate": false
+          }
+        }
+      },
+      "interpreterBindings": {},
+      "interpreterRepositories": [
+        {
+          "id": "central",
+          "type": "default",
+          "url": "https://repo1.maven.org/maven2/",
+          "releasePolicy": {
+            "enabled": true,
+            "updatePolicy": "daily",
+            "checksumPolicy": "warn"
+          },
+          "snapshotPolicy": {
+            "enabled": true,
+            "updatePolicy": "daily",
+            "checksumPolicy": "warn"
+          }
+        }
+      ]
+    }
+  configure-interpreter.sh: |
+    #!/bin/bash
+    echo "Configuring Flink interpreter for SQL Gateway mode..."
+    
+    # Wait for Zeppelin to start
+    sleep 30
+    
+    # Ensure the configuration directory exists
+    mkdir -p /opt/zeppelin/conf
+    
+    echo "Interpreter configuration is ready from ConfigMap"
+    
+    # Test connectivity to Flink SQL Gateway
+    echo "Testing connection to Flink SQL Gateway..."
+    timeout 30 bash -c 'until curl -s http://flink-sql-gateway:80/v1/info; do echo "Waiting for Flink SQL Gateway..."; sleep 2; done'
+    
+    if [ $? -eq 0 ]; then
+        echo "Successfully connected to Flink SQL Gateway"
+    else
+        echo "Warning: Could not connect to Flink SQL Gateway within 30 seconds"
+    fi
+    
+    # Test connectivity to Flink Session cluster
+    echo "Testing connection to Flink Session cluster..."
+    timeout 30 bash -c 'until curl -s http://flink-session-cluster:80/; do echo "Waiting for Flink Session cluster..."; sleep 2; done'
+    
+    if [ $? -eq 0 ]; then
+        echo "Successfully connected to Flink Session cluster"
+    else
+        echo "Warning: Could not connect to Flink Session cluster within 30 seconds"
+    fi
+    
+    echo "Flink interpreter configured successfully"

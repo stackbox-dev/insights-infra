@@ -1,0 +1,71 @@
+# Custom Zeppelin image with embedded Flink 2.0 for faster startup
+FROM apache/zeppelin:0.12.0
+
+# Switch to root to install dependencies
+USER root
+
+# Install required tools and Java (if needed)
+RUN apt-get update && \
+    apt-get install -y curl wget && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create Flink directory
+RUN mkdir -p /opt/flink
+
+# Download and setup Flink 2.0
+RUN cd /tmp && \
+    curl -L https://archive.apache.org/dist/flink/flink-2.0.0/flink-2.0.0-bin-scala_2.12.tgz -o flink.tgz && \
+    tar -xzf flink.tgz && \
+    mv flink-2.0.0/* /opt/flink/ && \
+    rm -rf flink-2.0.0 flink.tgz
+
+# Flink 2.0 specific setup for Zeppelin compatibility
+RUN echo "Setting up Flink 2.0 for Zeppelin compatibility..." && \
+    # Ensure SQL client jar is in lib (required for Flink 1.16+)
+    if [ -f "/opt/flink/opt/flink-sql-client-2.0.0.jar" ]; then \
+        mv /opt/flink/opt/flink-sql-client-2.0.0.jar /opt/flink/lib/ && \
+        echo "Moved SQL client jar to lib directory"; \
+    fi && \
+    # Ensure table planner is correctly positioned for Flink 2.0
+    if [ -f "/opt/flink/opt/flink-table-planner-2.0.0.jar" ]; then \
+        mv /opt/flink/opt/flink-table-planner-2.0.0.jar /opt/flink/lib/ && \
+        echo "Moved table planner to lib directory"; \
+    fi
+
+# Set proper ownership for Flink directory
+RUN chown -R 1000:1000 /opt/flink && \
+    chmod -R 755 /opt/flink
+
+# Create Zeppelin data directories with proper permissions
+RUN mkdir -p /opt/zeppelin/notebook /opt/zeppelin/logs /opt/zeppelin/local-repo && \
+    chown -R 1000:1000 /opt/zeppelin/notebook /opt/zeppelin/logs /opt/zeppelin/local-repo && \
+    chmod -R 755 /opt/zeppelin/notebook /opt/zeppelin/logs /opt/zeppelin/local-repo
+
+# Set environment variables for Flink
+ENV FLINK_HOME=/opt/flink
+ENV FLINK_CONF_DIR=/opt/flink/conf
+ENV PATH=$PATH:$FLINK_HOME/bin
+
+# Display Flink setup information
+RUN echo "Flink 2.0 setup completed!" && \
+    echo "FLINK_HOME contents:" && \
+    ls -la /opt/flink/ && \
+    echo "Flink lib directory:" && \
+    ls -la /opt/flink/lib/ | grep -E "(sql-client|table-planner)" && \
+    echo "Zeppelin directories:" && \
+    ls -la /opt/zeppelin/
+
+# Switch back to zeppelin user
+USER 1000
+
+# Health check to ensure Flink is properly set up
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD test -f ${FLINK_HOME}/lib/flink-sql-client-2.0.0.jar && \
+        test -f ${FLINK_HOME}/lib/flink-table-planner-2.0.0.jar
+
+# Labels for better image management
+LABEL maintainer="Stackbox Infrastructure Team"
+LABEL version="1.0"
+LABEL description="Apache Zeppelin 0.12.0 with embedded Flink 2.0 for streaming SQL"
+LABEL flink.version="2.0.0"
+LABEL zeppelin.version="0.12.0"
