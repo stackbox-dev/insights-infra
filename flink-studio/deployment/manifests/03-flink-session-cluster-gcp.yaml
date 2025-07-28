@@ -102,14 +102,20 @@ spec:
               secretName: gcp-service-account-key
   taskManager:
     resource:
-      memory: "3072m"
-      cpu: 1
-    replicas: 1
+      memory: "8192m"
+      cpu: 2
+    replicas: 3
     podTemplate:
       spec:
         serviceAccountName: flink
         containers:
           - name: flink-main-container
+            resources:
+              requests:
+                memory: "8Gi"
+                cpu: "2"
+              limits:
+                memory: "8Gi"
             env:
               - name: GOOGLE_APPLICATION_CREDENTIALS
                 value: /opt/flink/gcp/service-account.json
