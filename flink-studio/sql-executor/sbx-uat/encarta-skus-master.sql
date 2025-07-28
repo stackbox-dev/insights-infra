@@ -56,7 +56,6 @@ CREATE TABLE `sbx-uat.encarta.public.skus` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- products source table
 CREATE TABLE `sbx-uat.encarta.public.products` (
     id STRING,
@@ -101,7 +100,6 @@ CREATE TABLE `sbx-uat.encarta.public.products` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- categories source table
 CREATE TABLE `sbx-uat.encarta.public.categories` (
     id STRING,
@@ -134,7 +132,6 @@ CREATE TABLE `sbx-uat.encarta.public.categories` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- sub_categories source table
 CREATE TABLE `sbx-uat.encarta.public.sub_categories` (
     id STRING,
@@ -167,7 +164,6 @@ CREATE TABLE `sbx-uat.encarta.public.sub_categories` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- category_groups source table
 CREATE TABLE `sbx-uat.encarta.public.category_groups` (
     id STRING,
@@ -199,7 +195,6 @@ CREATE TABLE `sbx-uat.encarta.public.category_groups` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- brands source table
 CREATE TABLE `sbx-uat.encarta.public.brands` (
     id STRING,
@@ -232,7 +227,6 @@ CREATE TABLE `sbx-uat.encarta.public.brands` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- sub_brands source table
 CREATE TABLE `sbx-uat.encarta.public.sub_brands` (
     id STRING,
@@ -265,119 +259,6 @@ CREATE TABLE `sbx-uat.encarta.public.sub_brands` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
--- uoms source table
-CREATE TABLE `sbx-uat.encarta.public.uoms` (
-    id STRING,
-    principal_id BIGINT,
-    sku_id STRING,
-    name STRING,
-    hierarchy STRING,
-    weight DOUBLE,
-    volume DOUBLE,
-    package_type STRING,
-    length DOUBLE,
-    width DOUBLE,
-    height DOUBLE,
-    units INT,
-    packing_efficiency DOUBLE,
-    active BOOLEAN,
-    itf_code STRING,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    erp_weight DOUBLE,
-    erp_volume DOUBLE,
-    erp_length DOUBLE,
-    erp_width DOUBLE,
-    erp_height DOUBLE,
-    text_tag1 STRING,
-    text_tag2 STRING,
-    image STRING,
-    num_tag1 DOUBLE,
-    is_deleted BOOLEAN,
-    proc_time AS PROCTIME(),
-    event_time AS CASE
-        WHEN updated_at > created_at THEN updated_at
-        ELSE created_at
-    END,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.uoms',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
-);
-
--- classifications source table
-CREATE TABLE `sbx-uat.encarta.public.classifications` (
-    id STRING,
-    principal_id BIGINT,
-    sku_id STRING,
-    type STRING,
-    value STRING,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    is_deleted BOOLEAN,
-    proc_time AS PROCTIME(),
-    event_time AS CASE
-        WHEN updated_at > created_at THEN updated_at
-        ELSE created_at
-    END,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.classifications',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
-);
-
--- product_classifications source table
-CREATE TABLE `sbx-uat.encarta.public.product_classifications` (
-    id STRING,
-    principal_id BIGINT,
-    product_id STRING,
-    type STRING,
-    value STRING,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    is_deleted BOOLEAN,
-    proc_time AS PROCTIME(),
-    event_time AS CASE
-        WHEN updated_at > created_at THEN updated_at
-        ELSE created_at
-    END,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.product_classifications',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
-);
-
 -- skus_uoms_agg source table
 CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     sku_id STRING,
@@ -479,7 +360,6 @@ CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- skus_classifications_agg source table
 CREATE TABLE `sbx-uat.encarta.public.skus_classifications_agg` (
     sku_id STRING,
@@ -506,7 +386,6 @@ CREATE TABLE `sbx-uat.encarta.public.skus_classifications_agg` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- products_classifications_agg source table
 CREATE TABLE `sbx-uat.encarta.public.products_classifications_agg` (
     product_id STRING,
@@ -533,7 +412,6 @@ CREATE TABLE `sbx-uat.encarta.public.products_classifications_agg` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- Create final summary table structure (destination table)
 CREATE TABLE `sbx-uat.encarta.public.skus_master` (
     id VARCHAR NOT NULL,
@@ -796,7 +674,30 @@ SELECT s.id,
     COALESCE(prod_class_agg.product_classifications, '{}') AS product_classifications,
     COALESCE(s.is_deleted, FALSE) AS is_deleted,
     s.created_at,
-    s.updated_at
+    GREATEST(
+        COALESCE(s.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(
+            uom_agg.updated_at,
+            TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        COALESCE(
+            class_agg.updated_at,
+            TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        COALESCE(
+            prod_class_agg.updated_at,
+            TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        COALESCE(p.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(
+            subcat.updated_at,
+            TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        COALESCE(cat.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(cg.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(sb.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(b.updated_at, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS updated_at
 FROM `sbx-uat.encarta.public.skus` s
     LEFT JOIN `sbx-uat.encarta.public.skus_uoms_agg` AS uom_agg ON s.id = uom_agg.sku_id
     LEFT JOIN `sbx-uat.encarta.public.skus_classifications_agg` AS class_agg ON s.id = class_agg.sku_id
