@@ -1,3 +1,48 @@
+-- source table
+CREATE TABLE `sbx-uat.encarta.public.uoms` (
+    id VARCHAR NOT NULL,
+    principal_id BIGINT NOT NULL,
+    sku_id VARCHAR NOT NULL,
+    name VARCHAR,
+    hierarchy VARCHAR NOT NULL,
+    weight DOUBLE PRECISION,
+    volume DOUBLE PRECISION,
+    package_type VARCHAR,
+    length DOUBLE PRECISION,
+    width DOUBLE PRECISION,
+    height DOUBLE PRECISION,
+    units INT,
+    packing_efficiency DOUBLE PRECISION,
+    active BOOLEAN,
+    itf_code VARCHAR,
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
+    erp_weight DOUBLE PRECISION,
+    erp_volume DOUBLE PRECISION,
+    erp_length DOUBLE PRECISION,
+    erp_width DOUBLE PRECISION,
+    erp_height DOUBLE PRECISION,
+    text_tag1 VARCHAR,
+    text_tag2 VARCHAR,
+    image VARCHAR,
+    num_tag1 DOUBLE PRECISION,
+    is_deleted BOOLEAN,
+    PRIMARY KEY (id) NOT ENFORCED,
+    WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx-uat.encarta.public.uoms',
+    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'OAUTHBEARER',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
+    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+);
+-- destination table
 CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     sku_id VARCHAR NOT NULL,
     l0_units INT,
@@ -76,8 +121,8 @@ CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     l3_text_tag2 VARCHAR,
     l3_image VARCHAR,
     l3_num_tag1 DOUBLE PRECISION,
-    created_at TIMESTAMP_LTZ(3) NOT NULL,
-    updated_at TIMESTAMP_LTZ(3) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL,
+    updated_at TIMESTAMP(3) NOT NULL,
     PRIMARY KEY (sku_id) NOT ENFORCED,
     WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
 ) WITH (
@@ -94,3 +139,392 @@ CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
+-- populate
+-- Population script for UOM aggregations table
+INSERT INTO `sbx-uat.encarta.public.skus_uoms_agg`
+SELECT u.sku_id,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.units
+        END
+    ) AS l0_units,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.units
+        END
+    ) AS l1_units,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.units
+        END
+    ) AS l2_units,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.units
+        END
+    ) AS l3_units,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.name
+        END
+    ) AS l0_name,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.weight
+        END
+    ) AS l0_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.volume
+        END
+    ) AS l0_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.package_type
+        END
+    ) AS l0_package_type,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.length
+        END
+    ) AS l0_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.width
+        END
+    ) AS l0_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.height
+        END
+    ) AS l0_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.packing_efficiency
+        END
+    ) AS l0_packing_efficiency,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.itf_code
+        END
+    ) AS l0_itf_code,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.erp_weight
+        END
+    ) AS l0_erp_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.erp_volume
+        END
+    ) AS l0_erp_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.erp_length
+        END
+    ) AS l0_erp_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.erp_width
+        END
+    ) AS l0_erp_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.erp_height
+        END
+    ) AS l0_erp_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.text_tag1
+        END
+    ) AS l0_text_tag1,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.text_tag2
+        END
+    ) AS l0_text_tag2,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.image
+        END
+    ) AS l0_image,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L0' THEN u.num_tag1
+        END
+    ) AS l0_num_tag1,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.name
+        END
+    ) AS l1_name,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.weight
+        END
+    ) AS l1_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.volume
+        END
+    ) AS l1_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.package_type
+        END
+    ) AS l1_package_type,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.length
+        END
+    ) AS l1_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.width
+        END
+    ) AS l1_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.height
+        END
+    ) AS l1_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.packing_efficiency
+        END
+    ) AS l1_packing_efficiency,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.itf_code
+        END
+    ) AS l1_itf_code,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.erp_weight
+        END
+    ) AS l1_erp_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.erp_volume
+        END
+    ) AS l1_erp_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.erp_length
+        END
+    ) AS l1_erp_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.erp_width
+        END
+    ) AS l1_erp_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.erp_height
+        END
+    ) AS l1_erp_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.text_tag1
+        END
+    ) AS l1_text_tag1,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.text_tag2
+        END
+    ) AS l1_text_tag2,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.image
+        END
+    ) AS l1_image,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L1' THEN u.num_tag1
+        END
+    ) AS l1_num_tag1,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.name
+        END
+    ) AS l2_name,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.weight
+        END
+    ) AS l2_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.volume
+        END
+    ) AS l2_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.package_type
+        END
+    ) AS l2_package_type,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.length
+        END
+    ) AS l2_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.width
+        END
+    ) AS l2_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.height
+        END
+    ) AS l2_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.packing_efficiency
+        END
+    ) AS l2_packing_efficiency,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.itf_code
+        END
+    ) AS l2_itf_code,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.erp_weight
+        END
+    ) AS l2_erp_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.erp_volume
+        END
+    ) AS l2_erp_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.erp_length
+        END
+    ) AS l2_erp_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.erp_width
+        END
+    ) AS l2_erp_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.erp_height
+        END
+    ) AS l2_erp_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.text_tag1
+        END
+    ) AS l2_text_tag1,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.text_tag2
+        END
+    ) AS l2_text_tag2,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.image
+        END
+    ) AS l2_image,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L2' THEN u.num_tag1
+        END
+    ) AS l2_num_tag1,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.name
+        END
+    ) AS l3_name,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.weight
+        END
+    ) AS l3_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.volume
+        END
+    ) AS l3_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.package_type
+        END
+    ) AS l3_package_type,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.length
+        END
+    ) AS l3_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.width
+        END
+    ) AS l3_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.height
+        END
+    ) AS l3_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.packing_efficiency
+        END
+    ) AS l3_packing_efficiency,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.itf_code
+        END
+    ) AS l3_itf_code,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.erp_weight
+        END
+    ) AS l3_erp_weight,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.erp_volume
+        END
+    ) AS l3_erp_volume,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.erp_length
+        END
+    ) AS l3_erp_length,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.erp_width
+        END
+    ) AS l3_erp_width,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.erp_height
+        END
+    ) AS l3_erp_height,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.text_tag1
+        END
+    ) AS l3_text_tag1,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.text_tag2
+        END
+    ) AS l3_text_tag2,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.image
+        END
+    ) AS l3_image,
+    MAX(
+        CASE
+            WHEN u.hierarchy = 'L3' THEN u.num_tag1
+        END
+    ) AS l3_num_tag1,
+    MIN(u.created_at) AS created_at,
+    MAX(u.updated_at) AS updated_at
+FROM `sbx-uat.encarta.public.uoms` u
+WHERE u.active = true
+GROUP BY u.sku_id;
