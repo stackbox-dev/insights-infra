@@ -1,15 +1,20 @@
 -- Create source tables (DDL for Kafka topics)
-
 -- storage_bin source table
 CREATE TABLE `sbx-uat.wms.public.storage_bin` (
     id STRING,
     whId BIGINT,
     code STRING,
     description STRING,
+    binTypeId STRING,
+    zoneId STRING,
+    binHuId STRING,
     multiSku BOOLEAN,
+    createdAt TIMESTAMP(3),
+    updatedAt TIMESTAMP(3),
     multiBatch BOOLEAN,
     pickingPosition INT,
     putawayPosition INT,
+    status STRING,
     `rank` INT,
     aisle STRING,
     bay STRING,
@@ -18,11 +23,7 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin` (
     `depth` STRING,
     maxSkuCount INT,
     maxSkuBatchCount INT,
-    binTypeId STRING,
-    zoneId STRING,
-    status STRING,
-    createdAt TIMESTAMP(3),
-    updatedAt TIMESTAMP(3),
+    attrs STRING,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -44,14 +45,16 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_bin_fixed_mapping source table
 CREATE TABLE `sbx-uat.wms.public.storage_bin_fixed_mapping` (
     id STRING,
+    whId BIGINT,
     binId STRING,
-    active STRING,
+    `value` STRING,
+    active BOOLEAN,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
+    mode STRING,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -73,23 +76,24 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin_fixed_mapping` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_bin_type source table
 CREATE TABLE `sbx-uat.wms.public.storage_bin_type` (
     id STRING,
+    whId BIGINT,
     code STRING,
     description STRING,
     maxVolumeInCC DOUBLE,
     maxWeightInKG DOUBLE,
+    active BOOLEAN,
+    createdAt TIMESTAMP(3),
+    updatedAt TIMESTAMP(3),
     palletCapacity INT,
     storageHUType STRING,
     auxiliaryBin BOOLEAN,
     huMultiSku BOOLEAN,
     huMultiBatch BOOLEAN,
     useDerivedPalletBestFit BOOLEAN,
-    active BOOLEAN,
-    createdAt TIMESTAMP(3),
-    updatedAt TIMESTAMP(3),
+    onlyFullPallet BOOLEAN,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -111,18 +115,19 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin_type` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_zone source table
 CREATE TABLE `sbx-uat.wms.public.storage_zone` (
     id STRING,
+    whId BIGINT,
     code STRING,
     description STRING,
     face STRING,
-    peripheral BOOLEAN,
-    surveillanceConfig STRING,
     areaId STRING,
+    active BOOLEAN,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
+    peripheral BOOLEAN,
+    surveillanceConfig STRING,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -144,7 +149,6 @@ CREATE TABLE `sbx-uat.wms.public.storage_zone` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_area source table
 CREATE TABLE `sbx-uat.wms.public.storage_area` (
     id STRING,
@@ -152,9 +156,10 @@ CREATE TABLE `sbx-uat.wms.public.storage_area` (
     code STRING,
     description STRING,
     `type` STRING,
-    rollingDays INT,
+    active BOOLEAN,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
+    rollingDays INT,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -176,10 +181,10 @@ CREATE TABLE `sbx-uat.wms.public.storage_area` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_position source table
 CREATE TABLE `sbx-uat.wms.public.storage_position` (
     id STRING,
+    whId BIGINT,
     storageId STRING,
     x1 DOUBLE,
     x2 DOUBLE,
@@ -187,6 +192,7 @@ CREATE TABLE `sbx-uat.wms.public.storage_position` (
     y2 DOUBLE,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
+    active BOOLEAN,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -208,20 +214,21 @@ CREATE TABLE `sbx-uat.wms.public.storage_position` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_area_sloc source table
 CREATE TABLE `sbx-uat.wms.public.storage_area_sloc` (
-    id STRING,
     whId BIGINT,
+    id STRING,
     areaCode STRING,
+    quality STRING,
     sloc STRING,
     slocDescription STRING,
-    quality STRING,
     clientQuality STRING,
-    inventoryVisible BOOLEAN,
-    erpToWMS BOOLEAN,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
+    deactivatedAt TIMESTAMP(3),
+    inventoryVisible BOOLEAN,
+    erpToWMS BOOLEAN,
+    iloc STRING,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -243,16 +250,18 @@ CREATE TABLE `sbx-uat.wms.public.storage_area_sloc` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_bin_dockdoor source table
 CREATE TABLE `sbx-uat.wms.public.storage_bin_dockdoor` (
     id STRING,
+    whId BIGINT,
     binId STRING,
     dockdoorId STRING,
-    `usage` STRING,
-    multiTrip BOOLEAN,
+    active BOOLEAN,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
+    `usage` STRING,
+    dockHandlingUnit STRING,
+    multiTrip BOOLEAN,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -274,20 +283,21 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin_dockdoor` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_dockdoor source table
 CREATE TABLE `sbx-uat.wms.public.storage_dockdoor` (
     id STRING,
+    whId BIGINT,
     code STRING,
     description STRING,
+    createdAt TIMESTAMP(3),
+    updatedAt TIMESTAMP(3),
     maxQueue BIGINT,
     allowInbound BOOLEAN,
     allowOutbound BOOLEAN,
     allowReturns BOOLEAN,
     incompatibleVehicleTypes STRING,
+    status STRING,
     incompatibleLoadTypes STRING,
-    createdAt TIMESTAMP(3),
-    updatedAt TIMESTAMP(3),
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -309,15 +319,16 @@ CREATE TABLE `sbx-uat.wms.public.storage_dockdoor` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- storage_dockdoor_position source table
 CREATE TABLE `sbx-uat.wms.public.storage_dockdoor_position` (
     id STRING,
+    whId BIGINT,
     dockdoorId STRING,
     x DOUBLE,
     y DOUBLE,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
+    active BOOLEAN,
     is_deleted BOOLEAN,
     proc_time AS PROCTIME(),
     event_time AS CASE
@@ -339,7 +350,6 @@ CREATE TABLE `sbx-uat.wms.public.storage_dockdoor_position` (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- Create final summary table structure (destination table)
 CREATE TABLE `sbx-uat.wms.public.storage_bin_summary` (
     wh_id BIGINT,
@@ -419,12 +429,12 @@ CREATE TABLE `sbx-uat.wms.public.storage_bin_summary` (
     'properties.sasl.mechanism' = 'OAUTHBEARER',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
+    'properties.transaction.id.prefix' = 'storage_bin_summary_sink',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
 );
-
 -- Continuously populate the summary table from source tables
 INSERT INTO `sbx-uat.wms.public.storage_bin_summary`
 SELECT sb.`whId` AS wh_id,
@@ -492,7 +502,7 @@ SELECT sb.`whId` AS wh_id,
     sb.status AS sb_status,
     sbt.active AS sbt_active,
     CASE
-        WHEN sbfm.active = 'True' THEN 'FIXED'
+        WHEN sbfm.active = true THEN 'FIXED'
         ELSE 'DYNAMIC'
     END AS bin_mapping,
     sb.createdAt,
