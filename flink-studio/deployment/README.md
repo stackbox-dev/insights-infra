@@ -351,7 +351,41 @@ For production access via ingress:
 
 ### Flink Cluster Scaling
 
-Edit the appropriate cluster manifest to adjust resources:
+We provide an automated scaling script for easy TaskManager replica management:
+
+#### Quick Start with scale.sh
+
+```bash
+# Scale to 6 TaskManager replicas (GCP)
+./scale.sh 6
+
+# Scale to 8 TaskManager replicas on Azure
+./scale.sh 8 aks
+
+# Check current cluster status
+./scale.sh --status
+
+# Preview changes without applying (dry run)
+./scale.sh --dry-run 6
+
+# Get help and see all options
+./scale.sh --help
+```
+
+#### Script Features
+
+- ✅ **Safe scaling**: Validates inputs and resource requirements
+- ✅ **Multi-environment**: Supports both GCP and AKS deployments
+- ✅ **Kubernetes context verification**: Checks cluster connectivity and requires user confirmation
+- ✅ **Resource calculation**: Shows memory/CPU requirements before scaling
+- ✅ **Status monitoring**: Check current cluster state and pod status
+- ✅ **Dry-run mode**: Preview changes without applying them
+- ✅ **Interactive confirmation**: Prevents accidental scaling operations
+- ✅ **Context safety**: Always confirms target cluster before operations
+
+#### Manual Configuration (Advanced)
+
+For manual configuration, edit the appropriate cluster manifest:
 
 **For GCP**: `manifests/03-flink-session-cluster-gcp.yaml`
 **For Azure**: `manifests/03-flink-session-cluster-aks.yaml`
@@ -365,9 +399,9 @@ jobManager:
 
 taskManager:
   resource:
-    memory: "3072m" # Adjust as needed
-    cpu: 1
-  replicas: 2 # Scale based on workload
+    memory: "8192m" # 8Gi per TaskManager
+    cpu: 2
+  replicas: 4 # Scale based on workload (use scale.sh instead)
 ```
 
 ### Resource Quotas
@@ -511,42 +545,38 @@ CREATE TABLE orders_avro (
 );
 ```
 
-**Check current cluster state before scaling:**
+**Check current cluster state using the scaling script:**
 
 ```bash
-# Check cluster capacity
-kubectl exec -n flink-studio deployment/flink-session-cluster -- \
-  curl -s http://localhost:8081/overview
+# Get comprehensive cluster status
+./scale.sh --status
 
-# Check running jobs
-kubectl exec -n flink-studio deployment/flink-session-cluster -- flink list
-
-# Check TaskManager pods
+# Alternative: Check manually
+kubectl get flinkdeployment flink-session-cluster -n flink-studio
 kubectl get pods -n flink-studio -l component=taskmanager
-
-# Verify current context
-kubectl config current-context
+kubectl get resourcequota flink-studio-quota -n flink-studio
 ```
 
-**Monitor scaling progress manually:**
+**Monitor scaling progress:**
 
 ```bash
-# Watch pods during scaling
-kubectl get pods -n flink-studio -l app=flink-session-cluster -w
+# Watch TaskManager pods during scaling
+kubectl get pods -n flink-studio -l component=taskmanager -w
 
-# Monitor Flink cluster state
-watch "kubectl exec -n flink-studio deployment/flink-session-cluster -- \
-  curl -s http://localhost:8081/overview | jq '.taskmanagers, .\"slots-total\"'"
+# Monitor cluster resource usage
+kubectl top pods -n flink-studio
 ```
 
 ### 🔧 Configuration
 
-Default settings (customizable in the script):
+Default settings in `scale.sh`:
 
 - **Namespace**: `flink-studio`
-- **Deployment**: `flink-session-cluster`
-- **Slots per TaskManager**: 4
-- **Savepoint Storage**: `gs://sbx-stag-flink-storage/savepoints/`
+- **TaskManager Memory**: 8Gi per replica
+- **TaskManager CPU**: 2 cores per replica  
+- **Slots per TaskManager**: 2
+- **Environments**: GCP and AKS
+- **Resource Quota**: 48Gi memory, 16 CPU (adjustable in manifests/05-resource-quotas.yaml)
 
 ### 🚨 Troubleshooting Scaling
 
@@ -554,49 +584,57 @@ Default settings (customizable in the script):
 
 | Issue                       | Solution                                                                                     |
 | --------------------------- | -------------------------------------------------------------------------------------------- |
-| Permission denied           | `chmod +x safe-scale.sh`                                                                     |
-| Wrong Kubernetes context    | Check with `kubectl config current-context`, switch with `kubectl config use-context <name>` |
-| Cannot connect to Flink API | Check pods: `kubectl get pods -n flink-studio`                                               |
-| Scaling timeout (5 min)     | Check node resources and TaskManager pod logs                                                |
-| Debug information needed    | Run with debug: `./safe-scale.sh <replicas> debug`                                           |
+| Permission denied           | `chmod +x scale.sh`                                                                     |
+| Wrong Kubernetes context    | Script will show current context and ask for confirmation before proceeding |
+| Context confirmation denied | Use `kubectl config use-context <name>` to switch to the correct cluster |
+| Resource quota exceeded     | Update `manifests/05-resource-quotas.yaml` or reduce replica count |
+| Manifest file not found     | Ensure you're running from the deployment directory                                                |
+| Scaling validation failed   | Run `./scale.sh --status` to check current state                                           |
+| Insufficient cluster resources | Check node capacity with `kubectl describe nodes`                                           |
 
 **Detailed troubleshooting steps:**
 
 ```bash
-# 1. Verify cluster health before scaling
-kubectl get flinkdeployment -n flink-studio
+# 1. Check cluster status and resource usage
+./scale.sh --status
+
+# 2. Verify cluster health before scaling
+kubectl get flinkdeployment flink-session-cluster -n flink-studio
 kubectl get pods -n flink-studio
 
-# 2. Check Flink REST API accessibility
-kubectl exec -n flink-studio deployment/flink-session-cluster -- \
-  curl -s http://localhost:8081/v1/config
-
-# 3. Check Kubernetes resources
-kubectl describe nodes
-kubectl get events -n flink-studio --sort-by='.lastTimestamp'
+# 3. Check resource quotas and limits
+kubectl get resourcequota flink-studio-quota -n flink-studio
+kubectl describe resourcequota flink-studio-quota -n flink-studio
 
 # 4. Examine TaskManager logs if scaling fails
 kubectl logs -n flink-studio -l component=taskmanager --tail=50
 
-# 5. Use debug mode for detailed information
-./safe-scale.sh <target-replicas> debug
+# 5. Check node resources
+kubectl describe nodes
+kubectl get events -n flink-studio --sort-by='.lastTimestamp'
+
+# 6. Use dry-run to validate changes
+./scale.sh --dry-run <target-replicas>
 ```
 
 **Access Flink UI for manual job management:**
 
 ```bash
-kubectl port-forward -n flink-studio service/flink-session-cluster-rest 8081:8081
+kubectl port-forward -n flink-studio service/flink-session-cluster 8081:8081
 # Then open: http://localhost:8081
 ```
 
 ### 📊 Best Practices
 
-1. **Always Scale with Confidence**: All scaling operations are zero-downtime
-2. **Use Debug Mode**: When troubleshooting, run `./safe-scale.sh <replicas> debug`
-3. **Verify Context**: The script confirms your Kubernetes context for safety
-4. **Monitor Resources**: Keep cluster utilization < 80% for optimal performance
-5. **Scale Gradually**: For large changes, consider incremental scaling (5→8→12 vs 5→12)
-6. **Test in Development**: Validate behavior with your specific workloads
+1. **Use the Scaling Script**: Always use `./scale.sh` for safe, validated scaling operations
+2. **Check Status First**: Run `./scale.sh --status` before making changes
+3. **Verify Context**: The script will show your current context and ask for confirmation
+4. **Use Dry-Run**: Preview changes with `./scale.sh --dry-run <replicas>` 
+5. **Monitor Resources**: Keep cluster utilization < 80% for optimal performance
+6. **Scale Gradually**: For large changes, consider incremental scaling (4→6→8 vs 4→8)
+7. **Double-Check Context**: Always confirm you're targeting the correct cluster when prompted
+8. **Test in Development**: Validate scaling behavior with your specific workloads
+9. **Resource Planning**: Each TaskManager uses 8Gi memory + 2 CPU cores
 
 ### 🔄 How Job Rebalancing Works
 

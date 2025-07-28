@@ -8,10 +8,10 @@ metadata:
     app.kubernetes.io/component: resource-quota
 spec:
   hard:
-    requests.cpu: "12"
-    requests.memory: 24Gi
-    limits.cpu: "24"
-    limits.memory: 48Gi
+    requests.cpu: "16"
+    requests.memory: 48Gi
+    limits.cpu: "32"
+    limits.memory: 96Gi
     persistentvolumeclaims: "10"
     pods: "50"
     services: "10"
