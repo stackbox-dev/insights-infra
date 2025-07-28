@@ -10,12 +10,12 @@ This repository contains the complete deployment manifests and instructions for 
 
 ## Architecture Overview
 
-The platform consists of four main components:
+The platform consists of three main components:
 
 1. **Flink Kubernetes Operator**: Manages Flink cluster lifecycle
 2. **Flink Session Cluster**: Long-running cluster for job execution with comprehensive connector support
 3. **Flink SQL Gateway**: REST API for SQL query submission
-4. **Apache Hue**: Web-based SQL editor and interface
+4. **Custom SQL Executor**: Command-line tool for executing Flink SQL queries
 
 ### Supported Connectors & Libraries
 
@@ -62,7 +62,6 @@ Before deploying the Flink platform, ensure you have:
 - `helm` (v3.8+) - for installing the Flink Kubernetes Operator
 - A Kubernetes cluster with:
   - At least 6 CPU cores and 12GB RAM available
-  - Storage provisioner for Hue data persistence
   - Ingress controller (nginx recommended)
 
 ### Cloud Storage Requirements
@@ -111,14 +110,14 @@ This deployment uses cloud-native storage solutions for Flink state management:
 - **Checkpoints**: Stored directly in cloud storage (GCS/Azure Blob)
 - **Savepoints**: Stored directly in cloud storage (GCS/Azure Blob)
 - **High Availability**: Kubernetes-native HA with cloud storage backend
-- **Local Storage**: Only required for Hue data persistence (~5Gi)
+- **Local Storage**: Not required for Custom SQL Executor (CLI tool)
 
 ### Required Kubernetes Resources
 
 - **CPU**: Minimum 6 cores (recommended: 12+ cores)
 - **Memory**: Minimum 12GB (recommended: 24+ GB)
-- **Storage**: At least 10GB for Hue data persistence
-- **Network**: Ingress controller for external access
+- **Storage**: None required (uses cloud storage directly)
+- **Network**: Ingress controller for external access (optional)
 
 ### Optional Components
 
@@ -171,10 +170,10 @@ The script will:
 
 1. Install the Flink Kubernetes Operator
 2. Create the platform namespace and RBAC
-3. Deploy persistent storage
+3. Deploy persistent storage (minimal configuration)
 4. Deploy the Flink Session Cluster
 5. Deploy the Flink SQL Gateway
-6. Deploy Apache Hue with configuration
+6. Configure the Custom SQL Executor
 7. Apply security policies
 
 **Note:** For any deployment issues, refer to [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
@@ -300,14 +299,19 @@ kubectl apply -f manifests/04-flink-sql-gateway.yaml
 kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flink-studio --timeout=180s
 ```
 
-### Step 5: Deploy Apache Hue
+### Step 5: Configure Custom SQL Executor
+
+The Custom SQL Executor is a CLI tool that communicates directly with the Flink SQL Gateway. No additional Kubernetes deployment is required.
 
 ```bash
-kubectl apply -f manifests/07-hue-config.yaml
-kubectl apply -f manifests/08-hue.yaml
+# The SQL executor is available in the sql-executor directory
+cd ../sql-executor
 
-# Wait for Hue to be ready
-kubectl wait --for=condition=Available deployment/hue -n flink-studio --timeout=300s
+# Install Python dependencies (if running locally)
+pip install -r requirements.txt
+
+# Configure the executor to connect to your Flink SQL Gateway
+# Edit config.yaml to set the SQL Gateway URL
 ```
 
 ### Step 6: Apply Security Policies (Optional)
@@ -326,26 +330,34 @@ For local development or testing:
 # Flink Web UI
 kubectl port-forward svc/flink-session-cluster-rest 8081:8081 -n flink-studio
 
-# Hue Web Interface
-kubectl port-forward svc/hue 8888:8888 -n flink-studio
-
-# SQL Gateway API (direct access)
+# SQL Gateway API (for Custom SQL Executor)
 kubectl port-forward svc/flink-sql-gateway 8083:8083 -n flink-studio
 ```
 
 Then access:
 
 - **Flink UI**: http://localhost:8081
-- **Hue Interface**: http://localhost:8888 (admin/admin)
 - **SQL Gateway**: http://localhost:8083/v1/info
+
+### Using the Custom SQL Executor
+
+```bash
+# Execute SQL from a file
+python flink_sql_executor.py --file /path/to/your/query.sql
+
+# Execute inline SQL
+python flink_sql_executor.py --sql "SELECT 1"
+
+# Execute with custom SQL Gateway URL
+python flink_sql_executor.py --sql "SELECT 1" --sql-gateway-url http://localhost:8083
+```
 
 ### Ingress (Production)
 
-For production access via ingress:
+For production access via ingress (optional):
 
-1. **Update DNS/Hosts**: Point `hue.flink-studio.local` to your ingress controller IP
-2. **Configure TLS**: Ensure cert-manager is installed for automatic certificates
-3. **Access Hue**: https://hue.flink-studio.local
+1. **Configure TLS**: Ensure cert-manager is installed for automatic certificates
+2. **Set up Ingress**: Configure ingress for the Flink UI if external access is needed
 
 ## Configuration
 
@@ -417,27 +429,37 @@ spec:
     limits.memory: 48Gi # Total memory limits
 ```
 
-### Hue Configuration
+### Custom SQL Executor Configuration
 
-Customize Hue settings in `manifests/07-hue-config.yaml`:
+The Custom SQL Executor can be configured via `config.yaml`:
 
-- Database backend (SQLite default, can use PostgreSQL/MySQL)
-- Authentication method
-- SQL Gateway connection settings
-- UI customizations
+```yaml
+sql_gateway:
+  url: "http://localhost:8083"  # Flink SQL Gateway URL
+  
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+```
 
 ## Using the Platform
 
-### 1. Access Hue Interface
+### 1. Execute SQL Files
 
-- Navigate to Hue web interface (localhost:8888 or via ingress)
-- Login with default credentials: `admin/admin`
+```bash
+# Execute SQL from a file
+cd ../sql-executor
+python flink_sql_executor.py --file /path/to/your/query.sql
+```
 
-### 2. Create SQL Queries
+### 2. Execute Inline SQL
 
-- Click on "Query" in the top menu
-- Select "Flink SQL" as the interpreter
-- Write your Flink SQL queries
+```bash
+# Execute inline SQL
+python flink_sql_executor.py --sql "SELECT 1"
+
+# Execute multiple statements
+python flink_sql_executor.py --sql "CREATE TABLE test AS SELECT 1; SELECT * FROM test;"
+```
 
 ### 3. Example Queries
 

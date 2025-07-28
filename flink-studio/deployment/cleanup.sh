@@ -26,11 +26,6 @@ print_error() {
 
 print_status "Starting Flink Platform cleanup..."
 
-# Remove Hue
-print_status "Removing Hue deployment..."
-kubectl delete -f manifests/08-hue.yaml --ignore-not-found=true
-kubectl delete -f manifests/07-hue-config.yaml --ignore-not-found=true
-
 # Remove Network Policies
 print_status "Removing Network Policies..."
 kubectl delete -f manifests/06-network-policies.yaml --ignore-not-found=true
@@ -59,3 +54,4 @@ kubectl delete -f manifests/01-namespace.yaml --ignore-not-found=true
 print_status "Cleanup completed!"
 print_warning "Note: The Flink Kubernetes Operator is still installed in the flink-system namespace."
 print_warning "To remove it completely, run: helm uninstall flink-kubernetes-operator -n flink-system"
+print_status "The Custom SQL Executor (CLI tool) does not require cleanup as it's not deployed as a Kubernetes resource."

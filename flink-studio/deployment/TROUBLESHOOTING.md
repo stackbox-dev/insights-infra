@@ -55,9 +55,8 @@ kubectl describe resourcequota -n flink-studio
 # List available storage classes
 kubectl get storageclass
 
-# Check PVC status
+# Check PVC status (minimal storage requirements now)
 kubectl get pvc -n flink-studio
-kubectl describe pvc hue-data-pvc -n flink-studio
 
 # For GCP: Ensure GKE has persistent disk CSI driver enabled
 # For Azure: Ensure AKS has managed disk CSI driver enabled
@@ -153,8 +152,9 @@ az storage account keys list --account-name sbxstagflinkstorage --resource-group
 
 ### 1. SQL Gateway Connection Issues
 **Symptoms:**
-- Hue cannot connect to Flink SQL Gateway
+- Custom SQL Executor cannot connect to Flink SQL Gateway
 - Gateway returns connection errors
+- Timeout errors during SQL execution
 
 **Solutions:**
 ```bash
@@ -177,29 +177,28 @@ kubectl exec -it deployment/flink-sql-gateway -n flink-studio -- \
   curl http://flink-session-cluster-rest:8081/overview
 ```
 
-### 2. Hue Interface Issues
+### 2. Custom SQL Executor Issues
 **Symptoms:**
-- Hue web interface not loading
-- Cannot access Hue at expected URL
+- SQL executor cannot connect to Flink SQL Gateway
+- Connection timeout errors
+- Invalid response errors
 
 **Solutions:**
 ```bash
-# Check Hue pod status
-kubectl get pods -n flink-studio -l app.kubernetes.io/name=hue
+# Test SQL Gateway connectivity
+curl http://localhost:8083/v1/info
 
-# Check Hue logs
-kubectl logs deployment/hue -n flink-studio
+# Check if port-forward is running
+kubectl port-forward svc/flink-sql-gateway 8083:8083 -n flink-studio
 
-# Check Hue configuration
-kubectl get configmap hue-config -n flink-studio -o yaml
+# Test with verbose logging
+python flink_sql_executor.py --sql "SELECT 1" --log-level DEBUG
 
-# Test Hue directly
-kubectl port-forward svc/hue 8888:8888 -n flink-studio
-# Then access http://localhost:8888
+# Check configuration
+cat config.yaml
 
-# Check ingress configuration (if used)
-kubectl get ingress -n flink-studio
-kubectl describe ingress hue-ingress -n flink-studio
+# Verify SQL Gateway is responding
+kubectl logs deployment/flink-sql-gateway -n flink-studio
 ```
 
 ### 3. Flink Job Failures
@@ -240,9 +239,9 @@ kubectl get networkpolicy -n flink-studio
 # Temporarily disable network policies for testing
 kubectl delete networkpolicy --all -n flink-studio
 
-# Test connectivity between pods
-kubectl exec -it deployment/hue -n flink-studio -- \
-  curl http://flink-sql-gateway:8083/v1/info
+# Test connectivity from within the cluster
+kubectl exec -it deployment/flink-sql-gateway -n flink-studio -- \
+  curl http://flink-session-cluster-rest:8081/overview
 
 # Re-apply network policies after testing
 kubectl apply -f manifests/06-network-policies.yaml
@@ -316,12 +315,10 @@ kubectl top nodes
 # Check logs for all components
 kubectl logs -n flink-studio deployment/flink-session-cluster
 kubectl logs -n flink-studio deployment/flink-sql-gateway
-kubectl logs -n flink-studio deployment/hue
 
 # Port forward for local access
 kubectl port-forward svc/flink-session-cluster-rest 8081:8081 -n flink-studio &
 kubectl port-forward svc/flink-sql-gateway 8083:8083 -n flink-studio &
-kubectl port-forward svc/hue 8888:8888 -n flink-studio &
 ```
 
 ### Clean Restart Procedure

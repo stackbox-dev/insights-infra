@@ -1,22 +1,5 @@
 # Flink Platform Storage Configuration for Google Cloud Platform (GCP)
 #
-# This configuration removes Flink-related storage as we use Google Cloud Storage directly
-# Only Hue storage remains for web UI data persistence
+# This configuration is minimal as Flink uses Google Cloud Storage directly
+# No local storage is required for the Custom SQL Executor (CLI tool)
 #
----
-# PVC for Hue data storage only
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: hue-data-pvc
-  namespace: flink-studio
-  labels:
-    app.kubernetes.io/name: hue
-    app.kubernetes.io/component: storage
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: standard-rwo  # GCP standard persistent disk
