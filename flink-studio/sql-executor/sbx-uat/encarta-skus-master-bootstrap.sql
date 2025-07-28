@@ -52,6 +52,7 @@ CREATE TABLE `sbx-uat.encarta.public.skus` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -97,6 +98,7 @@ CREATE TABLE `sbx-uat.encarta.public.products` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -130,6 +132,7 @@ CREATE TABLE `sbx-uat.encarta.public.categories` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -163,6 +166,7 @@ CREATE TABLE `sbx-uat.encarta.public.sub_categories` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -195,6 +199,7 @@ CREATE TABLE `sbx-uat.encarta.public.category_groups` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -228,6 +233,7 @@ CREATE TABLE `sbx-uat.encarta.public.brands` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -261,6 +267,7 @@ CREATE TABLE `sbx-uat.encarta.public.sub_brands` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -363,6 +370,7 @@ CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -390,6 +398,7 @@ CREATE TABLE `sbx-uat.encarta.public.skus_classifications_agg` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -417,6 +426,7 @@ CREATE TABLE `sbx-uat.encarta.public.products_classifications_agg` (
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
     'properties.auto.offset.reset' = 'earliest',
+    'scan.bounded.mode' = 'latest-offset',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
     'value.format' = 'avro-confluent',
@@ -683,31 +693,8 @@ SELECT s.id,
     COALESCE(class_agg.classifications, '{}') AS classifications,
     COALESCE(prod_class_agg.product_classifications, '{}') AS product_classifications,
     COALESCE(s.is_deleted, FALSE) AS is_deleted,
-    s.created_at,
-    GREATEST(
-        COALESCE(s.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(
-            uom_agg.updated_at,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(
-            class_agg.updated_at,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(
-            prod_class_agg.updated_at,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(p.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(
-            subcat.updated_at,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(cat.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(cg.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(sb.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(b.updated_at, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updated_at
+    TIMESTAMP '1970-01-01 00:00:00' AS created_at,
+    TIMESTAMP '1970-01-01 00:00:00' AS updated_at
 FROM `sbx-uat.encarta.public.skus` s
     LEFT JOIN `sbx-uat.encarta.public.skus_uoms_agg` AS uom_agg ON s.id = uom_agg.sku_id
     LEFT JOIN `sbx-uat.encarta.public.skus_classifications_agg` AS class_agg ON s.id = class_agg.sku_id

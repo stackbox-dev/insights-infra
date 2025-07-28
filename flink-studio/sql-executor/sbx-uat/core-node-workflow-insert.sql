@@ -27,6 +27,7 @@ CREATE TABLE `sbx-uat.backbone.public.node` (
     'properties.sasl.mechanism' = 'OAUTHBEARER',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
     'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
+    'properties.auto.offset.reset' = 'earliest',
     'properties.group.id' = 'flink-backbone-public-node',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'http://cp-schema-registry.kafka:80',
