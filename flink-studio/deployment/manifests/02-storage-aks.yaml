@@ -1,0 +1,22 @@
+# Flink Platform Storage Configuration for Microsoft Azure (AKS)
+#
+# This configuration removes Flink-related storage as we use Azure Blob Storage directly
+# Only Hue storage remains for web UI data persistence
+#
+---
+# PVC for Hue data storage only
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hue-data-pvc
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: hue
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: managed-csi  # Azure managed disk

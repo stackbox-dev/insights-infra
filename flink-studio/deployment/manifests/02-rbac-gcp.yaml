@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flink
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink
+    app.kubernetes.io/component: serviceaccount
+    app.kubernetes.io/cloud: gcp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: flink-role
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink
+    app.kubernetes.io/component: role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps", "services", "secrets", "events", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["flink.apache.org"]
+  resources: ["flinkdeployments", "flinkdeployments/status", "flinkdeployments/finalizers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flink-role-binding
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink
+    app.kubernetes.io/component: rolebinding
+subjects:
+- kind: ServiceAccount
+  name: flink
+  namespace: flink-studio
+roleRef:
+  kind: Role
+  name: flink-role
+  apiGroup: rbac.authorization.k8s.io

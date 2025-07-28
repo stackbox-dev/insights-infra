@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flink-studio
+  labels:
+    name: flink-studio
+    app.kubernetes.io/name: flink-studio
+    app.kubernetes.io/component: namespace

@@ -1,0 +1,86 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: flink-session-cluster
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-session-cluster
+    app.kubernetes.io/component: flink-cluster
+    app.kubernetes.io/cloud: azure
+spec:
+  image: flink:2.0.0-scala_2.12-java21 # Using default Docker Hub Flink image
+  flinkVersion: v2_0
+  imagePullPolicy: IfNotPresent
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "4"
+    state.backend: "hashmap"
+    # Azure Blob Storage paths for Flink state management (using modern abfss:// protocol)
+    state.checkpoints.dir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/checkpoints
+    state.savepoints.dir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/savepoints
+    high-availability.type: kubernetes
+    high-availability.storageDir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/ha
+    restart-strategy.type: failure-rate
+    restart-strategy.failure-rate.max-failures-per-interval: "10"
+    restart-strategy.failure-rate.failure-rate-interval: "10 min"
+    restart-strategy.failure-rate.delay: "30 s"
+    execution.checkpointing.interval: "30 s"
+    execution.checkpointing.mode: EXACTLY_ONCE
+    execution.checkpointing.timeout: "10 min"
+    table.exec.source.idle-timeout: "30 s"
+  serviceAccount: flink
+  jobManager:
+    resource:
+      memory: "1536m"
+      cpu: 1
+    replicas: 1
+    podTemplate:
+      spec:
+        containers:
+          - name: flink-main-container
+            env:
+              - name: HADOOP_CONF_DIR
+                value: /opt/hadoop/conf
+              - name: AZURE_STORAGE_ACCOUNT_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: azure-storage-secret
+                    key: storage-account-key
+            # No volume mounts needed - using Azure Blob Storage directly
+  taskManager:
+    resource:
+      memory: "3072m"
+      cpu: 1
+    replicas: 2
+    podTemplate:
+      spec:
+        containers:
+          - name: flink-main-container
+            env:
+              - name: HADOOP_CONF_DIR
+                value: /opt/hadoop/conf
+              - name: AZURE_STORAGE_ACCOUNT_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: azure-storage-secret
+                    key: storage-account-key
+            # No volume mounts needed - using Azure Blob Storage directly
+  mode: native
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-session-cluster-web
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-session-cluster
+    app.kubernetes.io/component: web-service
+spec:
+  selector:
+    app.kubernetes.io/name: flink-session-cluster
+    app.kubernetes.io/component: jobmanager
+  ports:
+  - name: web
+    port: 80
+    targetPort: 8081
+    protocol: TCP
+  type: ClusterIP

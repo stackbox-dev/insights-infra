@@ -1,0 +1,42 @@
+# Flink SQL Executor Configuration
+
+# Default configuration for the Flink SQL Executor
+# You can override these settings using command line arguments
+
+sql_gateway:
+  # Flink SQL Gateway URL - adjust for your deployment
+  url: "http://flink-sql-gateway.flink-studio.api.staging.stackbox.internal"
+
+  # Session timeout in seconds
+  session_timeout: 300
+
+  # Operation polling settings
+  poll_interval: 2
+  max_wait_time: 60
+
+logging:
+  # Logging configuration
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR
+
+  # Optional log file (if not specified, logs to console only)
+  # file: "flink_executor.log"
+
+  # Log format
+  format: "%(asctime)s - %(levelname)s - %(message)s"
+
+execution:
+  # Execution behavior settings
+
+  # Continue executing if errors occur
+  continue_on_error: true
+
+# Connection settings
+connection:
+  # Request timeout in seconds
+  timeout: 30
+
+  # Number of retries for failed requests
+  retry_count: 3
+
+  # Retry delay in seconds
+  retry_delay: 5

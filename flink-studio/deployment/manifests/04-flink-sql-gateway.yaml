@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-sql-gateway
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-sql-gateway
+    app.kubernetes.io/component: sql-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flink-sql-gateway
+      app.kubernetes.io/component: sql-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: flink-sql-gateway
+        app.kubernetes.io/component: sql-gateway
+    spec:
+      serviceAccountName: flink
+      containers:
+        - name: flink-sql-gateway
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:latest
+          imagePullPolicy: Always
+          command: ["/opt/flink/bin/sql-gateway.sh"]
+          args:
+            - "start-foreground"
+            - "-Dsql-gateway.endpoint.rest.address=0.0.0.0"
+            - "-Dsql-gateway.endpoint.rest.port=80"
+            - "-Drest.address=flink-session-cluster-rest"
+            - "-Drest.port=8081"
+            # SQL Gateway Session Configuration
+            - "-Dsql-gateway.session.idle-timeout=60min"
+            - "-Dsql-gateway.session.check-interval=5min"
+            - "-Dsql-gateway.session.max-num=1000000"
+            # SQL Gateway Worker Configuration
+            - "-Dsql-gateway.worker.threads.min=5"
+            - "-Dsql-gateway.worker.threads.max=500"
+            - "-Dsql-gateway.worker.keepalive-time=5min"
+          ports:
+            - containerPort: 80
+              name: rest-api
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /opt/hadoop/conf
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /opt/flink/gcp/service-account.json
+            - name: GOOGLE_CLOUD_PROJECT
+              value: sbx-stag
+          volumeMounts:
+            - name: gcp-service-account
+              mountPath: /opt/flink/gcp
+              readOnly: true
+            - name: hadoop-config
+              mountPath: /opt/hadoop/conf
+              readOnly: true
+            - name: hive-config
+              mountPath: /opt/hive-conf
+              readOnly: true
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /v1/info
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/info
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: gcp-service-account
+          secret:
+            secretName: gcp-service-account-key
+        - name: hadoop-config
+          configMap:
+            name: hadoop-config
+        - name: hive-config
+          configMap:
+            name: hive-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-sql-gateway
+  namespace: flink-studio
+  labels:
+    app.kubernetes.io/name: flink-sql-gateway
+    app.kubernetes.io/component: sql-gateway
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: rest-api
+  selector:
+    app.kubernetes.io/name: flink-sql-gateway
+    app.kubernetes.io/component: sql-gateway
