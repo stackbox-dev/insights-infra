@@ -104,7 +104,7 @@ spec:
     resource:
       memory: "8192m"
       cpu: 2
-    replicas: 3
+    replicas: 2
     podTemplate:
       spec:
         serviceAccountName: flink

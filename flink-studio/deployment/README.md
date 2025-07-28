@@ -6,6 +6,7 @@ This repository contains the complete deployment manifests and instructions for 
 
 - 📚 [Architecture Overview](ARCH.md) - System design and components
 - 🔧 [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
+- 🚀 [Scaling Guide](#scaling-your-flink-cluster) - How to scale TaskManagers safely
 
 ## Architecture Overview
 
@@ -500,6 +501,203 @@ CREATE TABLE orders_avro (
     }'
 );
 ```
+
+## Scaling Your Flink Cluster
+
+The `safe-scale.sh` script provides intelligent, zero-downtime scaling with automatic job rebalancing. The script has been enhanced to never interrupt running jobs - Flink automatically rebalances workloads across the new cluster size.
+
+### 🚀 Quick Start
+
+```bash
+# Make the script executable
+chmod +x safe-scale.sh
+
+# Scale to 5 TaskManager replicas
+./safe-scale.sh 5
+
+# Scale to 10 TaskManager replicas with debug output
+./safe-scale.sh 10 debug
+
+# The script will prompt for confirmation of your Kubernetes context
+```
+
+### 📊 How Smart Scaling Works
+
+The enhanced script provides **zero-downtime scaling** for all scenarios:
+
+#### ✅ **Always Zero-Downtime** (Jobs never interrupted)
+
+**Scaling UP** - Adding TaskManagers:
+```bash
+./safe-scale.sh 8  # Current: 5 TMs → Target: 8 TMs
+# ✅ Jobs continue running - Flink automatically uses new resources
+```
+
+**Scaling DOWN** - Reducing TaskManagers:
+```bash
+./safe-scale.sh 4  # Current: 8 TMs → Target: 4 TMs
+# ✅ Jobs continue running - Flink automatically rebalances to remaining resources
+```
+
+**Key Improvements:**
+- **No Job Interruption**: Jobs are never stopped or restarted during scaling
+- **Automatic Rebalancing**: Flink handles workload redistribution seamlessly
+- **Context Safety**: Prompts for Kubernetes context confirmation
+- **Debug Mode**: Enhanced logging with `./safe-scale.sh <replicas> debug`
+
+### 📋 Understanding the Output
+
+When you run the scaling script, you'll see enhanced analysis and real-time progress:
+
+```bash
+./safe-scale.sh 6
+
+🔍 Checking Kubernetes context...
+📍 Current Kubernetes context: my-cluster-context
+⚠️  Are you sure you want to scale the Flink cluster in this context? (y/N): y
+
+🎯 Scaling Flink cluster to 6 TaskManager replicas...
+🔍 Checking for running jobs...
+📊 Current cluster state:
+   TaskManagers: 4
+   Total slots: 16
+   Used slots: 8
+   Available slots: 8
+
+🚀 Scaling UP detected (16 → 24 slots)
+✅ Flink will automatically rebalance jobs to use new resources!
+🔧 Scaling Flink cluster...
+📊 Target: 6 TaskManagers (24 slots total)
+🎉 Jobs will continue running and rebalance automatically!
+
+⏳ Waiting for Flink to scale TaskManagers (timeout: 5 minutes)...
+   Progress: 6 TaskManagers (24 slots) - Target: 6 TMs (24 slots)
+✅ Scaling completed successfully!
+🔄 All jobs have been automatically rebalanced across the new cluster size
+```
+
+### 🆕 New Features
+
+- **Context Verification**: Always confirms your Kubernetes context before scaling
+- **Debug Mode**: Use `./safe-scale.sh <replicas> debug` for detailed logging
+- **Enhanced Progress Tracking**: Real-time updates during the scaling process
+- **Automatic Job Rebalancing**: Never interrupts jobs - Flink handles everything
+- **Improved Error Handling**: Better timeout management and failure recovery
+
+### 🛠️ Advanced Usage
+
+**Using Debug Mode for Troubleshooting:**
+```bash
+# Enable detailed logging to debug scaling issues
+./safe-scale.sh 5 debug
+
+# Debug output includes:
+# - Full REST API responses
+# - Detailed cluster state information
+# - Step-by-step execution details
+```
+
+**Check current cluster state before scaling:**
+```bash
+# Check cluster capacity
+kubectl exec -n flink-studio deployment/flink-session-cluster -- \
+  curl -s http://localhost:8081/overview
+
+# Check running jobs
+kubectl exec -n flink-studio deployment/flink-session-cluster -- flink list
+
+# Check TaskManager pods
+kubectl get pods -n flink-studio -l component=taskmanager
+
+# Verify current context
+kubectl config current-context
+```
+
+**Monitor scaling progress manually:**
+```bash
+# Watch pods during scaling
+kubectl get pods -n flink-studio -l app=flink-session-cluster -w
+
+# Monitor Flink cluster state
+watch "kubectl exec -n flink-studio deployment/flink-session-cluster -- \
+  curl -s http://localhost:8081/overview | jq '.taskmanagers, .\"slots-total\"'"
+```
+
+### 🔧 Configuration
+
+Default settings (customizable in the script):
+- **Namespace**: `flink-studio`
+- **Deployment**: `flink-session-cluster`
+- **Slots per TaskManager**: 4
+- **Savepoint Storage**: `gs://sbx-stag-flink-storage/savepoints/`
+
+### 🚨 Troubleshooting Scaling
+
+**Common issues and solutions:**
+
+| Issue | Solution |
+|-------|----------|
+| Permission denied | `chmod +x safe-scale.sh` |
+| Wrong Kubernetes context | Check with `kubectl config current-context`, switch with `kubectl config use-context <name>` |
+| Cannot connect to Flink API | Check pods: `kubectl get pods -n flink-studio` |
+| Scaling timeout (5 min) | Check node resources and TaskManager pod logs |
+| Debug information needed | Run with debug: `./safe-scale.sh <replicas> debug` |
+
+**Detailed troubleshooting steps:**
+
+```bash
+# 1. Verify cluster health before scaling
+kubectl get flinkdeployment -n flink-studio
+kubectl get pods -n flink-studio
+
+# 2. Check Flink REST API accessibility
+kubectl exec -n flink-studio deployment/flink-session-cluster -- \
+  curl -s http://localhost:8081/v1/config
+
+# 3. Check Kubernetes resources
+kubectl describe nodes
+kubectl get events -n flink-studio --sort-by='.lastTimestamp'
+
+# 4. Examine TaskManager logs if scaling fails
+kubectl logs -n flink-studio -l component=taskmanager --tail=50
+
+# 5. Use debug mode for detailed information
+./safe-scale.sh <target-replicas> debug
+```
+
+**Access Flink UI for manual job management:**
+```bash
+kubectl port-forward -n flink-studio service/flink-session-cluster-rest 8081:8081
+# Then open: http://localhost:8081
+```
+
+### 📊 Best Practices
+
+1. **Always Scale with Confidence**: All scaling operations are zero-downtime
+2. **Use Debug Mode**: When troubleshooting, run `./safe-scale.sh <replicas> debug`
+3. **Verify Context**: The script confirms your Kubernetes context for safety
+4. **Monitor Resources**: Keep cluster utilization < 80% for optimal performance
+5. **Scale Gradually**: For large changes, consider incremental scaling (5→8→12 vs 5→12)
+6. **Test in Development**: Validate behavior with your specific workloads
+
+### 🔄 How Job Rebalancing Works
+
+The enhanced scaling script leverages Flink's native capabilities:
+
+- **Automatic Redistribution**: Flink automatically redistributes tasks across available slots
+- **No Downtime**: Jobs continue processing during the entire scaling operation  
+- **State Preservation**: All job state is preserved during rebalancing
+- **Backpressure Handling**: Flink manages backpressure during resource changes
+- **Slot Allocation**: The script sets minimum slots to ensure proper resource allocation
+
+**Example of seamless rebalancing:**
+```bash
+# Before scaling: 4 TaskManagers, 16 slots, 12 slots used
+./safe-scale.sh 6
+# After scaling: 6 TaskManagers, 24 slots, same jobs running with better distribution
+```
+
+For advanced scaling scenarios and performance tuning, see the [Flink Documentation](https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/resource-providers/native_kubernetes/#manual-resource-management).
 
 ## Monitoring and Troubleshooting
 

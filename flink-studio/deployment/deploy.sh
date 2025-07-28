@@ -64,6 +64,31 @@ case $cloud_choice in
         ;;
 esac
 
+# Check current Kubernetes context
+print_status "Checking Kubernetes context..."
+CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "No context set")
+if [ "$CURRENT_CONTEXT" = "No context set" ]; then
+    print_error "No Kubernetes context is currently set"
+    print_error "Please set the correct context with: kubectl config use-context <context-name>"
+    exit 1
+fi
+
+print_status "Current Kubernetes context: $CURRENT_CONTEXT"
+echo ""
+print_warning "WARNING: You are about to deploy to the cluster associated with context '$CURRENT_CONTEXT'"
+print_warning "Make sure this is the correct cluster for your $CLOUD_PROVIDER deployment!"
+echo ""
+read -p "Do you want to continue with this context? (y/N): " context_confirm
+
+if [[ ! $context_confirm =~ ^[Yy]$ ]]; then
+    print_status "Deployment cancelled by user"
+    print_status "Available contexts:"
+    kubectl config get-contexts
+    print_status ""
+    print_status "To switch context, use: kubectl config use-context <context-name>"
+    exit 0
+fi
+
 print_status "Starting Flink Platform deployment for $CLOUD_PROVIDER..."
 
 # Step 1: Install Flink Kubernetes Operator
