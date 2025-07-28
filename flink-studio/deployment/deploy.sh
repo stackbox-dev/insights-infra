@@ -291,29 +291,15 @@ if ! kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flin
     print_warning "SQL Gateway deployment may need more time. Continuing with deployment..."
 fi
 
-# Step 5: Deploy Hue configuration and application
-print_status "Step 5: Deploying Apache Hue..."
-kubectl apply -f manifests/07-hue-config.yaml
-kubectl apply -f manifests/08-hue.yaml
-
-# Wait for Hue to be ready
-print_status "Waiting for Hue to be ready..."
-if ! kubectl wait --for=condition=Available deployment/hue -n flink-studio --timeout=300s; then
-    print_warning "Hue deployment may need more time. Continuing with deployment..."
-fi
-
-# Step 6: Apply security policies (optional)
-print_status "Step 6: Applying Network Policies..."
+# Step 5: Apply security policies (optional)
+print_status "Step 5: Applying Network Policies..."
 kubectl apply -f manifests/06-network-policies.yaml
 
 print_status "Deployment completed successfully!"
 print_status ""
 print_status "=== Access Information ==="
 print_status "Flink UI: kubectl port-forward svc/flink-session-cluster 8081:80 -n flink-studio"
-print_status "Hue UI: kubectl port-forward svc/hue 8888:8888 -n flink-studio"
 print_status "SQL Gateway: kubectl port-forward svc/flink-sql-gateway 8083:80 -n flink-studio"
-print_status ""
-print_status "Default Hue credentials: admin/admin"
 print_status ""
 
 # Cloud-specific information
@@ -354,4 +340,3 @@ fi
 
 print_status ""
 print_status "To access via Ingress, ensure your ingress controller is properly configured"
-print_status "and update your /etc/hosts file or DNS to point hue.flink-studio.local to your ingress IP"

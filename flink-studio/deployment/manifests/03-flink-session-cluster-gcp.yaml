@@ -12,7 +12,7 @@ spec:
   flinkVersion: v2_0
   imagePullPolicy: Always
   flinkConfiguration:
-    taskmanager.numberOfTaskSlots: "4"
+    taskmanager.numberOfTaskSlots: "2"
     # State backend optimized for maximum GCS storage, minimal local storage
     state.backend.type: "rocksdb"
     state.backend.incremental: "true"
@@ -104,7 +104,7 @@ spec:
     resource:
       memory: "8192m"
       cpu: 2
-    replicas: 2
+    replicas: 1
     podTemplate:
       spec:
         serviceAccountName: flink
