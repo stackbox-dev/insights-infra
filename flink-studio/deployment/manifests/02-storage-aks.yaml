@@ -1,5 +1,0 @@
-# Flink Platform Storage Configuration for Microsoft Azure (AKS)
-#
-# This configuration is minimal as Flink uses Azure Blob Storage directly
-# No local storage is required for the Custom SQL Executor (CLI tool)
-#

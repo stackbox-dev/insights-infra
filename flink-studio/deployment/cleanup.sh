@@ -40,10 +40,8 @@ kubectl delete -f manifests/03-flink-session-cluster-gcp.yaml --ignore-not-found
 kubectl delete -f manifests/03-flink-session-cluster-aks.yaml --ignore-not-found=true
 
 # Remove storage, RBAC, and quotas
-print_status "Removing storage, RBAC, and resource quotas..."
+print_status "Removing RBAC and resource quotas..."
 kubectl delete -f manifests/05-resource-quotas.yaml --ignore-not-found=true
-kubectl delete -f manifests/02-storage-gcp.yaml --ignore-not-found=true
-kubectl delete -f manifests/02-storage-aks.yaml --ignore-not-found=true
 kubectl delete -f manifests/02-rbac-gcp.yaml --ignore-not-found=true
 kubectl delete -f manifests/02-rbac-aks.yaml --ignore-not-found=true
 

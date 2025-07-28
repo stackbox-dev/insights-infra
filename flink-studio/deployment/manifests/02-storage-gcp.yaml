@@ -1,5 +1,0 @@
-# Flink Platform Storage Configuration for Google Cloud Platform (GCP)
-#
-# This configuration is minimal as Flink uses Google Cloud Storage directly
-# No local storage is required for the Custom SQL Executor (CLI tool)
-#

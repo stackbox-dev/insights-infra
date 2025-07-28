@@ -234,7 +234,6 @@ elif [ "$CLOUD_PROVIDER" = "azure" ]; then
 fi
 
 kubectl apply -f manifests/02-rbac${MANIFEST_SUFFIX}.yaml
-kubectl apply -f manifests/02-storage${MANIFEST_SUFFIX}.yaml
 kubectl apply -f manifests/05-resource-quotas.yaml
 
 # Step 3: Deploy Flink Session Cluster

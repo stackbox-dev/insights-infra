@@ -13,21 +13,23 @@ spec:
   imagePullPolicy: Always
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "2"
-    # State backend optimized for maximum GCS storage, minimal local storage
+    # State backend optimized for persistent storage with GCS backup
     state.backend.type: "rocksdb"
     state.backend.incremental: "true"
     state.backend.rocksdb.memory.managed: "true"
-    # Minimize local memory usage to force more data to GCS
-    state.backend.rocksdb.memory.fixed-per-slot: "256mb"
-    # Smaller write buffers = more frequent flushes to GCS
-    state.backend.rocksdb.writebuffer.size: "32mb"
-    state.backend.rocksdb.writebuffer.count: "2"
-    # Smaller block cache = less local caching, more GCS reads
-    state.backend.rocksdb.block.cache-size: "128mb"
-    state.backend.rocksdb.thread.num: "2"
-    # Configure memory ratios to minimize local buffering
-    state.backend.rocksdb.memory.write-buffer-ratio: "0.3"
-    state.backend.rocksdb.memory.high-prio-pool-ratio: "0.05"
+    # Use persistent storage for RocksDB local state
+    state.backend.rocksdb.localdir: "/data/flink-rocksdb"
+    # Optimized for medium-sized jobs with 8GB memory, 50GB storage
+    state.backend.rocksdb.memory.fixed-per-slot: "768mb" # Conservative for 8GB total memory
+    # Balanced write buffers for medium-sized state
+    state.backend.rocksdb.writebuffer.size: "128mb" # Good balance for medium jobs
+    state.backend.rocksdb.writebuffer.count: "3" # Standard count for medium state
+    # Moderate block cache for medium datasets
+    state.backend.rocksdb.block.cache-size: "384mb" # Balanced cache size
+    state.backend.rocksdb.thread.num: "2" # Conservative thread count
+    # Configure memory ratios for medium-sized persistent storage
+    state.backend.rocksdb.memory.write-buffer-ratio: "0.4"
+    state.backend.rocksdb.memory.high-prio-pool-ratio: "0.08"
     # Enable changelog for continuous state uploading to GCS
     state.changelog.enabled: true
     state.changelog.storage: filesystem
@@ -110,6 +112,18 @@ spec:
     podTemplate:
       spec:
         serviceAccountName: flink
+        initContainers:
+          - name: rocksdb-init
+            image: busybox:1.35
+            command: ["sh", "-c"]
+            args:
+              - |
+                mkdir -p /data/flink-rocksdb
+                chmod -R 777 /data/flink-rocksdb
+                echo "RocksDB directory initialized successfully"
+            volumeMounts:
+              - name: rocksdb-storage
+                mountPath: /data/flink-rocksdb
         containers:
           - name: flink-main-container
             resources:
@@ -127,10 +141,15 @@ spec:
               - name: gcp-service-account
                 mountPath: /opt/flink/gcp
                 readOnly: true
+              - name: rocksdb-storage
+                mountPath: /data/flink-rocksdb
         volumes:
           - name: gcp-service-account
             secret:
               secretName: gcp-service-account-key
+          - name: rocksdb-storage
+            emptyDir:
+              sizeLimit: 50Gi
   mode: native
 ---
 apiVersion: v1
