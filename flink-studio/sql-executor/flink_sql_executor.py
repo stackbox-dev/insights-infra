@@ -36,6 +36,89 @@ from datetime import datetime
 from tabulate import tabulate
 
 
+def load_env_file(env_file_path: str) -> Dict[str, str]:
+    """
+    Load environment variables from a .env file
+    
+    Args:
+        env_file_path: Path to the .env file
+        
+    Returns:
+        Dictionary of environment variables
+    """
+    env_vars = {}
+    
+    if not os.path.exists(env_file_path):
+        print(f"⚠️  Environment file not found: {env_file_path}")
+        return env_vars
+    
+    try:
+        with open(env_file_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                
+                # Skip empty lines and comments
+                if not line or line.startswith('#'):
+                    continue
+                
+                # Parse KEY=VALUE format
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    
+                    # Remove quotes if present
+                    if (value.startswith('"') and value.endswith('"')) or \
+                       (value.startswith("'") and value.endswith("'")):
+                        value = value[1:-1]
+                    
+                    env_vars[key] = value
+                else:
+                    print(f"⚠️  Invalid format in {env_file_path} line {line_num}: {line}")
+        
+        print(f"✅ Loaded {len(env_vars)} environment variables from {env_file_path}")
+        return env_vars
+        
+    except Exception as e:
+        print(f"❌ Error reading environment file {env_file_path}: {e}")
+        return env_vars
+
+
+def substitute_env_variables(sql_content: str, env_vars: Dict[str, str]) -> str:
+    """
+    Substitute environment variables in SQL content
+    
+    Args:
+        sql_content: SQL content with ${VAR_NAME} placeholders
+        env_vars: Dictionary of environment variables
+        
+    Returns:
+        SQL content with variables substituted
+    """
+    if not env_vars:
+        return sql_content
+    
+    # Pattern to match ${VARIABLE_NAME}
+    pattern = r'\$\{([^}]+)\}'
+    
+    def replace_var(match):
+        var_name = match.group(1)
+        if var_name in env_vars:
+            return env_vars[var_name]
+        else:
+            print(f"⚠️  Environment variable not found: {var_name}")
+            return match.group(0)  # Return original placeholder if variable not found
+    
+    substituted_content = re.sub(pattern, replace_var, sql_content)
+    
+    # Count substitutions made
+    original_vars = re.findall(pattern, sql_content)
+    if original_vars:
+        print(f"✅ Substituted {len(original_vars)} environment variables: {original_vars}")
+    
+    return substituted_content
+
+
 def check_sql_gateway_connectivity(url: str) -> bool:
     """Check if Flink SQL Gateway is accessible"""
     try:
@@ -1182,6 +1265,13 @@ Examples:
     parser.add_argument("--sql", "-s", help="Inline SQL query to execute")
 
     parser.add_argument(
+        "--env-file",
+        "-e",
+        help="Path to environment file (.env) for variable substitution (default: .sbx-uat.env)",
+        default=".sbx-uat.env"
+    )
+
+    parser.add_argument(
         "--sql-gateway-url",
         "--url",  # Add bash script compatibility alias
         "-u",  # Add bash script compatibility short form
@@ -1312,6 +1402,16 @@ Examples:
             logger.info("Executing inline SQL query")
             executor = FlinkSQLExecutor(args.sql_gateway_url)
 
+            # Load environment variables if env file is specified
+            env_vars = {}
+            if args.env_file:
+                env_vars = load_env_file(args.env_file)
+
+            # Apply environment variable substitution to inline SQL
+            sql_content = args.sql
+            if env_vars:
+                sql_content = substitute_env_variables(sql_content, env_vars)
+
             if not args.dry_run:
                 if not executor.create_session():
                     logger.error("Failed to create SQL Gateway session")
@@ -1322,10 +1422,10 @@ Examples:
                     # Show what would be executed
                     if args.single_statement:
                         logger.info(
-                            f"DRY RUN: Would execute single SQL statement: {args.sql}"
+                            f"DRY RUN: Would execute single SQL statement: {sql_content}"
                         )
                     else:
-                        statements = executor.parse_sql_statements(args.sql)
+                        statements = executor.parse_sql_statements(sql_content)
                         logger.info(
                             f"DRY RUN: Would execute {len(statements)} SQL statement(s)"
                         )
@@ -1338,7 +1438,7 @@ Examples:
                     if args.single_statement:
                         # Execute as single statement
                         success, result = executor.execute_statement(
-                            args.sql, "inline-query", format_style
+                            sql_content, "inline-query", format_style
                         )
                         if success:
                             logger.info("🎉 Inline SQL executed successfully!")
@@ -1353,7 +1453,7 @@ Examples:
                     else:
                         # Execute as multiple statements
                         success, results = executor.execute_multiple_statements(
-                            args.sql, "inline-query", continue_on_error, format_style
+                            sql_content, "inline-query", continue_on_error, format_style
                         )
 
                         if success:
@@ -1402,6 +1502,11 @@ Examples:
                     sys.exit(1)
 
             try:
+                # Load environment variables if env file is specified
+                env_vars = {}
+                if args.env_file:
+                    env_vars = load_env_file(args.env_file)
+                
                 # Read SQL content from file
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
@@ -1410,6 +1515,10 @@ Examples:
                     if not sql_content:
                         logger.error(f"Empty SQL file: {file_path}")
                         sys.exit(1)
+                    
+                    # Apply environment variable substitution
+                    if env_vars:
+                        sql_content = substitute_env_variables(sql_content, env_vars)
 
                 except Exception as e:
                     logger.error(f"Error reading SQL file {file_path}: {e}")
