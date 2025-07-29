@@ -1,0 +1,9 @@
+# Exclude everything except what's needed for Docker build
+*
+
+# Include only files needed for Docker build
+!dependency-versions.json
+!prepare-image.sh
+
+# Make sure prepare-image.sh is executable
+!Dockerfile
