@@ -75,6 +75,9 @@ spec:
     fs.gs.auth.service.account.enable: "true"
     # Use Application Default Credentials via Workload Identity
     fs.gs.auth.type: APPLICATION_DEFAULT
+    # SSL truststore configuration for Kafka connections
+    security.ssl.truststore.location: /etc/kafka/secrets/kafka.truststore.jks
+    security.ssl.truststore.type: JKS
   serviceAccount: flink
   jobManager:
     resource:
@@ -89,7 +92,14 @@ spec:
             env:
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
-        volumes: []
+            volumeMounts:
+              - name: truststore-volume
+                mountPath: /etc/kafka/secrets
+                readOnly: true
+        volumes:
+          - name: truststore-volume
+            secret:
+              secretName: kafka-truststore-secret
   taskManager:
     resource:
       memory: "8192m"
@@ -124,10 +134,16 @@ spec:
             volumeMounts:
               - name: rocksdb-storage
                 mountPath: /data/flink-rocksdb
+              - name: truststore-volume
+                mountPath: /etc/kafka/secrets
+                readOnly: true
         volumes:
           - name: rocksdb-storage
             emptyDir:
               sizeLimit: 50Gi
+          - name: truststore-volume
+            secret:
+              secretName: kafka-truststore-secret
   mode: native
 ---
 apiVersion: v1

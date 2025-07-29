@@ -207,8 +207,37 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "Google Service Account: flink-gcs@sbx-stag.iam.gserviceaccount.com"
 fi
 
-# Step 3: Deploy Flink Session Cluster
-print_status "Step 3: Deploying Flink Session Cluster for $CLOUD_PROVIDER..."
+# Step 3: Check for Kafka truststore secret
+print_status "Step 3: Checking for Kafka truststore secret..."
+if ! kubectl get secret kafka-truststore-secret -n flink-studio --ignore-not-found 2>/dev/null | grep -q kafka-truststore-secret; then
+    print_error "Kafka truststore secret not found!"
+    print_error "The Flink deployment requires the Kafka truststore secret to connect to Aiven Kafka."
+    print_error ""
+    print_error "Please run the truststore setup script first:"
+    print_error "  ./setup-aiven-truststore.sh"
+    print_error ""
+    print_error "This script will:"
+    print_error "1. Prompt you to download the ca.pem file from Aiven console"
+    print_error "2. Convert it to JKS truststore format"
+    print_error "3. Create the required Kubernetes secrets"
+    print_error ""
+    read -p "Have you completed the truststore setup? (y/N): " truststore_confirm
+    if [[ ! $truststore_confirm =~ ^[Yy]$ ]]; then
+        print_error "Deployment cannot continue without truststore secret. Exiting."
+        exit 1
+    fi
+    
+    # Verify again after user confirmation
+    if ! kubectl get secret kafka-truststore-secret -n flink-studio --ignore-not-found 2>/dev/null | grep -q kafka-truststore-secret; then
+        print_error "Truststore secret still not found. Please run ./setup-aiven-truststore.sh"
+        exit 1
+    fi
+else
+    print_status "Kafka truststore secret found"
+fi
+
+# Step 4: Deploy Flink Session Cluster
+print_status "Step 4: Deploying Flink Session Cluster for $CLOUD_PROVIDER..."
 kubectl apply -f manifests/03-flink-session-cluster${MANIFEST_SUFFIX}.yaml
 
 # Wait for Flink cluster to be ready with better timeout handling
@@ -251,8 +280,8 @@ for i in {1..30}; do
     sleep 10
 done
 
-# Step 4: Deploy Flink SQL Gateway
-print_status "Step 4: Deploying Flink SQL Gateway..."
+# Step 5: Deploy Flink SQL Gateway
+print_status "Step 5: Deploying Flink SQL Gateway..."
 kubectl apply -f manifests/04-flink-sql-gateway.yaml
 
 # Wait for SQL Gateway to be ready
@@ -261,8 +290,8 @@ if ! kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flin
     print_warning "SQL Gateway deployment may need more time. Continuing with deployment..."
 fi
 
-# Step 5: Apply security policies (optional)
-print_status "Step 5: Applying Network Policies..."
+# Step 6: Apply security policies (optional)
+print_status "Step 6: Applying Network Policies..."
 kubectl apply -f manifests/06-network-policies.yaml
 
 print_status "Deployment completed successfully!"
