@@ -57,9 +57,9 @@ spec:
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM
-              value: "PLAIN"
+              value: "SCRAM-SHA-512"
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+              value: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
 
             # SSL handshake   
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION
