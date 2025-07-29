@@ -64,37 +64,165 @@ class Logger:
 class CompatibilityMatrix:
     """Manages compatibility rules for Flink dependencies"""
     
-    def __init__(self):
+    def __init__(self, logger: Logger = None):
+        self.logger = logger
         self.rules = {
             'flink-2.0.0': {
-                'kafka': ('3.6.0', '3.8.99'),
-                'avro': ('1.11.0', '1.12.99'),
-                'jackson': ('2.15.0', '2.17.99'),
+                # Kafka ecosystem - based on Kafka broker version 3.8.1
+                'kafka': ('3.6.0', '3.8.1'),  # Kafka broker/server libraries must match broker version
+                'kafka-clients': ('3.6.0', '3.8.1'),  # Must be compatible with Kafka broker 3.8.1
+                'schema-registry': ('7.4.0', '8.99.99'),  # Confluent Schema Registry compatibility (separate versioning)
+                
+                # Flink connectors - official Flink 2.0.0 versions  
+                'flink-connector': ('4.0.0', '4.99.99'),  # Flink 2.0.0 uses 4.0.0-2.0 format
+                
+                # Avro and schema registry - based on Flink 2.0.0 docs
+                'avro': ('1.11.0', '2.99.99'),  # Allow both external Avro and Flink native versions
+                'confluent-avro': ('2.0.0', '7.99.99'),  # Allow Flink native and Confluent versions
+                'schema-registry': ('7.4.0', '8.99.99'),  # Confluent Schema Registry compatibility
+                
+                # JSON processing - Jackson versions compatible with Flink 2.0.0
+                'jackson': ('2.15.0', '2.18.99'),  # Jackson 2.15+ for Java compatibility
+                'jackson-core': ('2.15.0', '2.18.99'),
+                'jackson-databind': ('2.15.0', '2.18.99'),
+                'jackson-annotations': ('2.15.0', '2.18.99'),
+                
+                # Scala - Flink 2.0.0 uses Scala 2.12
                 'scala': ('2.12.0', '2.12.99'),
-                'google-guava': ('30.0', '35.0'),
-                'grpc': ('1.50.0', '1.75.0'),
+                'scala-library': ('2.12.0', '2.12.99'),
+                
+                # Google libraries - liberal ranges for utility libraries
+                'google-guava': ('30.0', '35.99.99'),  # Google Guava broad compatibility
+                'google-auth': ('1.0.0', '2.99.99'),   # Google Auth libraries
+                'google-cloud': ('1.0.0', '4.99.99'),  # Google Cloud libraries  
+                'google-api': ('1.30.0', '3.99.99'),   # Google API client
+                'google-http': ('1.40.0', '2.99.99'),  # Google HTTP client
+                'gson': ('2.8.0', '2.99.99'),          # Google JSON library
+                'jsr305': ('1.0.0', '3.99.99'),        # JSR305 annotations (stable)
+                'failureaccess': ('1.0.0', '1.99.99'), # Guava dependency
+                'listenablefuture': ('1.0', '9999.99.99'), # Empty jar, version irrelevant
+                'protobuf': ('3.19.0', '4.99.99'),     # Protocol Buffers
+                'grpc': ('1.50.0', '1.99.99'),         # gRPC broader range
+                'perfmark': ('0.25.0', '0.99.99'),     # Performance marking
+                
+                # Hadoop ecosystem - compatible with Flink 2.0.0
+                'hadoop': ('3.3.0', '3.99.99'),
+                'hadoop-client': ('3.3.0', '3.99.99'),
+                'hadoop-common': ('3.3.0', '3.99.99'),
+                
+                # Logging - standard logging libraries
+                'slf4j': ('1.7.30', '2.99.99'),
+                'logback': ('1.2.10', '1.99.99'),
+                'log4j': ('2.17.0', '2.99.99'),
+                
+                # Apache commons - stable utility libraries
+                'commons-lang3': ('3.12.0', '3.99.99'),
+                'commons-cli': ('1.5.0', '1.99.99'),
+                'commons-io': ('2.11.0', '2.99.99'),
+                'commons-compress': ('1.20.0', '1.99.99'),
+                
+                # Compression libraries - broad compatibility
+                'snappy': ('1.1.8', '1.99.99'),
+                'lz4': ('1.8.0', '1.99.99'),
+                'zstd': ('1.5.0', '1.99.99'),
+                
+                # Netty - network library
+                'netty': ('4.1.90', '4.1.99'),
+                
+                # OpenCensus/Observability - monitoring libraries
+                'opencensus': ('0.28.0', '0.99.99'),
+                
+                # Miscellaneous - stable formats and utilities
+                'snakeyaml': ('1.30.0', '2.99.99'),
+                'swagger': ('2.2.0', '2.99.99'),
+                
+                # Other connectors and formats - broad compatibility
+                'elasticsearch': ('7.17.0', '8.99.99'),
+                'cassandra': ('4.0.0', '5.99.99'),
+                'mongodb': ('4.10.0', '6.99.99'),
             }
         }
     
-    def is_compatible(self, flink_version: str, dependency_type: str, dep_version: str) -> bool:
+    def is_compatible(self, flink_version: str, dependency_type: str, dep_version: str, dep_name: str = '') -> bool:
         """Check if a dependency version is compatible with Flink version"""
         key = f'flink-{flink_version}'
+        
+        # Special case handling for specific dependencies
+        if dependency_type == 'kafka' and 'schema-registry' in dep_name.lower():
+            # Schema registry client has different versioning
+            dependency_type = 'schema-registry'
+        elif dependency_type == 'kafka' and 'managed-kafka-auth' in dep_name.lower():
+            # Google managed Kafka auth handler has its own versioning
+            dependency_type = 'google-cloud'
+        elif dependency_type == 'jackson' and 'google-http-client' in dep_name.lower():
+            # Google HTTP client Jackson integration has different versioning
+            dependency_type = 'google-http'
+        
+        # If no rules defined for this Flink version, be conservative
         if key not in self.rules:
-            return True  # Assume compatible if no rules defined
+            self.logger.warning(f"No compatibility rules defined for Flink {flink_version}")
+            return False
             
+        # If no specific rule for this dependency type, check if it's a known type
         if dependency_type not in self.rules[key]:
-            return True  # Assume compatible if no specific rule
+            if dependency_type == 'unknown':
+                # For unknown types, we can't determine compatibility
+                return False
+            else:
+                # For known types without rules, log warning but allow
+                return True
             
         min_ver, max_ver = self.rules[key][dependency_type]
         
         try:
-            dep_pkg_version = pkg_version.parse(dep_version)
-            min_pkg_version = pkg_version.parse(min_ver)
-            max_pkg_version = pkg_version.parse(max_ver)
+            # Handle special version formats
+            clean_dep_version = self._clean_version(dep_version)
+            clean_min_version = self._clean_version(min_ver)
+            clean_max_version = self._clean_version(max_ver)
             
-            return min_pkg_version <= dep_pkg_version <= max_pkg_version
-        except Exception:
-            return True  # Assume compatible if version parsing fails
+            dep_pkg_version = pkg_version.parse(clean_dep_version)
+            min_pkg_version = pkg_version.parse(clean_min_version)
+            max_pkg_version = pkg_version.parse(clean_max_version)
+            
+            is_in_range = min_pkg_version <= dep_pkg_version <= max_pkg_version
+            
+            if not is_in_range:
+                # Log detailed compatibility information
+                if hasattr(self, 'logger'):
+                    self.logger.debug(f"Version {dep_version} is outside compatible range [{min_ver}, {max_ver}] for {dependency_type}")
+            
+            return is_in_range
+            
+        except Exception as e:
+            # Version parsing failed - this is a real issue
+            if hasattr(self, 'logger'):
+                self.logger.warning(f"Failed to parse version {dep_version} for {dependency_type}: {e}")
+            return False
+    
+    def _clean_version(self, version: str) -> str:
+        """Clean version string for parsing"""
+        # Handle Flink-specific versions like "4.0.0-2.0"
+        if '-' in version and version.count('-') == 1:
+            parts = version.split('-')
+            if len(parts) == 2 and all(c.replace('.', '').isdigit() for c in parts):
+                # This looks like a connector version, keep the first part
+                return parts[0]
+        
+        # Handle Maven classifier suffixes like "33.2.1-jre"
+        if '-jre' in version:
+            return version.replace('-jre', '')
+        if '-android' in version:
+            return version.replace('-android', '')
+        
+        # Handle special case for listenablefuture empty jar
+        if 'empty-to-avoid-conflict' in version:
+            # Extract the version number before the descriptor
+            parts = version.split('-')
+            if parts and parts[0]:
+                return parts[0]
+            return '9999.0'  # Default high version for empty jar
+        
+        return version
     
     def get_compatible_range(self, flink_version: str, dependency_type: str) -> Optional[Tuple[str, str]]:
         """Get the compatible version range for a dependency"""
@@ -218,20 +346,148 @@ class Dependency:
         )
     
     def get_dependency_type(self) -> str:
-        """Determine dependency type for compatibility checking"""
+        """Determine dependency type for compatibility checking using groupId and artifactId"""
         name_lower = self.name.lower()
-        if 'kafka' in name_lower:
+        group_lower = self.group_id.lower()
+        artifact_lower = self.artifact_id.lower()
+        
+        # Flink native connectors
+        if (group_lower == 'org.apache.flink' and 
+            ('connector' in artifact_lower or 'sql-connector' in artifact_lower)):
+            return 'flink-connector'
+        
+        # Kafka ecosystem
+        if ('kafka' in name_lower or 'kafka' in artifact_lower or 
+            group_lower == 'org.apache.kafka'):
+            if 'clients' in artifact_lower:
+                return 'kafka-clients'
+            elif artifact_lower.startswith('kafka_2.'):
+                # This is the Kafka broker/server library (e.g., kafka_2.12, kafka_2.13)
+                return 'kafka'
             return 'kafka'
-        elif 'avro' in name_lower:
+        
+        # Avro and schema registry
+        if ('avro' in name_lower or 'avro' in artifact_lower):
+            if 'confluent' in name_lower or 'confluent' in artifact_lower:
+                return 'confluent-avro'
             return 'avro'
-        elif 'jackson' in name_lower:
+        
+        if 'schema-registry' in name_lower or 'schema-registry' in artifact_lower:
+            return 'schema-registry'
+        
+        # Jackson JSON processing
+        if ('jackson' in name_lower or 'jackson' in artifact_lower or 
+            group_lower.startswith('com.fasterxml.jackson')):
+            if 'core' in artifact_lower:
+                return 'jackson-core'
+            elif 'databind' in artifact_lower:
+                return 'jackson-databind'
+            elif 'annotations' in artifact_lower:
+                return 'jackson-annotations'
             return 'jackson'
-        elif 'guava' in name_lower:
-            return 'google-guava'
-        elif 'grpc' in name_lower:
-            return 'grpc'
-        elif 'scala' in name_lower:
+        
+        # Scala
+        if ('scala' in name_lower or 'scala' in artifact_lower or 
+            group_lower.startswith('org.scala-lang')):
+            if 'library' in artifact_lower:
+                return 'scala-library'
             return 'scala'
+        
+        # Google libraries
+        if group_lower.startswith('com.google'):
+            if 'guava' in artifact_lower:
+                return 'google-guava'
+            elif 'auth' in artifact_lower:
+                return 'google-auth'
+            elif 'cloud' in artifact_lower:
+                return 'google-cloud'
+            elif 'api' in artifact_lower:
+                return 'google-api'
+            elif 'http' in artifact_lower:
+                return 'google-http'
+            elif 'gson' in artifact_lower:
+                return 'gson'
+            elif 'failureaccess' in artifact_lower:
+                return 'failureaccess'
+            elif 'listenablefuture' in artifact_lower:
+                return 'listenablefuture'
+            elif 'protobuf' in artifact_lower:
+                return 'protobuf'
+        
+        # JSR305 annotations
+        if 'jsr305' in artifact_lower or group_lower == 'com.google.code.findbugs':
+            return 'jsr305'
+        
+        # gRPC
+        if 'grpc' in name_lower or 'grpc' in artifact_lower or group_lower.startswith('io.grpc'):
+            return 'grpc'
+        
+        # Perfmark
+        if 'perfmark' in artifact_lower or group_lower.startswith('io.perfmark'):
+            return 'perfmark'
+        
+        # Protobuf
+        if 'protobuf' in name_lower or 'protobuf' in artifact_lower:
+            return 'protobuf'
+        
+        # Hadoop ecosystem
+        if ('hadoop' in name_lower or 'hadoop' in artifact_lower or 
+            group_lower.startswith('org.apache.hadoop')):
+            if 'client' in artifact_lower:
+                return 'hadoop-client'
+            elif 'common' in artifact_lower:
+                return 'hadoop-common'
+            return 'hadoop'
+        
+        # Logging
+        if 'slf4j' in name_lower or 'slf4j' in artifact_lower:
+            return 'slf4j'
+        if 'logback' in name_lower or 'logback' in artifact_lower:
+            return 'logback'
+        if 'log4j' in name_lower or 'log4j' in artifact_lower:
+            return 'log4j'
+        
+        # Apache Commons
+        if group_lower.startswith('org.apache.commons'):
+            if 'lang3' in artifact_lower:
+                return 'commons-lang3'
+            elif 'cli' in artifact_lower:
+                return 'commons-cli'
+            elif 'io' in artifact_lower:
+                return 'commons-io'
+            elif 'compress' in artifact_lower:
+                return 'commons-compress'
+        
+        # Compression libraries
+        if 'snappy' in artifact_lower:
+            return 'snappy'
+        if 'lz4' in artifact_lower:
+            return 'lz4'
+        if 'zstd' in artifact_lower:
+            return 'zstd'
+        
+        # Netty
+        if 'netty' in name_lower or 'netty' in artifact_lower:
+            return 'netty'
+        
+        # OpenCensus
+        if 'opencensus' in artifact_lower or group_lower.startswith('io.opencensus'):
+            return 'opencensus'
+        
+        # Miscellaneous
+        if 'snakeyaml' in artifact_lower:
+            return 'snakeyaml'
+        if 'swagger' in artifact_lower:
+            return 'swagger'
+        
+        # Other connectors
+        if 'elasticsearch' in name_lower or 'elasticsearch' in artifact_lower:
+            return 'elasticsearch'
+        if 'cassandra' in name_lower or 'cassandra' in artifact_lower:
+            return 'cassandra'
+        if 'mongodb' in name_lower or 'mongodb' in artifact_lower:
+            return 'mongodb'
+        
         return 'unknown'
 
 
@@ -242,7 +498,7 @@ class DependencyManager:
         self.versions_file = Path(versions_file)
         self.logger = logger
         self.maven = MavenRepository(logger)
-        self.compatibility = CompatibilityMatrix()
+        self.compatibility = CompatibilityMatrix(logger)
         self.dependencies: Dict[str, Dict[str, Dependency]] = {}
         self.metadata = {}
         
@@ -338,7 +594,11 @@ class DependencyManager:
                 if metadata is None:
                     continue
                 
-                latest_version = self.maven.get_latest_version(metadata, include_prereleases)
+                # Get dependency type first to check compatibility constraints
+                dep_type = dep.get_dependency_type()
+                
+                # Find the latest compatible version instead of just the absolute latest
+                latest_version = self._get_latest_compatible_version(metadata, flink_version, dep_type, dep_name, include_prereleases)
                 if latest_version is None:
                     continue
                 
@@ -348,9 +608,8 @@ class DependencyManager:
                     latest_pkg_version = pkg_version.parse(latest_version)
                     
                     if latest_pkg_version > current_pkg_version:
-                        # Check compatibility
-                        dep_type = dep.get_dependency_type()
-                        is_compatible = self.compatibility.is_compatible(flink_version, dep_type, latest_version)
+                        # Check compatibility (should be True since we filtered for compatible versions)
+                        is_compatible = self.compatibility.is_compatible(flink_version, dep_type, latest_version, dep_name)
                         
                         update_info = {
                             'name': dep_name,
@@ -371,6 +630,53 @@ class DependencyManager:
                     continue
         
         return results
+    
+    def _get_latest_compatible_version(self, metadata: ET.Element, flink_version: str, 
+                                     dep_type: str, dep_name: str, include_prereleases: bool = False) -> Optional[str]:
+        """Get the latest version that's compatible with the given Flink version"""
+        if metadata is None:
+            return None
+            
+        # Get all available versions
+        versions = []
+        versioning = metadata.find('versioning')
+        if versioning is not None:
+            versions_elem = versioning.find('versions')
+            if versions_elem is not None:
+                for version_elem in versions_elem.findall('version'):
+                    if version_elem.text:
+                        versions.append(version_elem.text)
+        
+        if not versions:
+            return None
+            
+        # Filter out snapshots and pre-releases if not wanted
+        filtered_versions = []
+        for v in versions:
+            if 'SNAPSHOT' in v.upper():
+                continue
+            if not include_prereleases:
+                if any(pre in v.upper() for pre in ['ALPHA', 'BETA', 'RC', 'M']):
+                    continue
+            filtered_versions.append(v)
+        
+        if not filtered_versions:
+            return None
+            
+        # Sort versions in descending order (latest first)
+        try:
+            sorted_versions = sorted(filtered_versions, key=pkg_version.parse, reverse=True)
+        except Exception:
+            # Fallback to simple string sorting
+            sorted_versions = sorted(filtered_versions, reverse=True)
+        
+        # Find the latest version that's compatible
+        for version in sorted_versions:
+            if self.compatibility.is_compatible(flink_version, dep_type, version, dep_name):
+                return version
+        
+        # If no compatible version found, return None
+        return None
     
     def update_dependencies(self, category: str = None, include_prereleases: bool = False,
                           exclude: List[str] = None, force: bool = False, dry_run: bool = False) -> int:
@@ -435,16 +741,40 @@ class DependencyManager:
         
         total_deps = 0
         compatible_deps = 0
+        unknown_deps = 0
+        
+        # Track issues by category for detailed reporting
+        compatibility_issues = []
+        unknown_types = []
         
         for category, deps in self.dependencies.items():
             for dep_name, dep in deps.items():
                 total_deps += 1
                 dep_type = dep.get_dependency_type()
                 
-                if self.compatibility.is_compatible(flink_version, dep_type, dep.version):
+                if dep_type == 'unknown':
+                    unknown_deps += 1
+                    unknown_types.append({
+                        'category': category,
+                        'name': dep_name,
+                        'groupId': dep.group_id,
+                        'artifactId': dep.artifact_id,
+                        'version': dep.version
+                    })
+                    self.logger.warning(f"{category}/{dep_name} has unknown type (groupId: {dep.group_id}, artifactId: {dep.artifact_id})")
+                    continue
+                
+                if self.compatibility.is_compatible(flink_version, dep_type, dep.version, dep_name):
                     compatible_deps += 1
                     self.logger.debug(f"{category}/{dep_name} ({dep.version}) is compatible")
                 else:
+                    compatibility_issues.append({
+                        'category': category,
+                        'name': dep_name,
+                        'type': dep_type,
+                        'version': dep.version,
+                        'expected_range': self.compatibility.get_compatible_range(flink_version, dep_type)
+                    })
                     self.logger.warning(f"{category}/{dep_name} ({dep.version}) may not be compatible with Flink {flink_version}")
                     
                     # Show expected range if available
@@ -452,14 +782,23 @@ class DependencyManager:
                     if compat_range:
                         self.logger.info(f"  Expected range: {compat_range[0]} - {compat_range[1]}")
         
-        incompatible_deps = total_deps - compatible_deps
+        # Detailed reporting
+        incompatible_deps = total_deps - compatible_deps - unknown_deps
         
         self.logger.info("Validation Summary:")
         self.logger.success(f"  Compatible: {compatible_deps}/{total_deps}")
         if incompatible_deps > 0:
-            self.logger.warning(f"  Potential issues: {incompatible_deps}/{total_deps}")
+            self.logger.warning(f"  Incompatible: {incompatible_deps}/{total_deps}")
+        if unknown_deps > 0:
+            self.logger.warning(f"  Unknown types: {unknown_deps}/{total_deps}")
         
-        return compatible_deps, incompatible_deps
+        # Suggest actions for unknown types
+        if unknown_types:
+            self.logger.info("Unknown dependency types found. Consider adding compatibility rules for:")
+            for dep in unknown_types[:5]:  # Show first 5
+                self.logger.info(f"  - {dep['groupId']}:{dep['artifactId']} (used as {dep['name']})")
+        
+        return compatible_deps, incompatible_deps + unknown_deps
     
     def generate_report(self, output_file: str = None) -> str:
         """Generate a comprehensive compatibility report"""
@@ -505,7 +844,7 @@ class DependencyManager:
             
             for dep_name, dep in deps.items():
                 dep_type = dep.get_dependency_type()
-                is_current_compatible = self.compatibility.is_compatible(flink_version, dep_type, dep.version)
+                is_current_compatible = self.compatibility.is_compatible(flink_version, dep_type, dep.version, dep_name)
                 
                 if dep_name in update_dict:
                     update_info = update_dict[dep_name]
