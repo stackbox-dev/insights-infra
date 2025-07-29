@@ -1,6 +1,6 @@
 -- Create source tables (DDL for Kafka topics)
 -- skus source table
-CREATE TABLE `sbx-uat.encarta.public.skus` (
+CREATE TABLE skus (
     id STRING,
     principal_id BIGINT,
     code STRING,
@@ -45,20 +45,25 @@ CREATE TABLE `sbx-uat.encarta.public.skus` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.skus',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.skus',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- products source table
-CREATE TABLE `sbx-uat.encarta.public.products` (
+CREATE TABLE products (
     id STRING,
     principal_id BIGINT,
     code STRING,
@@ -90,20 +95,25 @@ CREATE TABLE `sbx-uat.encarta.public.products` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.products',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.products',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- categories source table
-CREATE TABLE `sbx-uat.encarta.public.categories` (
+CREATE TABLE categories (
     id STRING,
     principal_id BIGINT,
     category_group_id STRING,
@@ -123,20 +133,25 @@ CREATE TABLE `sbx-uat.encarta.public.categories` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.categories',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.categories',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- sub_categories source table
-CREATE TABLE `sbx-uat.encarta.public.sub_categories` (
+CREATE TABLE sub_categories (
     id STRING,
     principal_id BIGINT,
     category_id STRING,
@@ -156,20 +171,25 @@ CREATE TABLE `sbx-uat.encarta.public.sub_categories` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.sub_categories',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.sub_categories',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- category_groups source table
-CREATE TABLE `sbx-uat.encarta.public.category_groups` (
+CREATE TABLE category_groups (
     id STRING,
     principal_id BIGINT,
     code STRING,
@@ -188,20 +208,25 @@ CREATE TABLE `sbx-uat.encarta.public.category_groups` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.category_groups',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.category_groups',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- brands source table
-CREATE TABLE `sbx-uat.encarta.public.brands` (
+CREATE TABLE brands (
     id STRING,
     principal_id BIGINT,
     code STRING,
@@ -221,20 +246,25 @@ CREATE TABLE `sbx-uat.encarta.public.brands` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.brands',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.brands',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- sub_brands source table
-CREATE TABLE `sbx-uat.encarta.public.sub_brands` (
+CREATE TABLE sub_brands (
     id STRING,
     principal_id BIGINT,
     code STRING,
@@ -254,20 +284,25 @@ CREATE TABLE `sbx-uat.encarta.public.sub_brands` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.sub_brands',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.sub_brands',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- skus_uoms_agg source table
-CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
+CREATE TABLE skus_uoms_agg (
     sku_id STRING,
     l0_units INT,
     l1_units INT,
@@ -356,20 +391,25 @@ CREATE TABLE `sbx-uat.encarta.public.skus_uoms_agg` (
     PRIMARY KEY (sku_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.skus_uoms_agg',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.skus_uoms_agg',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- skus_classifications_agg source table
-CREATE TABLE `sbx-uat.encarta.public.skus_classifications_agg` (
+CREATE TABLE skus_classifications_agg (
     sku_id STRING,
     classifications STRING,
     created_at TIMESTAMP(3),
@@ -383,20 +423,25 @@ CREATE TABLE `sbx-uat.encarta.public.skus_classifications_agg` (
     PRIMARY KEY (sku_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.skus_classifications_agg',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.skus_classifications_agg',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- products_classifications_agg source table
-CREATE TABLE `sbx-uat.encarta.public.products_classifications_agg` (
+CREATE TABLE products_classifications_agg (
     product_id STRING,
     product_classifications STRING,
     created_at TIMESTAMP(3),
@@ -410,20 +455,25 @@ CREATE TABLE `sbx-uat.encarta.public.products_classifications_agg` (
     PRIMARY KEY (product_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.products_classifications_agg',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.products_classifications_agg',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
-    'properties.auto.offset.reset' = 'earliest',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Create final summary table structure (destination table)
-CREATE TABLE `sbx-uat.encarta.public.skus_master` (
+CREATE TABLE skus_master (
     id VARCHAR NOT NULL,
     principal_id BIGINT NOT NULL,
     node_id BIGINT NOT NULL,
@@ -550,23 +600,28 @@ CREATE TABLE `sbx-uat.encarta.public.skus_master` (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx-uat.encarta.public.skus_master',
-    'properties.bootstrap.servers' = 'bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092',
+    'topic' = 'sbx_uat.encarta.public.skus_master',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.hosted.kafka.auth.GcpLoginCallbackHandler',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.transaction.id.prefix' = 'encarta-skus-classifications-agg',
     'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'http://cp-schema-registry.kafka',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'http://cp-schema-registry.kafka'
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Continuously populate the summary table from source tables
 -- Optimized INSERT statement using materialized aggregation tables
 -- Uses regular LEFT JOINs for real-time latest data processing
--- Source 'skus' table has proper PRIMARY KEY (id) NOT ENFORCED with changelog.mode = 'upsert'
-INSERT INTO `sbx-uat.encarta.public.skus_master`
+INSERT INTO skus_master
 SELECT s.id,
     -- Primary key from source matches target primary key
     s.principal_id,
@@ -708,13 +763,13 @@ SELECT s.id,
         COALESCE(sb.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(b.updated_at, TIMESTAMP '1970-01-01 00:00:00')
     ) AS updated_at
-FROM `sbx-uat.encarta.public.skus` s
-    LEFT JOIN `sbx-uat.encarta.public.skus_uoms_agg` AS uom_agg ON s.id = uom_agg.sku_id
-    LEFT JOIN `sbx-uat.encarta.public.skus_classifications_agg` AS class_agg ON s.id = class_agg.sku_id
-    LEFT JOIN `sbx-uat.encarta.public.products_classifications_agg` AS prod_class_agg ON s.product_id = prod_class_agg.product_id
-    LEFT JOIN `sbx-uat.encarta.public.products` AS p ON s.product_id = p.id
-    LEFT JOIN `sbx-uat.encarta.public.sub_categories` AS subcat ON p.sub_category_id = subcat.id
-    LEFT JOIN `sbx-uat.encarta.public.categories` AS cat ON subcat.category_id = cat.id
-    LEFT JOIN `sbx-uat.encarta.public.category_groups` AS cg ON cat.category_group_id = cg.id
-    LEFT JOIN `sbx-uat.encarta.public.sub_brands` AS sb ON p.sub_brand_id = sb.id
-    LEFT JOIN `sbx-uat.encarta.public.brands` AS b ON sb.brand_id = b.id;
+FROM skus s
+    LEFT JOIN skus_uoms_agg AS uom_agg ON s.id = uom_agg.sku_id
+    LEFT JOIN skus_classifications_agg AS class_agg ON s.id = class_agg.sku_id
+    LEFT JOIN products_classifications_agg AS prod_class_agg ON s.product_id = prod_class_agg.product_id
+    LEFT JOIN products AS p ON s.product_id = p.id
+    LEFT JOIN sub_categories AS subcat ON p.sub_category_id = subcat.id
+    LEFT JOIN categories AS cat ON subcat.category_id = cat.id
+    LEFT JOIN category_groups AS cg ON cat.category_group_id = cg.id
+    LEFT JOIN sub_brands AS sb ON p.sub_brand_id = sb.id
+    LEFT JOIN brands AS b ON sb.brand_id = b.id;
