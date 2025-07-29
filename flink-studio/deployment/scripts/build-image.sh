@@ -41,7 +41,7 @@ fi
 
 # Build the image
 print_status "Building Docker image for linux/amd64 platform..."
-docker build --platform linux/amd64 -t "${FULL_IMAGE_NAME}" .
+docker build --platform linux/amd64 -t "${FULL_IMAGE_NAME}" -f ../docker/Dockerfile ../docker/
 
 if [ $? -ne 0 ]; then
     print_error "Docker build failed!"

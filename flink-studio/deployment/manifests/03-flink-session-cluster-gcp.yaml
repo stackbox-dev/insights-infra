@@ -96,6 +96,26 @@ spec:
                 value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
+              - name: AIVEN_KAFKA_BOOTSTRAP_SERVERS
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: bootstrap-servers
+              - name: AIVEN_KAFKA_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: username
+              - name: AIVEN_KAFKA_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: password
+              - name: AIVEN_SCHEMA_REGISTRY_URL
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: schema-registry-url
             volumeMounts:
               - name: gcp-service-account
                 mountPath: /opt/flink/gcp
@@ -137,6 +157,26 @@ spec:
                 value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
+              - name: AIVEN_KAFKA_BOOTSTRAP_SERVERS
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: bootstrap-servers
+              - name: AIVEN_KAFKA_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: username
+              - name: AIVEN_KAFKA_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: password
+              - name: AIVEN_SCHEMA_REGISTRY_URL
+                valueFrom:
+                  secretKeyRef:
+                    name: aiven-kafka-credentials
+                    key: schema-registry-url
             volumeMounts:
               - name: gcp-service-account
                 mountPath: /opt/flink/gcp

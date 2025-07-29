@@ -137,7 +137,7 @@ cd flink-studio
 Run the comprehensive validation script to check all prerequisites:
 
 ```bash
-./pre-deploy-check.sh
+./scripts/pre-deploy-check.sh
 ```
 
 This validation script will check:
@@ -177,6 +177,70 @@ The script will:
 7. Apply security policies
 
 **Note:** For any deployment issues, refer to [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
+
+## Available Scripts
+
+The `scripts/` directory contains utility scripts for managing the Flink deployment:
+
+### Core Deployment Scripts
+
+- **`deploy.sh`** - Automated deployment of the entire platform
+- **`cleanup.sh`** - Complete cleanup of all deployed resources
+- **`pre-deploy-check.sh`** - Comprehensive pre-deployment validation
+
+### Management & Operations Scripts
+
+- **`scale.sh`** - Safe scaling of TaskManager replicas with validation
+- **`build-image.sh`** - Build custom Flink Docker images
+- **`test-deployment.sh`** - Comprehensive deployment testing and validation
+- **`test-kafka-connectivity.sh`** - Test Kafka connectivity and authentication
+- **`get-state-size.sh`** - Monitor Flink job state sizes and performance
+
+### Security & Configuration Scripts
+
+- **`create-aiven-secret.sh`** - Interactive creation of Aiven Kafka credentials
+  - Securely prompts for Kafka credentials (bootstrap servers, username, password, schema registry)
+  - Validates Kubernetes context before creating secrets
+  - Supports environment variable substitution in SQL queries
+
+## Docker Files
+
+The `docker/` directory contains Docker-related files for building custom Flink images:
+
+- **`Dockerfile`** - Custom Flink image with pre-installed connectors
+- **`prepare-image.sh`** - Image preparation script (used by Dockerfile)
+
+### Building Custom Images
+
+```bash
+# Build custom Flink image with all connectors
+./scripts/build-image.sh
+```
+
+### Usage Examples
+
+```bash
+# Pre-deployment validation
+./scripts/pre-deploy-check.sh
+
+# Deploy entire platform
+./scripts/deploy.sh
+
+# Create Aiven Kafka credentials securely
+./scripts/create-aiven-secret.sh
+
+# Scale TaskManagers safely
+./scripts/scale.sh 6
+
+# Test deployment health
+./scripts/test-deployment.sh
+
+# Monitor state sizes
+./scripts/get-state-size.sh
+
+# Clean up everything
+./scripts/cleanup.sh
+```
 
 ### 5. Verify Deployment
 
