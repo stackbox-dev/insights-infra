@@ -13,20 +13,13 @@ SELECT * FROM pg_publication;
 CREATE PUBLICATION dbz_publication
 FOR TABLE 
 public.skus, 
-public.uoms;
-
-
-ALTER PUBLICATION dbz_publication 
-ADD TABLE 
+public.uoms,
 public.products, 
 public.sub_categories,
 public.categories,
 public.classifications,
 public.node_overrides,
-public.node_override_classifications;
-
-ALTER PUBLICATION dbz_publication 
-ADD TABLE 
+public.node_override_classifications,
 public.eans,
 public.product_classifications,
 public.product_node_overrides,

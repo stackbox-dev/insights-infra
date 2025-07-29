@@ -22,25 +22,16 @@ public.storage_area_sloc,
 public.storage_area,
 public.storage_position,
 public.storage_bin_fixed_mapping,
-public.inventory;
-
-ALTER PUBLICATION dbz_publication 
-ADD TABLE 
+public.inventory,
 public.pd_drop_item, 
 public.pd_pick_item,
 public.pd_pick_drop_mapping,
 public.task,
 public.session,
 public.worker,
-public.handling_unit;
-
-ALTER PUBLICATION dbz_publication 
-ADD TABLE 
+public.handling_unit,
 public.trip,
-public.trip_relation;
-
-ALTER PUBLICATION dbz_publication 
-ADD TABLE 
+public.trip_relation,
 public.inb_receive_item,
 public.ob_load_item,
 public.inb_palletization_item,

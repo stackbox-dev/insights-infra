@@ -35,9 +35,9 @@ fi
 
 
 export DB_PASSWORD=$(kubectl get secret debezium-pg-pass -n kafka -o jsonpath='{.data.password}' | base64 --decode)
-export SCHEMA_REGISTRY_AUTH=$(kubectl get secret schema-registry-credentials -n kafka -o jsonpath='{.data.credentials}' | base64 --decode)
-export CLUSTER_USER_NAME=$(kubectl get secret confluent-cloud-credentials -n kafka -o jsonpath='{.data.username}' | base64 --decode)
-export CLUSTER_PASSWORD=$(kubectl get secret confluent-cloud-credentials -n kafka -o jsonpath='{.data.password}' | base64 --decode)
+export SCHEMA_REGISTRY_AUTH=$(kubectl get secret aiven-credentials -n kafka -o jsonpath='{.data.userinfo}' | base64 --decode)
+export CLUSTER_USER_NAME=$(kubectl get secret aiven-credentials -n kafka -o jsonpath='{.data.username}' | base64 --decode)
+export CLUSTER_PASSWORD=$(kubectl get secret aiven-credentials -n kafka -o jsonpath='{.data.password}' | base64 --decode)
 
 
 if [ -z "$DB_PASSWORD" ]; then
@@ -61,23 +61,23 @@ if [ -z "$CLUSTER_PASSWORD" ]; then
 fi
 
 # The rest of the script uses these environment variables
-curl -X PUT http://localhost:8083/connectors/source-sbx-uat-backbone/config -H "Content-Type: application/json" \
+curl -X PUT http://localhost:8083/connectors/source-sbx-uat-encarta/config -H "Content-Type: application/json" \
 -d '{
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
       "database.hostname": "192.168.16.8",
       "database.port": "5432",
       "database.user": "debezium",
       "database.password": "'"$DB_PASSWORD"'",
-      "database.dbname": "backbone",
+      "database.dbname": "encarta",
       "database.server.name": "postgres",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.node,public.node_closure", 
+      "table.include.list": "public.skus,public.uoms,public.products,public.sub_categories,public.categories,public.classifications,public.node_overrides,public.node_override_classifications,public.eans,public.product_classifications,public.product_node_overrides,public.product_node_override_classifications,public.category_groups,public.default_values,public.sub_brands,public.brands", 
       "database.history.kafka.topic": "schema-changes.postgres",
       "publication.name": "dbz_publication",
-      "slot.name": "dbz2",
-      
-      "database.history.kafka.bootstrap.servers": "pkc-41p56.asia-south1.gcp.confluent.cloud:9092",
-      "topic.prefix": "sbx-uat.backbone",
+      "slot.name": "aiven_dbz1",
+
+      "database.history.kafka.bootstrap.servers": "sbx-stag-kafka-stackbox.e.aivencloud.com:22167",
+      "topic.prefix": "sbx_uat.encarta",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
@@ -90,8 +90,8 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-backbone/config -H "
       "producer.compression.type": "lz4",
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
-      "key.converter.schema.registry.url": "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud",
-      "value.converter.schema.registry.url": "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud",
+      "key.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
+      "value.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
       "key.converter.basic.auth.credentials.source": "USER_INFO",
       "value.converter.basic.auth.credentials.source": "USER_INFO",
       "key.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
@@ -121,19 +121,7 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-backbone/config -H "
       "transforms.cast.type": "org.apache.kafka.connect.transforms.Cast$Value",
       "transforms.cast.spec": "__deleted:boolean",
       "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
-      "transforms.renameDelete.renames": "__deleted:is_deleted",
-
-      "producer.security.protocol": "SASL_SSL",
-      "producer.sasl.mechanism": "PLAIN",
-      "producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
-  
-      "consumer.security.protocol": "SASL_SSL",
-      "consumer.sasl.mechanism": "PLAIN",
-      "consumer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
-
-      "admin.security.protocol": "SASL_SSL",
-      "admin.sasl.mechanism": "PLAIN",
-      "admin.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";"
+      "transforms.renameDelete.renames": "__deleted:is_deleted"
 }'
 
 # Stop port forwarding

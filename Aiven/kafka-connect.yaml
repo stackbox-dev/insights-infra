@@ -15,14 +15,6 @@ spec:
       labels:
         app: cp-connect
     spec:
-      nodeSelector:
-        instance_type: kafka-genral
-      tolerations:
-        - key: "instance_type"
-          operator: "Equal"
-          value: "kafka-genral"
-          effect: "NoSchedule"
-      serviceAccountName: kafka-sa
       containers:
         - name: cp-connect
           image: asia-docker.pkg.dev/sbx-ci-cd/private/devops-kafka-connect:latest
@@ -37,7 +29,7 @@ spec:
               memory: 512Mi
           env:
             - name: CONNECT_BOOTSTRAP_SERVERS
-              value: "pkc-41p56.asia-south1.gcp.confluent.cloud:9092"
+              value: "sbx-stag-kafka-stackbox.e.aivencloud.com:22167"
             - name: CONNECT_REST_PORT
               value: "8083"
             - name: CONNECT_GROUP_ID
@@ -68,35 +60,35 @@ spec:
             - name: CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY
               value: "All"
             - name: CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL
-              value: "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud"
+              value: "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159"
             - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL
-              value: "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud" 
+              value: "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159" 
             - name: CONNECT_VALUE_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE
               value: "USER_INFO"
             - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO
               valueFrom:
                 secretKeyRef:
-                  name: schema-registry-credentials
-                  key: credentials
+                  name: aiven-credentials
+                  key: userinfo
             - name: SCHEMAREGISTRYAUTH_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: schema-registry-credentials
+                  name: aiven-credentials
                   key: username
             - name: SCHEMAREGISTRYAUTH_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: schema-registry-credentials
+                  name: aiven-credentials
                   key: password
             - name: CLUSTER_USER_NAME
               valueFrom:
                 secretKeyRef:
-                  name: confluent-cloud-credentials
+                  name: aiven-credentials
                   key: username
             - name: CLUSTER_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: confluent-cloud-credentials
+                  name: aiven-credentials
                   key: password
             - name: DB_PASSWORD
               valueFrom:
@@ -112,7 +104,14 @@ spec:
             - name: CONNECT_SASL_JAAS_CONFIG
               value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
             - name: CONNECT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
-              value: "https"
+              value: ""
+            - name: CONNECT_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
             
             # For consumers
             - name: CONNECT_CONSUMER_SECURITY_PROTOCOL
@@ -122,7 +121,14 @@ spec:
             - name: CONNECT_CONSUMER_SASL_JAAS_CONFIG
               value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
             - name: CONNECT_CONSUMER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
-              value: "https"
+              value: ""
+            - name: CONNECT_CONSUMER_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_CONSUMER_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
               
             # For producers
             - name: CONNECT_PRODUCER_SECURITY_PROTOCOL
@@ -132,7 +138,14 @@ spec:
             - name: CONNECT_PRODUCER_SASL_JAAS_CONFIG
               value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
             - name: CONNECT_PRODUCER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
-              value: "https"
+              value: ""
+            - name: CONNECT_PRODUCER_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_PRODUCER_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
 
             # For admin
             - name: CONNECT_ADMIN_SECURITY_PROTOCOL
@@ -142,7 +155,25 @@ spec:
             - name: CONNECT_ADMIN_SASL_JAAS_CONFIG
               value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
             - name: CONNECT_ADMIN_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
-              value: "https"
+              value: ""
+            - name: CONNECT_ADMIN_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_ADMIN_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
+
+            # - name: KAFKA_OPTS
+            #   value: "-Djavax.net.debug=ssl:handshake,trustmanager"
+          volumeMounts:
+            - name: truststore-volume
+              mountPath: /etc/kafka/secrets
+              readOnly: true
+      volumes:
+        - name: truststore-volume
+          secret:
+            secretName: kafka-truststore-secret
 ---
 apiVersion: v1
 kind: Service
@@ -174,14 +205,6 @@ spec:
       labels:
         app: cp-connect-ui
     spec:
-      nodeSelector:
-        instance_type: kafka-genral
-      tolerations:
-        - key: "instance_type"
-          operator: "Equal"
-          value: "kafka-genral"
-          effect: "NoSchedule"
-      serviceAccountName: kafka-sa
       containers:
         - name: cp-connect-ui
           image: landoop/kafka-connect-ui:latest
@@ -196,7 +219,7 @@ spec:
               memory: 512Mi
           env:
             - name: CONNECT_URL
-              value: "http://cp-connect"
+              value: "http://cp-connect.kafka"
 ---
 apiVersion: v1
 kind: Service

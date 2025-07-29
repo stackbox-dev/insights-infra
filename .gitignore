@@ -4,3 +4,5 @@ queries.sql
 *.png
 config.json
 sql-queries1
+ca.pem
+*.jks

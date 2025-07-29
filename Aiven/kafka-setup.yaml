@@ -15,14 +15,6 @@ spec:
       labels:
         app: kafka-ui
     spec:
-      nodeSelector:
-        instance_type: kafka-genral
-      tolerations:
-        - key: "instance_type"
-          operator: "Equal"
-          value: "kafka-genral"
-          effect: "NoSchedule"
-      serviceAccountName: kafka-sa
       containers:
         - name: kafka-ui
           image: provectuslabs/kafka-ui:latest
@@ -37,30 +29,30 @@ spec:
               cpu: "1"
           env:
             - name: KAFKA_CLUSTERS_0_NAME
-              value: "services-1-staging"
+              value: "sbx-stag-kafka"
             - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
-              value: "pkc-41p56.asia-south1.gcp.confluent.cloud:9092"
+              value: "sbx-stag-kafka-stackbox.e.aivencloud.com:22167"
             - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
-              value: "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud"
+              value: "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159"
             - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRYAUTH_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: schema-registry-credentials
+                  name: aiven-credentials
                   key: username
             - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRYAUTH_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: schema-registry-credentials
+                  name: aiven-credentials
                   key: password
             - name: CLUSTER_USER_NAME
               valueFrom:
                 secretKeyRef:
-                  name: confluent-cloud-credentials
+                  name: aiven-credentials
                   key: username
             - name: CLUSTER_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: confluent-cloud-credentials
+                  name: aiven-credentials
                   key: password
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL
               value: "SASL_SSL"
@@ -68,6 +60,25 @@ spec:
               value: "PLAIN"
             - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG
               value: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+
+            # SSL handshake   
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
+            - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: "https"
+          volumeMounts:
+            - name: truststore-volume
+              mountPath: /etc/kafka/secrets
+              readOnly: true
+      volumes:
+        - name: truststore-volume
+          secret:
+            secretName: kafka-truststore-secret
 ---
 apiVersion: v1
 kind: Service
