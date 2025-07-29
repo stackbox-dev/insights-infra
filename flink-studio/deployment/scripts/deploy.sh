@@ -207,41 +207,8 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "Google Service Account: flink-gcs@sbx-stag.iam.gserviceaccount.com"
 fi
 
-# Step 3: Check and create Aiven Kafka credentials if needed
-print_status "Step 3: Checking Aiven Kafka credentials..."
-if ! kubectl get secret aiven-kafka-credentials -n flink-studio >/dev/null 2>&1; then
-    print_warning "Aiven Kafka credentials secret not found!"
-    print_status "Creating Aiven Kafka credentials..."
-    
-    if [ -f "./scripts/create-aiven-secret.sh" ]; then
-        print_status "Running Aiven secret creation script..."
-        ./scripts/create-aiven-secret.sh
-        
-        # Verify the secret was created
-        if kubectl get secret aiven-kafka-credentials -n flink-studio >/dev/null 2>&1; then
-            print_status "Aiven Kafka credentials created successfully"
-        else
-            print_error "Failed to create Aiven Kafka credentials secret"
-            print_error "Please run: ./scripts/create-aiven-secret.sh"
-            exit 1
-        fi
-    else
-        print_error "Aiven secret creation script not found: ./scripts/create-aiven-secret.sh"
-        print_error "Please create the Aiven Kafka credentials manually:"
-        print_error "kubectl create secret generic aiven-kafka-credentials \\"
-        print_error "  --from-literal=bootstrap-servers=YOUR_BOOTSTRAP_SERVERS \\"
-        print_error "  --from-literal=username=YOUR_USERNAME \\"
-        print_error "  --from-literal=password=YOUR_PASSWORD \\"
-        print_error "  --from-literal=schema-registry-url=YOUR_SCHEMA_REGISTRY_URL \\"
-        print_error "  -n flink-studio"
-        exit 1
-    fi
-else
-    print_status "Aiven Kafka credentials secret already exists"
-fi
-
-# Step 4: Deploy Flink Session Cluster
-print_status "Step 4: Deploying Flink Session Cluster for $CLOUD_PROVIDER..."
+# Step 3: Deploy Flink Session Cluster
+print_status "Step 3: Deploying Flink Session Cluster for $CLOUD_PROVIDER..."
 kubectl apply -f manifests/03-flink-session-cluster${MANIFEST_SUFFIX}.yaml
 
 # Wait for Flink cluster to be ready with better timeout handling
@@ -284,8 +251,8 @@ for i in {1..30}; do
     sleep 10
 done
 
-# Step 5: Deploy Flink SQL Gateway
-print_status "Step 5: Deploying Flink SQL Gateway..."
+# Step 4: Deploy Flink SQL Gateway
+print_status "Step 4: Deploying Flink SQL Gateway..."
 kubectl apply -f manifests/04-flink-sql-gateway.yaml
 
 # Wait for SQL Gateway to be ready
@@ -294,8 +261,8 @@ if ! kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flin
     print_warning "SQL Gateway deployment may need more time. Continuing with deployment..."
 fi
 
-# Step 6: Apply security policies (optional)
-print_status "Step 6: Applying Network Policies..."
+# Step 5: Apply security policies (optional)
+print_status "Step 5: Applying Network Policies..."
 kubectl apply -f manifests/06-network-policies.yaml
 
 print_status "Deployment completed successfully!"

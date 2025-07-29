@@ -198,10 +198,7 @@ The `scripts/` directory contains utility scripts for managing the Flink deploym
 
 ### Security & Configuration Scripts
 
-- **`create-aiven-secret.sh`** - Interactive creation of Aiven Kafka credentials
-  - Securely prompts for Kafka credentials (bootstrap servers, username, password, schema registry)
-  - Validates Kubernetes context before creating secrets
-  - Supports environment variable substitution in SQL queries
+None currently configured.
 
 ## Docker Files
 
@@ -225,9 +222,6 @@ The `docker/` directory contains Docker-related files for building custom Flink 
 
 # Deploy entire platform
 ./scripts/deploy.sh
-
-# Create Aiven Kafka credentials securely
-./scripts/create-aiven-secret.sh
 
 # Scale TaskManagers safely
 ./scripts/scale.sh 6
@@ -563,7 +557,7 @@ CREATE TABLE kafka_avro_source (
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'user_behavior',
-    'properties.bootstrap.servers' = 'your-aiven-kafka-bootstrap-servers',
+    'properties.bootstrap.servers' = 'your-kafka-bootstrap-servers',
     'properties.group.id' = 'flink-consumer-group',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-256',
@@ -582,7 +576,7 @@ CREATE TABLE kafka_json_sink (
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'user_behavior_aggregated',
-    'properties.bootstrap.servers' = 'your-aiven-kafka-bootstrap-servers',
+    'properties.bootstrap.servers' = 'your-kafka-bootstrap-servers',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-256',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="your-username" password="your-password";',
@@ -842,7 +836,6 @@ kubectl logs deployment/hue -n flink-studio
 - Check authentication credentials (OAuth tokens, certificates)
 - Test connectivity from Flink pods: `kubectl exec <pod> -- telnet <kafka-server> 9092`
 - Validate security protocols and SASL mechanisms
-- Check Aiven Kafka authentication and service credentials
 
 #### 6. Avro Schema Issues
 

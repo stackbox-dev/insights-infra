@@ -1,1 +1,2 @@
-gcp-service-account-key.json
+*.pem
+*.jks

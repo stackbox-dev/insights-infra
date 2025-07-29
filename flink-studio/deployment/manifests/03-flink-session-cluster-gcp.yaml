@@ -89,26 +89,6 @@ spec:
             env:
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
-              - name: AIVEN_KAFKA_BOOTSTRAP_SERVERS
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: bootstrap-servers
-              - name: AIVEN_KAFKA_USERNAME
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: username
-              - name: AIVEN_KAFKA_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: password
-              - name: AIVEN_SCHEMA_REGISTRY_URL
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: schema-registry-url
         volumes: []
   taskManager:
     resource:
@@ -141,26 +121,6 @@ spec:
             env:
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
-              - name: AIVEN_KAFKA_BOOTSTRAP_SERVERS
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: bootstrap-servers
-              - name: AIVEN_KAFKA_USERNAME
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: username
-              - name: AIVEN_KAFKA_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: password
-              - name: AIVEN_SCHEMA_REGISTRY_URL
-                valueFrom:
-                  secretKeyRef:
-                    name: aiven-kafka-credentials
-                    key: schema-registry-url
             volumeMounts:
               - name: rocksdb-storage
                 mountPath: /data/flink-rocksdb
