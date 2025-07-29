@@ -1,4 +1,7 @@
 FROM flink:2.0.0-scala_2.12-java21
 
-COPY prepare-image.sh /opt/flink/prepare-image.sh
+# Copy dependency configuration and preparation script
+COPY dependency-versions.json prepare-image.sh /opt/flink/
+
+# Run the preparation script
 RUN bash /opt/flink/prepare-image.sh

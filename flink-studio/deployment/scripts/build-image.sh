@@ -2,6 +2,14 @@
 
 # Build and push custom Flink image with all necessary libraries
 # This script builds a custom Flink image with Kafka, Avro, and GCP libraries pre-installed
+#
+# Usage:
+#   ./build-image.sh [TAG]
+#
+# Examples:
+#   ./build-image.sh                 # Build with 'latest' tag
+#   ./build-image.sh v1.0.0         # Build with 'v1.0.0' tag
+#   ./build-image.sh $(date +%Y%m%d) # Build with date tag
 
 set -e
 
@@ -25,13 +33,23 @@ print_error() {
 }
 
 # Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOCKER_DIR="${SCRIPT_DIR}/../docker"
 IMAGE_REGISTRY="asia-docker.pkg.dev/sbx-ci-cd/public"
 IMAGE_NAME="flink"
-IMAGE_TAG="latest"
+
+# Allow custom tag from command line argument
+if [[ -n "$1" ]]; then
+    IMAGE_TAG="$1"
+else
+    IMAGE_TAG="latest"
+fi
+
 FULL_IMAGE_NAME="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 print_status "Building custom Flink image with pre-installed libraries..."
 print_status "Target image: ${FULL_IMAGE_NAME}"
+print_status "Docker context: ${DOCKER_DIR}"
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
@@ -39,22 +57,77 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
-# Build the image
-print_status "Building Docker image for linux/amd64 platform..."
-docker build --platform linux/amd64 -t "${FULL_IMAGE_NAME}" -f ../docker/Dockerfile ../docker/
-
-if [ $? -ne 0 ]; then
-    print_error "Docker build failed!"
+# Verify required files exist
+if [[ ! -f "${DOCKER_DIR}/Dockerfile" ]]; then
+    print_error "Dockerfile not found at ${DOCKER_DIR}/Dockerfile"
     exit 1
 fi
 
+if [[ ! -f "${DOCKER_DIR}/prepare-image.sh" ]]; then
+    print_error "prepare-image.sh not found at ${DOCKER_DIR}/prepare-image.sh"
+    exit 1
+fi
+
+if [[ ! -f "${DOCKER_DIR}/dependency-versions.json" ]]; then
+    print_error "dependency-versions.json not found at ${DOCKER_DIR}/dependency-versions.json"
+    exit 1
+fi
+
+print_status "All required files found. Starting build..."
+
+# Build the image
+print_status "Building Docker image for linux/amd64 platform..."
+print_status "Docker build output will be displayed below..."
+echo "----------------------------------------"
+
+cd "${DOCKER_DIR}"
+
+# Build with no-cache to see all stages and --progress=plain for better visibility
+docker build --platform linux/amd64 --progress=plain --no-cache -t "${FULL_IMAGE_NAME}" .
+
+# Check if build succeeded
+if [ $? -ne 0 ]; then
+    echo "----------------------------------------"
+    print_error "Docker build failed!"
+    print_error "Check the build output above for errors."
+    print_error "Common issues:"
+    print_error "  - Network connectivity issues"
+    print_error "  - Missing dependencies in dependency-versions.json"
+    print_error "  - Permission issues with prepare-image.sh"
+    exit 1
+fi
+
+echo "----------------------------------------"
 print_status "Docker image built successfully!"
+cd - > /dev/null  # Return to original directory
 
 # Verify the image contents
 print_status "Verifying image contents..."
-docker run --rm "${FULL_IMAGE_NAME}" ls -la /opt/flink/lib/ | grep -E "(kafka|avro|google)" || {
-    print_warning "Could not verify all libraries in the image"
-}
+print_status "Checking installed libraries..."
+docker run --rm "${FULL_IMAGE_NAME}" ls -la /opt/flink/lib/ | head -10
+
+print_status "Checking for key dependencies..."
+if docker run --rm "${FULL_IMAGE_NAME}" ls /opt/flink/lib/ | grep -q "kafka"; then
+    print_status "✓ Kafka libraries found"
+else
+    print_warning "⚠ Kafka libraries not found"
+fi
+
+if docker run --rm "${FULL_IMAGE_NAME}" ls /opt/flink/lib/ | grep -q "avro"; then
+    print_status "✓ Avro libraries found"
+else
+    print_warning "⚠ Avro libraries not found"
+fi
+
+if docker run --rm "${FULL_IMAGE_NAME}" ls /opt/flink/lib/ | grep -q "google"; then
+    print_status "✓ Google libraries found"
+else
+    print_warning "⚠ Google libraries not found"
+fi
+
+# Show total library count
+total_libs=$(docker run --rm "${FULL_IMAGE_NAME}" ls -1 /opt/flink/lib/ | wc -l)
+print_status "Total libraries installed: ${total_libs}"
 
 # Push the image to the registry
 print_status "Pushing image to registry..."
