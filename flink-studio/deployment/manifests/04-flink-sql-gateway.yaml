@@ -50,6 +50,9 @@ spec:
             - name: hadoop-config
               mountPath: /opt/hadoop/conf
               readOnly: true
+            - name: truststore-volume
+              mountPath: /etc/kafka/secrets
+              readOnly: true
           resources:
             requests:
               memory: "1Gi"
@@ -77,6 +80,9 @@ spec:
         - name: hadoop-config
           configMap:
             name: hadoop-config
+        - name: truststore-volume
+          secret:
+            secretName: aiven-credentials
 ---
 apiVersion: v1
 kind: Service
