@@ -207,33 +207,68 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "Google Service Account: flink-gcs@sbx-stag.iam.gserviceaccount.com"
 fi
 
-# Step 3: Check for Kafka truststore secret
-print_status "Step 3: Checking for Kafka truststore secret..."
-if ! kubectl get secret kafka-truststore-secret -n flink-studio --ignore-not-found 2>/dev/null | grep -q kafka-truststore-secret; then
-    print_error "Kafka truststore secret not found!"
-    print_error "The Flink deployment requires the Kafka truststore secret to connect to Aiven Kafka."
+# Step 3: Check for Aiven credentials secret
+print_status "Step 3: Checking for Aiven credentials secret..."
+if ! kubectl get secret aiven-credentials -n flink-studio --ignore-not-found 2>/dev/null | grep -q aiven-credentials; then
+    print_error "Aiven credentials secret not found!"
+    print_error "The Flink deployment requires the 'aiven-credentials' secret to connect to Aiven Kafka."
     print_error ""
-    print_error "Please run the truststore setup script first:"
-    print_error "  ./setup-aiven-truststore.sh"
+    print_error "Please run the Aiven credentials setup script first:"
+    print_error "  ./scripts/create-aiven-secret.sh"
     print_error ""
     print_error "This script will:"
-    print_error "1. Prompt you to download the ca.pem file from Aiven console"
-    print_error "2. Convert it to JKS truststore format"
-    print_error "3. Create the required Kubernetes secrets"
+    print_error "1. Prompt you for Kafka username and password"
+    print_error "2. Ask for the path to your Kafka CA certificate PEM file"
+    print_error "3. Convert the PEM file to JKS truststore format"
+    print_error "4. Create the consolidated Kubernetes secret with all credentials"
     print_error ""
-    read -p "Have you completed the truststore setup? (y/N): " truststore_confirm
-    if [[ ! $truststore_confirm =~ ^[Yy]$ ]]; then
-        print_error "Deployment cannot continue without truststore secret. Exiting."
+    read -p "Do you want to run the create-aiven-secret.sh script now? (y/N): " run_script
+    if [[ $run_script =~ ^[Yy]$ ]]; then
+        print_status "Running create-aiven-secret.sh script..."
+        if [ -f "./scripts/create-aiven-secret.sh" ]; then
+            ./scripts/create-aiven-secret.sh
+            if [ $? -eq 0 ]; then
+                print_status "Aiven credentials secret created successfully!"
+            else
+                print_error "Failed to create Aiven credentials secret. Deployment cannot continue."
+                exit 1
+            fi
+        else
+            print_error "create-aiven-secret.sh script not found in ./scripts/ directory"
+            exit 1
+        fi
+    else
+        print_error "Deployment cannot continue without Aiven credentials secret. Exiting."
         exit 1
     fi
     
-    # Verify again after user confirmation
-    if ! kubectl get secret kafka-truststore-secret -n flink-studio --ignore-not-found 2>/dev/null | grep -q kafka-truststore-secret; then
-        print_error "Truststore secret still not found. Please run ./setup-aiven-truststore.sh"
+    # Verify the secret was created
+    if ! kubectl get secret aiven-credentials -n flink-studio --ignore-not-found 2>/dev/null | grep -q aiven-credentials; then
+        print_error "Aiven credentials secret still not found after running the script."
         exit 1
     fi
 else
-    print_status "Kafka truststore secret found"
+    print_status "Aiven credentials secret found"
+    
+    # Verify the secret has all required keys
+    print_status "Verifying secret contains all required keys..."
+    SECRET_KEYS=$(kubectl get secret aiven-credentials -n flink-studio -o jsonpath='{.data}' | jq -r 'keys[]' 2>/dev/null || echo "")
+    REQUIRED_KEYS=("username" "password" "truststore-password" "kafka.truststore.jks")
+    MISSING_KEYS=()
+    
+    for key in "${REQUIRED_KEYS[@]}"; do
+        if ! echo "$SECRET_KEYS" | grep -q "^$key$"; then
+            MISSING_KEYS+=("$key")
+        fi
+    done
+    
+    if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
+        print_error "Aiven credentials secret is missing required keys: ${MISSING_KEYS[*]}"
+        print_error "Please recreate the secret using: ./scripts/create-aiven-secret.sh"
+        exit 1
+    else
+        print_status "All required keys found in Aiven credentials secret"
+    fi
 fi
 
 # Step 4: Deploy Flink Session Cluster
