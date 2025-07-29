@@ -44,19 +44,11 @@ spec:
           env:
             - name: HADOOP_CONF_DIR
               value: /opt/hadoop/conf
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /opt/flink/gcp/service-account.json
             - name: GOOGLE_CLOUD_PROJECT
               value: sbx-stag
           volumeMounts:
-            - name: gcp-service-account
-              mountPath: /opt/flink/gcp
-              readOnly: true
             - name: hadoop-config
               mountPath: /opt/hadoop/conf
-              readOnly: true
-            - name: hive-config
-              mountPath: /opt/hive-conf
               readOnly: true
           resources:
             requests:
@@ -82,15 +74,9 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
       volumes:
-        - name: gcp-service-account
-          secret:
-            secretName: gcp-service-account-key
         - name: hadoop-config
           configMap:
             name: hadoop-config
-        - name: hive-config
-          configMap:
-            name: hive-config
 ---
 apiVersion: v1
 kind: Service

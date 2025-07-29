@@ -29,17 +29,17 @@ data:
         <description>Google Cloud Project ID</description>
       </property>
       
-      <!-- Authentication via service account JSON key -->
+      <!-- Authentication via Workload Identity -->
       <property>
         <name>fs.gs.auth.service.account.enable</name>
         <value>true</value>
-        <description>Enable service account authentication</description>
+        <description>Enable service account authentication via Workload Identity</description>
       </property>
       
       <property>
-        <name>fs.gs.auth.service.account.json.keyfile</name>
-        <value>/opt/flink/gcp/service-account.json</value>
-        <description>Path to service account JSON key file</description>
+        <name>fs.gs.auth.type</name>
+        <value>APPLICATION_DEFAULT</value>
+        <description>Use Application Default Credentials via Workload Identity</description>
       </property>
       
       <!-- Performance tuning -->

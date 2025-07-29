@@ -55,7 +55,7 @@ download_jar "avro-1.11.4.jar" \
     "https://repo1.maven.org/maven2/org/apache/avro/avro/1.11.4/avro-1.11.4.jar" \
     "Apache Avro Core Library"
 
-# Confluent Schema Registry support - Updated for managed-kafka-auth-login-handler compatibility
+# Confluent Schema Registry support - Compatible with Aiven Kafka
 download_jar "flink-avro-confluent-registry-2.0.0.jar" \
     "https://repo1.maven.org/maven2/org/apache/flink/flink-avro-confluent-registry/2.0.0/flink-avro-confluent-registry-2.0.0.jar" \
     "Flink Confluent Avro Registry Connector"

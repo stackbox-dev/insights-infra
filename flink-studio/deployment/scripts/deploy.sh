@@ -101,70 +101,26 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     # SQL Gateway already configured with default image - no changes needed
     print_status "SQL Gateway configured to use default Flink image"
     
-    # Create GCP Service Account and Kubernetes Secret
-    print_status "Setting up GCP Service Account authentication..."
+    # Setup GCP Workload Identity
+    print_status "Setting up GCP Workload Identity..."
     
-    # Check if service account key file already exists
-    if [ ! -f "gcp-service-account-key.json" ]; then
-        print_status "Creating Google Service Account and downloading key..."
-        
-        # Create service account if it doesn't exist
-        if ! gcloud iam service-accounts describe flink-gcs@sbx-stag.iam.gserviceaccount.com >/dev/null 2>&1; then
-            print_status "Creating Google Service Account: flink-gcs"
-            gcloud iam service-accounts create flink-gcs \
-                --display-name="Flink GCS Service Account" \
-                --description="Service account for Flink to access GCS" \
-                --project=sbx-stag
-        else
-            print_status "Google Service Account flink-gcs already exists"
-        fi
-        
-        # Grant storage permissions
-        print_status "Granting Storage Admin permissions..."
-        gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin \
-            gs://sbx-stag-flink-storage/
-        
-        # Grant Managed Kafka permissions
-        print_status "Granting Managed Kafka permissions..."
-        gcloud projects add-iam-policy-binding sbx-stag \
-            --member="serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com" \
-            --role="roles/managedkafka.client"
-        
-        gcloud projects add-iam-policy-binding sbx-stag \
-            --member="serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com" \
-            --role="roles/managedkafka.viewer"
-            
-        # Generate and download service account key
-        print_status "Generating service account key..."
-        gcloud iam service-accounts keys create gcp-service-account-key.json \
-            --iam-account=flink-gcs@sbx-stag.iam.gserviceaccount.com \
+    # Create service account if it doesn't exist
+    if ! gcloud iam service-accounts describe flink-gcs@sbx-stag.iam.gserviceaccount.com >/dev/null 2>&1; then
+        print_status "Creating Google Service Account: flink-gcs"
+        gcloud iam service-accounts create flink-gcs \
+            --display-name="Flink GCS Service Account" \
+            --description="Service account for Flink to access GCS" \
             --project=sbx-stag
-            
-        print_status "Service account key saved to: gcp-service-account-key.json"
     else
-        print_status "Service account key file already exists: gcp-service-account-key.json"
+        print_status "Google Service Account flink-gcs already exists"
     fi
     
-    # Create Kubernetes secret from the service account key
-    print_status "Creating Kubernetes secret for GCP service account..."
-    if kubectl get secret gcp-service-account-key -n flink-studio >/dev/null 2>&1; then
-        print_status "Kubernetes secret already exists, updating..."
-        kubectl delete secret gcp-service-account-key -n flink-studio
-    fi
-    
-    kubectl create secret generic gcp-service-account-key \
-        --from-file=service-account.json=gcp-service-account-key.json \
-        -n flink-studio
+    # Grant storage permissions
+    print_status "Granting Storage Admin permissions..."
+    gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin \
+        gs://sbx-stag-flink-storage/
         
-    print_status "Kubernetes secret 'gcp-service-account-key' created successfully"
-    
-    # Verify the secret was created correctly
-    if kubectl get secret gcp-service-account-key -n flink-studio -o jsonpath='{.data.service-account\.json}' | base64 -d | jq . >/dev/null 2>&1; then
-        print_status "Secret verification: Service account key is valid JSON"
-    else
-        print_error "Secret verification failed: Service account key is not valid JSON"
-        exit 1
-    fi
+    print_status "Google Service Account permissions configured successfully"
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_status "Using default Docker Hub Flink image with Azure configuration"
     
@@ -236,8 +192,56 @@ fi
 kubectl apply -f manifests/02-rbac${MANIFEST_SUFFIX}.yaml
 kubectl apply -f manifests/05-resource-quotas.yaml
 
-# Step 3: Deploy Flink Session Cluster
-print_status "Step 3: Deploying Flink Session Cluster for $CLOUD_PROVIDER..."
+# Configure Workload Identity binding for GCP
+if [ "$CLOUD_PROVIDER" = "gcp" ]; then
+    print_status "Configuring Workload Identity binding..."
+    
+    # Allow the Kubernetes service account to impersonate the Google service account
+    gcloud iam service-accounts add-iam-policy-binding flink-gcs@sbx-stag.iam.gserviceaccount.com \
+        --role roles/iam.workloadIdentityUser \
+        --member "serviceAccount:sbx-stag.svc.id.goog[flink-studio/flink]" \
+        --project=sbx-stag
+    
+    print_status "Workload Identity binding configured successfully"
+    print_status "Kubernetes Service Account: flink-studio/flink"
+    print_status "Google Service Account: flink-gcs@sbx-stag.iam.gserviceaccount.com"
+fi
+
+# Step 3: Check and create Aiven Kafka credentials if needed
+print_status "Step 3: Checking Aiven Kafka credentials..."
+if ! kubectl get secret aiven-kafka-credentials -n flink-studio >/dev/null 2>&1; then
+    print_warning "Aiven Kafka credentials secret not found!"
+    print_status "Creating Aiven Kafka credentials..."
+    
+    if [ -f "./scripts/create-aiven-secret.sh" ]; then
+        print_status "Running Aiven secret creation script..."
+        ./scripts/create-aiven-secret.sh
+        
+        # Verify the secret was created
+        if kubectl get secret aiven-kafka-credentials -n flink-studio >/dev/null 2>&1; then
+            print_status "Aiven Kafka credentials created successfully"
+        else
+            print_error "Failed to create Aiven Kafka credentials secret"
+            print_error "Please run: ./scripts/create-aiven-secret.sh"
+            exit 1
+        fi
+    else
+        print_error "Aiven secret creation script not found: ./scripts/create-aiven-secret.sh"
+        print_error "Please create the Aiven Kafka credentials manually:"
+        print_error "kubectl create secret generic aiven-kafka-credentials \\"
+        print_error "  --from-literal=bootstrap-servers=YOUR_BOOTSTRAP_SERVERS \\"
+        print_error "  --from-literal=username=YOUR_USERNAME \\"
+        print_error "  --from-literal=password=YOUR_PASSWORD \\"
+        print_error "  --from-literal=schema-registry-url=YOUR_SCHEMA_REGISTRY_URL \\"
+        print_error "  -n flink-studio"
+        exit 1
+    fi
+else
+    print_status "Aiven Kafka credentials secret already exists"
+fi
+
+# Step 4: Deploy Flink Session Cluster
+print_status "Step 4: Deploying Flink Session Cluster for $CLOUD_PROVIDER..."
 kubectl apply -f manifests/03-flink-session-cluster${MANIFEST_SUFFIX}.yaml
 
 # Wait for Flink cluster to be ready with better timeout handling
@@ -280,8 +284,8 @@ for i in {1..30}; do
     sleep 10
 done
 
-# Step 4: Deploy Flink SQL Gateway
-print_status "Step 4: Deploying Flink SQL Gateway..."
+# Step 5: Deploy Flink SQL Gateway
+print_status "Step 5: Deploying Flink SQL Gateway..."
 kubectl apply -f manifests/04-flink-sql-gateway.yaml
 
 # Wait for SQL Gateway to be ready
@@ -290,8 +294,8 @@ if ! kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flin
     print_warning "SQL Gateway deployment may need more time. Continuing with deployment..."
 fi
 
-# Step 5: Apply security policies (optional)
-print_status "Step 5: Applying Network Policies..."
+# Step 6: Apply security policies (optional)
+print_status "Step 6: Applying Network Policies..."
 kubectl apply -f manifests/06-network-policies.yaml
 
 print_status "Deployment completed successfully!"
@@ -305,23 +309,24 @@ print_status ""
 if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "=== GCP-Specific Configuration ==="
     print_status "Storage: gs://sbx-stag-flink-storage"
-    print_status "Authentication: Service Account JSON Key"
+    print_status "Authentication: GKE Workload Identity"
     print_status ""
-    print_status "Service Account Details:"
+    print_status "Workload Identity Configuration:"
     print_status "- Google Service Account: flink-gcs@sbx-stag.iam.gserviceaccount.com"
-    print_status "- Kubernetes Secret: gcp-service-account-key"
-    print_status "- Key File: gcp-service-account-key.json"
+    print_status "- Kubernetes Service Account: flink-studio/flink"
+    print_status "- Workload Identity Pool: sbx-stag.svc.id.goog"
     print_status ""
-    print_warning "Security Note:"
-    print_warning "- The service account key file 'gcp-service-account-key.json' has been created"
-    print_warning "- This file contains sensitive credentials - keep it secure"
-    print_warning "- Consider rotating the key periodically for better security"
-    print_warning ""
+    print_status "Security Benefits:"
+    print_status "✅ No service account keys stored in cluster"
+    print_status "✅ Automatic credential rotation"
+    print_status "✅ IAM-based access control"
+    print_status "✅ Reduced security risk"
+    print_status ""
     print_status "To verify GCS access from a pod:"
     print_status "kubectl exec -it deployment/flink-session-cluster -n flink-studio -- gsutil ls gs://sbx-stag-flink-storage/"
     print_status ""
-    print_status "To run comprehensive authentication verification:"
-    print_status "kubectl exec -it deployment/flink-session-cluster -n flink-studio -- /opt/flink/bin/verify-gcp-auth.sh"
+    print_status "To verify Workload Identity is working:"
+    print_status "kubectl exec -it deployment/flink-session-cluster -n flink-studio -- gcloud auth list"
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_status "=== Azure-Specific Configuration ==="
     print_status "Storage: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net"

@@ -68,18 +68,13 @@ spec:
     jobstore.expiration-time: 86400
     jobstore.max-capacity: 1000
     jobstore.type: File
-    # Hadoop configuration for GCS
+    # Hadoop configuration for GCS with Workload Identity
     fs.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
     fs.AbstractFileSystem.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS
     fs.gs.project.id: sbx-stag
     fs.gs.auth.service.account.enable: "true"
-    fs.gs.auth.service.account.json.keyfile: /opt/flink/gcp/service-account.json
-    # Kafka configuration for GCP managed Kafka
-    kafka.bootstrap.servers: "bootstrap.sbx-kafka-cluster.asia-south1.managedkafka.sbx-stag.cloud.goog:9092"
-    kafka.security.protocol: "SASL_SSL"
-    kafka.sasl.mechanism: "OAUTHBEARER"
-    kafka.sasl.jaas.config: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;"
-    kafka.sasl.login.callback.handler.class: "com.google.cloud.kafka.OAuthBearerTokenCallbackHandler"
+    # Use Application Default Credentials via Workload Identity
+    fs.gs.auth.type: APPLICATION_DEFAULT
   serviceAccount: flink
   jobManager:
     resource:
@@ -92,8 +87,6 @@ spec:
         containers:
           - name: flink-main-container
             env:
-              - name: GOOGLE_APPLICATION_CREDENTIALS
-                value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
               - name: AIVEN_KAFKA_BOOTSTRAP_SERVERS
@@ -116,14 +109,7 @@ spec:
                   secretKeyRef:
                     name: aiven-kafka-credentials
                     key: schema-registry-url
-            volumeMounts:
-              - name: gcp-service-account
-                mountPath: /opt/flink/gcp
-                readOnly: true
-        volumes:
-          - name: gcp-service-account
-            secret:
-              secretName: gcp-service-account-key
+        volumes: []
   taskManager:
     resource:
       memory: "8192m"
@@ -153,8 +139,6 @@ spec:
               limits:
                 memory: "8Gi"
             env:
-              - name: GOOGLE_APPLICATION_CREDENTIALS
-                value: /opt/flink/gcp/service-account.json
               - name: GOOGLE_CLOUD_PROJECT
                 value: sbx-stag
               - name: AIVEN_KAFKA_BOOTSTRAP_SERVERS
@@ -178,15 +162,9 @@ spec:
                     name: aiven-kafka-credentials
                     key: schema-registry-url
             volumeMounts:
-              - name: gcp-service-account
-                mountPath: /opt/flink/gcp
-                readOnly: true
               - name: rocksdb-storage
                 mountPath: /data/flink-rocksdb
         volumes:
-          - name: gcp-service-account
-            secret:
-              secretName: gcp-service-account-key
           - name: rocksdb-storage
             emptyDir:
               sizeLimit: 50Gi

@@ -25,8 +25,8 @@ The Flink deployment includes the following pre-installed connectors and librari
 
 - **Kafka Connector** (`flink-sql-connector-kafka-4.0.0-2.0.jar`) - 9.7MB
   - Full Apache Kafka integration for streaming data
-  - Supports SASL/SSL authentication for managed Kafka services
-  - Compatible with Confluent, Azure Event Hubs, and GCP Managed Kafka
+  - Supports SASL/SSL authentication for Kafka services
+  - Compatible with Confluent, Azure Event Hubs, and Aiven Kafka
 
 #### Data Formats & Serialization
 
@@ -39,7 +39,7 @@ The Flink deployment includes the following pre-installed connectors and librari
 
 - **Google Auth Library** (`google-auth-library-oauth2-http-1.19.0.jar`) - 247KB
   - OAuth2 authentication for GCP services
-  - Required for GCP Managed Kafka connectivity
+  - Required for GCP Workload Identity authentication
 - **Google Cloud Core** (`google-cloud-core-2.8.1.jar`) - 131KB
   - Core GCP service integration libraries
 
@@ -563,12 +563,11 @@ CREATE TABLE kafka_avro_source (
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'user_behavior',
-    'properties.bootstrap.servers' = 'bootstrap.kafka-cluster.region.managedkafka.project.cloud.goog:9092',
+    'properties.bootstrap.servers' = 'your-aiven-kafka-bootstrap-servers',
     'properties.group.id' = 'flink-consumer-group',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-256',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="your-username" password="your-password";',
     'scan.startup.mode' = 'earliest-offset',
     'format' = 'avro'
 );
@@ -583,11 +582,10 @@ CREATE TABLE kafka_json_sink (
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'user_behavior_aggregated',
-    'properties.bootstrap.servers' = 'bootstrap.kafka-cluster.region.managedkafka.project.cloud.goog:9092',
+    'properties.bootstrap.servers' = 'your-aiven-kafka-bootstrap-servers',
     'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'OAUTHBEARER',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;',
-    'properties.sasl.login.callback.handler.class' = 'com.google.cloud.kafka.OAuthBearerTokenCallbackHandler',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-256',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="your-username" password="your-password";',
     'format' = 'json'
 );
 
@@ -844,7 +842,7 @@ kubectl logs deployment/hue -n flink-studio
 - Check authentication credentials (OAuth tokens, certificates)
 - Test connectivity from Flink pods: `kubectl exec <pod> -- telnet <kafka-server> 9092`
 - Validate security protocols and SASL mechanisms
-- Check Google Cloud IAM permissions for managed Kafka (GCP)
+- Check Aiven Kafka authentication and service credentials
 
 #### 6. Avro Schema Issues
 

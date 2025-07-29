@@ -9,28 +9,29 @@ This document outlines the architecture and deployment plan for creating a robus
 The proposed platform is composed of three core, decoupled components that work together to provide a seamless SQL-on-Flink experience.
 
 ```
-+---------------------+      +-------------------------+
-|                     |      |                         |
-|  Custom SQL         |----->|   Flink SQL Gateway     |
-|  Executor (CLI)     |      |  (REST API / JDBC)      |
-|                     |      |                         |
-+---------------------+      +-------------------------+
-                                      |
-                                      | Submits Jobs
-                                      v
++---------------------+
+|                     |
+|  Custom SQL         |
+|  Executor (CLI)     |
+|                     |
++---------------------+
+           |
+           | REST API
+           v
 +---------------------------------------------------------------------------------+
 |                                                                                 |
-|                            Kubernetes Cluster                                   |
+|                     Kubernetes Cluster (flink-studio namespace)                |
 |                                                                                 |
-|   +-------------------------------------------------------------------------+   |
-|   |                        Flink Session Cluster                            |   |
-|   |                                                                         |   |
-|   |   +---------------------+        +--------------------------------+     |   |
-|   |   |   JobManager (HA)   |        |   TaskManagers (Scalable)      |     |   |
-|   |   +---------------------+        +--------------------------------+     |   |
-|   |                                                                         |   |
-|   +-------------------------------------------------------------------------+   |
-|                      (Managed by Flink Kubernetes Operator)                     |
+|   +-------------------------+     +-------------------------------------+       |
+|   |                         |     |                                     |       |
+|   |   Flink SQL Gateway     |---->|        Flink Session Cluster       |       |
+|   |    (REST API)           |     |                                     |       |
+|   |                         |     |  +---------------+ +-------------+  |       |
+|   +-------------------------+     |  | JobManager(HA)| | TaskManagers|  |       |
+|                                   |  +---------------+ +-------------+  |       |
+|                                   |                                     |       |
+|                                   +-------------------------------------+       |
+|                                   (Managed by Flink Kubernetes Operator)       |
 |                                                                                 |
 +---------------------------------------------------------------------------------+
 ```
@@ -41,7 +42,7 @@ The proposed platform is composed of three core, decoupled components that work 
 
 2.  **Flink Session Cluster**: A pre-deployed, shared Flink cluster that is always available to accept jobs. This avoids the latency of spinning up a new Flink cluster for every SQL query, making the user experience much faster and more interactive.
 
-3.  **Flink SQL Gateway**: This is the central API layer. It's a standalone service that receives SQL queries from clients via a REST API. It translates these queries into Flink jobs and submits them to the Flink Session Cluster for execution.
+3.  **Flink SQL Gateway**: This is the central API layer deployed in the same Kubernetes cluster and namespace as the Flink Session Cluster. It's a standalone service that receives SQL queries from clients via a REST API. It translates these queries into Flink jobs and submits them to the Flink Session Cluster for execution.
 
 4.  **Custom SQL Executor**: A command-line tool that provides a streamlined interface for executing Flink SQL queries. It communicates directly with the Flink SQL Gateway REST API to submit SQL statements, monitor execution status, and retrieve results. This executor supports both single SQL statements and batch execution of multiple statements from files.
 
