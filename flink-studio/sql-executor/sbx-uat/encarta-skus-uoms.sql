@@ -1,3 +1,4 @@
+SET 'pipeline.name' = 'Encarta SKUs UOMs Aggregation';
 -- source table
 CREATE TABLE uoms (
     id VARCHAR NOT NULL,

@@ -14,6 +14,15 @@ sql_gateway:
   poll_interval: 2
   max_wait_time: 60
 
+flink_cluster:
+  # Flink REST API URL for direct cluster operations
+  url: "http://flink-session-cluster.flink-studio.api.staging.stackbox.internal"
+
+job_management:
+  # Only create database when pause/resume features are needed
+  enable_database: true
+  database_path: "flink_jobs.db"
+
 logging:
   # Logging configuration
   level: "INFO" # DEBUG, INFO, WARNING, ERROR
