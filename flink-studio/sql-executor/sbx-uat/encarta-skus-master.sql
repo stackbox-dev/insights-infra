@@ -1,3 +1,4 @@
+SET 'pipeline.name' = 'Encarta SKUs Master Aggregation';
 -- Create source tables (DDL for Kafka topics)
 -- skus source table
 CREATE TABLE skus (

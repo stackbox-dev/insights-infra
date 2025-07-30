@@ -1,3 +1,4 @@
+SET 'pipeline.name' = 'Encarta Products Classifications Aggregation';
 -- source table
 CREATE TABLE t_product_classifications (
     id VARCHAR NOT NULL,

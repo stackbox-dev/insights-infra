@@ -1,3 +1,4 @@
+SET 'pipeline.name' = 'WMS Storage Bin Summary Aggregation';
 -- Create source tables (DDL for Kafka topics)
 -- storage_bin source table
 CREATE TABLE storage_bin (
