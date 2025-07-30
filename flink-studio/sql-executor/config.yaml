@@ -37,7 +37,7 @@ execution:
   # Execution behavior settings
 
   # Continue executing if errors occur
-  continue_on_error: true
+  continue_on_error: false
 
 # Connection settings
 connection:
