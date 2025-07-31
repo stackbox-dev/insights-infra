@@ -1,17 +1,79 @@
 SET 'pipeline.name' = 'Encarta SKUs Master';
--- Parallelism configuration
-SET 'parallelism.default' = '2';
-SET 'pipeline.max-parallelism' = '4';
+-- Parallelism configuration  
+SET 'parallelism.default' = '6';
+SET 'pipeline.max-parallelism' = '6';
 -- Table optimizer configuration
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.optimizer.agg-phase-strategy' = 'AUTO';
 SET 'table.exec.mini-batch.enabled' = 'true';
-SET 'table.exec.mini-batch.allow-latency' = '1s';
-SET 'table.exec.mini-batch.size' = '1000';
+SET 'table.exec.mini-batch.allow-latency' = '2s';
+SET 'table.exec.mini-batch.size' = '2000';
 -- Join optimization
 SET 'table.optimizer.distinct-agg.split.enabled' = 'true';
 SET 'table.exec.spill-compression.enabled' = 'true';
 SET 'table.exec.spill-compression.block-size' = '64kb';
+-- Memory and state optimization
+SET 'taskmanager.memory.managed.fraction' = '0.7';
+-- Increased for better state backend performance
+SET 'table.exec.state.ttl' = '86400000';
+-- 24 hours in ms
+SET 'state.backend.rocksdb.block.cache-size' = '512mb';
+-- Increased cache for better performance
+-- Advanced RocksDB optimization
+SET 'state.backend.rocksdb.writebuffer.size' = '256mb';
+-- Increased for better write performance
+SET 'state.backend.rocksdb.writebuffer.count' = '3';
+-- Reduced to avoid too much memory usage
+SET 'state.backend.rocksdb.writebuffer.number-to-merge' = '1';
+-- Reduced for faster merging
+SET 'state.backend.rocksdb.compaction.style' = 'LEVEL';
+SET 'state.backend.rocksdb.compaction.level.max-size-level-base' = '512mb';
+-- Increased for better compaction
+SET 'state.backend.rocksdb.use-bloom-filter' = 'true';
+SET 'state.backend.rocksdb.bloom-filter.bits-per-key' = '10';
+-- Additional RocksDB checkpoint optimizations
+SET 'state.backend.rocksdb.checkpoint.transfer.thread-num' = '4';
+SET 'state.backend.rocksdb.restore.thread-num' = '4';
+-- Checkpoint optimization
+SET 'execution.checkpointing.interval' = '120000';
+-- 2 minutes (increased for complex joins)
+SET 'execution.checkpointing.min-pause' = '60000';
+-- 1 minute (increased to reduce pressure)
+SET 'execution.checkpointing.timeout' = '900000';
+-- 15 minutes (increased for large state)
+SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
+-- Ensure only one checkpoint at a time
+SET 'execution.checkpointing.tolerable-failed-checkpoints' = '3';
+-- Allow some failures before job fails
+-- Network and I/O optimization
+SET 'taskmanager.network.memory.fraction' = '0.15';
+SET 'taskmanager.network.memory.max' = '1gb';
+SET 'table.exec.resource.default-parallelism' = '6';
+-- JSON and sink optimization
+SET 'table.exec.legacy-cast-behaviour' = 'disabled';
+SET 'table.exec.sink.upsert-materialize' = 'auto';
+-- Source optimization
+SET 'table.exec.source.idle-timeout' = '30000';
+-- 30 seconds
+SET 'scan.startup.mode' = 'group-offsets';
+-- Use consumer group offsets
+-- Kafka consumer optimization
+SET 'properties.fetch.min.bytes' = '1024';
+SET 'properties.fetch.max.wait.ms' = '500';
+SET 'properties.max.poll.records' = '500';
+SET 'properties.receive.buffer.bytes' = '65536';
+SET 'properties.send.buffer.bytes' = '131072';
+-- Advanced memory tuning
+SET 'taskmanager.memory.process.size' = '4gb';
+SET 'taskmanager.memory.flink.size' = '3.2gb';
+-- Removed conflicting managed.size setting to avoid conflicts with fraction
+-- JOIN optimization hints
+SET 'table.optimizer.join.broadcast-threshold' = '10MB';
+SET 'table.optimizer.multiple-input-enabled' = 'true';
+SET 'table.exec.operator-fusion-codegen.enabled' = 'true';
+-- Avro serialization optimization
+SET 'avro-confluent.schema.cache-size' = '1000';
+SET 'properties.compression.type' = 'snappy';
 -- =====================================================
 -- SOURCE TABLES (Kafka Topics)
 -- =====================================================
@@ -604,6 +666,7 @@ CREATE TABLE skus_master (
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.transaction.id.prefix' = 'encarta-skus-master-consolidated',
     'properties.allow.auto.create.topics' = 'true',
+    'properties.num.partitions' = '3',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -616,28 +679,44 @@ CREATE TABLE skus_master (
 -- =====================================================
 -- CONSOLIDATED INSERT STATEMENT WITH CTEs
 -- =====================================================
-INSERT INTO skus_master WITH uoms_agg AS (
+INSERT INTO skus_master WITH uoms_pivot AS (
+        -- First, pivot the UOM data to reduce processing overhead
+        SELECT sku_id,
+            hierarchy,
+            units,
+            name,
+            weight,
+            volume,
+            package_type,
+            length,
+            width,
+            height,
+            packing_efficiency,
+            itf_code,
+            erp_weight,
+            erp_volume,
+            erp_length,
+            erp_width,
+            erp_height,
+            text_tag1,
+            text_tag2,
+            image,
+            num_tag1,
+            created_at,
+            updated_at
+        FROM uoms
+        WHERE active = true
+            AND COALESCE(is_deleted, false) = false
+    ),
+    uoms_agg AS (
+        -- Optimized aggregation with reduced CASE statement overhead
         SELECT u.sku_id,
+            -- L0 hierarchy aggregations
             MAX(
                 CASE
                     WHEN u.hierarchy = 'L0' THEN u.units
                 END
             ) AS l0_units,
-            MAX(
-                CASE
-                    WHEN u.hierarchy = 'L1' THEN u.units
-                END
-            ) AS l1_units,
-            MAX(
-                CASE
-                    WHEN u.hierarchy = 'L2' THEN u.units
-                END
-            ) AS l2_units,
-            MAX(
-                CASE
-                    WHEN u.hierarchy = 'L3' THEN u.units
-                END
-            ) AS l3_units,
             MAX(
                 CASE
                     WHEN u.hierarchy = 'L0' THEN u.name
@@ -728,6 +807,12 @@ INSERT INTO skus_master WITH uoms_agg AS (
                     WHEN u.hierarchy = 'L0' THEN u.num_tag1
                 END
             ) AS l0_num_tag1,
+            -- L1 hierarchy aggregations
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.units
+                END
+            ) AS l1_units,
             MAX(
                 CASE
                     WHEN u.hierarchy = 'L1' THEN u.name
@@ -818,6 +903,12 @@ INSERT INTO skus_master WITH uoms_agg AS (
                     WHEN u.hierarchy = 'L1' THEN u.num_tag1
                 END
             ) AS l1_num_tag1,
+            -- L2 hierarchy aggregations
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.units
+                END
+            ) AS l2_units,
             MAX(
                 CASE
                     WHEN u.hierarchy = 'L2' THEN u.name
@@ -908,6 +999,12 @@ INSERT INTO skus_master WITH uoms_agg AS (
                     WHEN u.hierarchy = 'L2' THEN u.num_tag1
                 END
             ) AS l2_num_tag1,
+            -- L3 hierarchy aggregations
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.units
+                END
+            ) AS l3_units,
             MAX(
                 CASE
                     WHEN u.hierarchy = 'L3' THEN u.name
@@ -1000,8 +1097,7 @@ INSERT INTO skus_master WITH uoms_agg AS (
             ) AS l3_num_tag1,
             MIN(u.created_at) AS created_at,
             MAX(u.updated_at) AS updated_at
-        FROM uoms u
-        WHERE u.active = true
+        FROM uoms_pivot u
         GROUP BY u.sku_id
     ),
     sku_classifications_agg AS (
@@ -1014,7 +1110,15 @@ INSERT INTO skus_master WITH uoms_agg AS (
             ) AS classifications,
             MIN(sc.created_at) AS created_at,
             MAX(sc.updated_at) AS updated_at
-        FROM classifications sc
+        FROM (
+                SELECT sku_id,
+                    type,
+                    `value`,
+                    created_at,
+                    updated_at
+                FROM classifications
+                WHERE COALESCE(is_deleted, false) = false
+            ) sc
         GROUP BY sc.sku_id
     ),
     product_classifications_agg AS (
@@ -1027,7 +1131,15 @@ INSERT INTO skus_master WITH uoms_agg AS (
             ) AS product_classifications,
             MIN(pc.created_at) AS created_at,
             MAX(pc.updated_at) AS updated_at
-        FROM t_product_classifications pc
+        FROM (
+                SELECT product_id,
+                    type,
+                    `value`,
+                    created_at,
+                    updated_at
+                FROM t_product_classifications
+                WHERE COALESCE(is_deleted, false) = false
+            ) pc
         GROUP BY pc.product_id
     )
 SELECT s.id,
