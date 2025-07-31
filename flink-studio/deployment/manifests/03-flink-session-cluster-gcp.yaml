@@ -13,6 +13,9 @@ spec:
   imagePullPolicy: Always
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "2"
+    parallelism.default: "2"
+    # Network and memory configuration for TaskManager
+    taskmanager.memory.network.fraction: "0.15"
     # State backend optimized for persistent storage with GCS backup
     state.backend.type: "rocksdb"
     state.backend.incremental: "true"
@@ -20,7 +23,7 @@ spec:
     # Use persistent storage for RocksDB local state
     state.backend.rocksdb.localdir: "/data/flink-rocksdb"
     # Optimized for medium-sized jobs with 8GB memory, 50GB storage
-    state.backend.rocksdb.memory.fixed-per-slot: "768mb" # Conservative for 8GB total memory
+    state.backend.rocksdb.memory.fixed-per-slot: "1024mb" # Conservative for 8GB total memory
     # Balanced write buffers for medium-sized state
     state.backend.rocksdb.writebuffer.size: "128mb" # Good balance for medium jobs
     state.backend.rocksdb.writebuffer.count: "3" # Standard count for medium state
@@ -30,16 +33,18 @@ spec:
     # Configure memory ratios for medium-sized persistent storage
     state.backend.rocksdb.memory.write-buffer-ratio: "0.4"
     state.backend.rocksdb.memory.high-prio-pool-ratio: "0.08"
-    # Enable changelog for continuous state uploading to GCS
-    state.changelog.enabled: true
-    state.changelog.storage: filesystem
-    state.changelog.dstl.dfs.base-path: gs://sbx-stag-flink-storage/changelog
+    # Add bloom filters for faster lookups (great for joins):
+    state.backend.rocksdb.predefined-options: "SPINNING_DISK_OPTIMIZED_HIGH_MEM"
+    state.backend.rocksdb.use-bloom-filter: true
+    # Changelog disabled to fix checkpoint blocking issue
+    # state.changelog.enabled: false
+    # state.changelog.storage: filesystem
+    # state.changelog.dstl.dfs.base-path: gs://sbx-stag-flink-storage/changelog
     # Force session cluster to start TaskManager pods immediately
     slotmanager.number-of-slots.min: "1"
     slotmanager.number-of-slots.max: "16"
     slotmanager.slot-request-timeout: "300000"
-    # GCS paths for Flink state management
-    state.checkpoints.dir: gs://sbx-stag-flink-storage/checkpoints
+    # GCS paths for Flink state management - removed duplicate state.checkpoints.dir
     state.savepoints.dir: gs://sbx-stag-flink-storage/savepoints
     high-availability.type: kubernetes
     high-availability.storageDir: gs://sbx-stag-flink-storage/ha
@@ -47,18 +52,32 @@ spec:
     restart-strategy.failure-rate.max-failures-per-interval: "10"
     restart-strategy.failure-rate.failure-rate-interval: "10 min"
     restart-strategy.failure-rate.delay: "30 s"
-    execution.checkpointing.interval: "15 s"
+    execution.checkpointing.interval: "300 s" # 5 minutes
     execution.checkpointing.mode: EXACTLY_ONCE
-    execution.checkpointing.timeout: "10 min"
+    execution.checkpointing.timeout: "5 min"
     execution.checkpointing.incremental: true
+    execution.checkpointing.storage: filesystem
     execution.checkpointing.dir: gs://sbx-stag-flink-storage/flink-checkpoints
+    execution.checkpointing.data-inline-threshold: "64 kb"
     # Additional checkpoint settings for maximum GCS usage
-    execution.checkpointing.max-concurrent-checkpoints: 1
+    execution.checkpointing.max-concurrent-checkpoints: 5
     execution.checkpointing.min-pause: "5 s"
     execution.checkpointing.tolerable-failure-number: 3
+    # Disable unaligned checkpoints to avoid blocking issues
+    execution.checkpointing.unaligned.enabled: false
+    # Retain checkpoints on cancellation for better recovery
+    execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+    # Additional reliability settings
+    execution.checkpointing.checkpoints-after-tasks-finish.enabled: true
     # Reduce local state TTL to force more frequent GCS writes
     table.exec.state.ttl: "1 h"
+    # Set source idle timeout back to reasonable value (was causing issues with 0ms)
     table.exec.source.idle-timeout: "30 s"
+    table.exec.resource.default-parallelism: "2" # Match your slot count
+    table.optimizer.join-reorder-enabled: true
+    table.exec.mini-batch.enabled: true
+    table.exec.mini-batch.allow-latency: "1 s"
+    table.exec.mini-batch.size: "5000"
     # Job History and Archive Settings
     jobmanager.archive.fs.dir: gs://sbx-stag-flink-storage/archived-jobs
     web.history: 50
@@ -72,6 +91,10 @@ spec:
     fs.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
     fs.AbstractFileSystem.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS
     fs.gs.project.id: sbx-stag
+    fs.gs.block.size: "134217728" # 128MB blocks for better performance
+    fs.gs.outputstream.buffer.size: "8388608" # 8MB buffer
+    fs.gs.inputstream.buffer.size: "8388608"
+    fs.gs.io.retry.max-attempts: "10"
     fs.gs.auth.service.account.enable: "true"
     # Use Application Default Credentials via Workload Identity
     fs.gs.auth.type: APPLICATION_DEFAULT
