@@ -2747,7 +2747,7 @@ class FlinkSQLExecutor:
             print(f"   {sql_preview}")
 
         print(f"\n🔧 Management Commands:")
-        print(f"   Cancel job (with savepoint): --cancel-job {job['job_id']}")
+        print(f"   Pause job: --pause-job {job['job_id']}")
 
 
 def print_jobs_from_rest_api(jobs: List[Dict], format_style: str = "table"):
@@ -2910,7 +2910,7 @@ def print_job_details_from_rest_api(job_details: Dict):
 
     print(f"\n🔧 Management Commands:")
     job_id = job_details.get("jid", "unknown")
-    print(f"   Cancel job (with savepoint): --cancel-job {job_id}")
+    print(f"   Pause job: --pause-job {job_id}")
 
 
 def setup_logging(log_level: str, log_file: Optional[str] = None):
@@ -2958,7 +2958,7 @@ def load_config(config_file: str = "config.yaml") -> Dict:
                 "level": "INFO",
                 "format": "%(asctime)s - %(levelname)s - %(message)s",
             },
-            "execution": {"continue_on_error": True},
+            "execution": {"continue_on_error": False},
             "connection": {"timeout": 30, "retry_count": 3, "retry_delay": 5},
         }
 
@@ -3262,7 +3262,10 @@ Examples:
     # Execute as single statement (disable multi-statement parsing)
     python flink_sql_executor.py --file /path/to/my_query.sql --single-statement
     
-    # Stop on first error instead of continuing
+    # Continue executing remaining statements even if one fails
+    python flink_sql_executor.py --file /path/to/my_query.sql --continue-on-error
+    
+    # Explicitly stop on first error (this is the default behavior)
     python flink_sql_executor.py --file /path/to/my_query.sql --stop-on-error
     
     # Dry run to check what would be executed
@@ -3304,9 +3307,6 @@ Job Management Examples:
     # Get detailed information about a job
     python flink_sql_executor.py --job-info a1b2c3d4e5f6789abcdef123456789abcdef1234
     
-    # Cancel a job gracefully with savepoint (uses Flink default savepoint directory)
-    python flink_sql_executor.py --cancel-job a1b2c3d4e5f6789abcdef123456789abcdef1234
-    
     # Pause a job (creates savepoint and stops the job)
     python flink_sql_executor.py --pause-job a1b2c3d4e5f6
     python flink_sql_executor.py --pause-job "my_streaming_job"  # Can use job name
@@ -3342,7 +3342,6 @@ Dry Run Examples (preview actions without executing):
     python flink_sql_executor.py --sql "CREATE TABLE test AS SELECT 1" --dry-run
     
     # Preview job management operations
-    python flink_sql_executor.py --cancel-job a1b2c3d4e5f6 --dry-run
     python flink_sql_executor.py --pause-job my_job --dry-run
     python flink_sql_executor.py --resume-job my_job --resume-sql-file job.sql --dry-run
     python flink_sql_executor.py --resume-savepoint 1 --resume-sql-file job.sql --dry-run
@@ -3356,8 +3355,7 @@ Dry Run Examples (preview actions without executing):
     parser.add_argument(
         "--env-file",
         "-e",
-        help="Path to environment file (.env) for variable substitution (default: .sbx-uat.env)",
-        default=".sbx-uat.env",
+        help="Path to environment file (.env) for variable substitution",
     )
 
     parser.add_argument(
@@ -3404,8 +3402,8 @@ Dry Run Examples (preview actions without executing):
     parser.add_argument(
         "--continue-on-error",
         action="store_true",
-        default=True,
-        help="Continue executing remaining statements when one fails (default: True)",
+        default=False,
+        help="Continue executing remaining statements when one fails (default: False - stop on first error)",
     )
 
     parser.add_argument(
@@ -3460,12 +3458,6 @@ Dry Run Examples (preview actions without executing):
         "--job-info",
         metavar="JOB_ID",
         help="Get detailed information about a specific job from Flink cluster",
-    )
-
-    job_group.add_argument(
-        "--cancel-job",
-        metavar="JOB_ID",
-        help="Cancel a job gracefully with savepoint (uses Flink default savepoint directory)",
     )
 
     job_group.add_argument(
@@ -3607,7 +3599,6 @@ Dry Run Examples (preview actions without executing):
         rest_client_commands = [
             args.list_jobs,
             args.job_info,
-            args.cancel_job,
         ]
         # Commands that only need database
         database_only_commands = [
@@ -3683,33 +3674,6 @@ Dry Run Examples (preview actions without executing):
                         f"Job not found or error retrieving job: {args.job_info}"
                     )
                     sys.exit(1)
-                return
-
-            elif args.cancel_job:
-                if args.dry_run:
-                    logger.info(
-                        f"🛑 DRY RUN: Would cancel job {args.cancel_job} with savepoint"
-                    )
-                    logger.info(
-                        "   Savepoint directory: (Flink cluster default configuration)"
-                    )
-                    if enable_database:
-                        logger.info(
-                            "   Would update job status to 'STOPPING' in database"
-                        )
-                    logger.info("🎉 Dry run completed successfully!")
-                else:
-                    logger.info(f"🛑 Cancelling job {args.cancel_job}...")
-                    success = rest_client.stop_job_with_savepoint(args.cancel_job)
-                    if success:
-                        logger.info("✅ Job cancel request submitted successfully")
-                        if enable_database:
-                            # Update database if enabled
-                            database = FlinkJobDatabase(args.db_path)
-                            database.update_job_status(args.cancel_job, "STOPPING")
-                    else:
-                        logger.error("❌ Failed to cancel job")
-                        sys.exit(1)
                 return
 
             elif args.pause_job:

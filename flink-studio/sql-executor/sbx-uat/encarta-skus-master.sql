@@ -1,5 +1,20 @@
-SET 'pipeline.name' = 'Encarta SKUs Master Aggregation';
--- Create source tables (DDL for Kafka topics)
+SET 'pipeline.name' = 'Encarta SKUs Master';
+-- Parallelism configuration
+SET 'parallelism.default' = '2';
+SET 'pipeline.max-parallelism' = '4';
+-- Table optimizer configuration
+SET 'table.optimizer.join-reorder-enabled' = 'true';
+SET 'table.optimizer.agg-phase-strategy' = 'AUTO';
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '1s';
+SET 'table.exec.mini-batch.size' = '1000';
+-- Join optimization
+SET 'table.optimizer.distinct-agg.split.enabled' = 'true';
+SET 'table.exec.spill-compression.enabled' = 'true';
+SET 'table.exec.spill-compression.block-size' = '64kb';
+-- =====================================================
+-- SOURCE TABLES (Kafka Topics)
+-- =====================================================
 -- skus source table
 CREATE TABLE skus (
     id STRING,
@@ -54,6 +69,123 @@ CREATE TABLE skus (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+);
+-- uoms source table
+CREATE TABLE uoms (
+    id VARCHAR NOT NULL,
+    principal_id BIGINT NOT NULL,
+    sku_id VARCHAR NOT NULL,
+    name VARCHAR,
+    hierarchy VARCHAR NOT NULL,
+    weight DOUBLE PRECISION,
+    volume DOUBLE PRECISION,
+    package_type VARCHAR,
+    length DOUBLE PRECISION,
+    width DOUBLE PRECISION,
+    height DOUBLE PRECISION,
+    units INT,
+    packing_efficiency DOUBLE PRECISION,
+    active BOOLEAN,
+    itf_code VARCHAR,
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
+    erp_weight DOUBLE PRECISION,
+    erp_volume DOUBLE PRECISION,
+    erp_length DOUBLE PRECISION,
+    erp_width DOUBLE PRECISION,
+    erp_height DOUBLE PRECISION,
+    text_tag1 VARCHAR,
+    text_tag2 VARCHAR,
+    image VARCHAR,
+    num_tag1 DOUBLE PRECISION,
+    is_deleted BOOLEAN,
+    PRIMARY KEY (id) NOT ENFORCED,
+    WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx_uat.encarta.public.uoms',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
+    'properties.allow.auto.create.topics' = 'true',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+);
+-- classifications source table
+CREATE TABLE classifications (
+    id VARCHAR NOT NULL,
+    principal_id BIGINT NOT NULL,
+    sku_id VARCHAR NOT NULL,
+    type VARCHAR NOT NULL,
+    `value` VARCHAR,
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
+    is_deleted BOOLEAN,
+    PRIMARY KEY (id) NOT ENFORCED,
+    WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx_uat.encarta.public.classifications',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+);
+-- product_classifications source table
+CREATE TABLE t_product_classifications (
+    id VARCHAR NOT NULL,
+    principal_id BIGINT NOT NULL,
+    product_id VARCHAR NOT NULL,
+    type VARCHAR NOT NULL,
+    `value` VARCHAR,
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
+    is_deleted BOOLEAN,
+    PRIMARY KEY (id) NOT ENFORCED,
+    WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx_uat.encarta.public.product_classifications',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -104,6 +236,7 @@ CREATE TABLE products (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -142,6 +275,7 @@ CREATE TABLE categories (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -180,6 +314,7 @@ CREATE TABLE sub_categories (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -217,6 +352,7 @@ CREATE TABLE category_groups (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -233,7 +369,6 @@ CREATE TABLE brands (
     code STRING,
     name STRING,
     description STRING,
-    brand_owner_id STRING,
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
@@ -255,6 +390,7 @@ CREATE TABLE brands (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -268,10 +404,10 @@ CREATE TABLE brands (
 CREATE TABLE sub_brands (
     id STRING,
     principal_id BIGINT,
+    brand_id STRING,
     code STRING,
     name STRING,
     description STRING,
-    brand_id STRING,
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
@@ -293,6 +429,7 @@ CREATE TABLE sub_brands (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'properties.auto.offset.reset' = 'earliest',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -302,197 +439,27 @@ CREATE TABLE sub_brands (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- skus_uoms_agg source table
-CREATE TABLE skus_uoms_agg (
-    sku_id STRING,
-    l0_units INT,
-    l1_units INT,
-    l2_units INT,
-    l3_units INT,
-    l0_name STRING,
-    l0_weight DOUBLE,
-    l0_volume DOUBLE,
-    l0_package_type STRING,
-    l0_length DOUBLE,
-    l0_width DOUBLE,
-    l0_height DOUBLE,
-    l0_packing_efficiency DOUBLE,
-    l0_itf_code STRING,
-    l0_erp_weight DOUBLE,
-    l0_erp_volume DOUBLE,
-    l0_erp_length DOUBLE,
-    l0_erp_width DOUBLE,
-    l0_erp_height DOUBLE,
-    l0_text_tag1 STRING,
-    l0_text_tag2 STRING,
-    l0_image STRING,
-    l0_num_tag1 DOUBLE,
-    l1_name STRING,
-    l1_weight DOUBLE,
-    l1_volume DOUBLE,
-    l1_package_type STRING,
-    l1_length DOUBLE,
-    l1_width DOUBLE,
-    l1_height DOUBLE,
-    l1_packing_efficiency DOUBLE,
-    l1_itf_code STRING,
-    l1_erp_weight DOUBLE,
-    l1_erp_volume DOUBLE,
-    l1_erp_length DOUBLE,
-    l1_erp_width DOUBLE,
-    l1_erp_height DOUBLE,
-    l1_text_tag1 STRING,
-    l1_text_tag2 STRING,
-    l1_image STRING,
-    l1_num_tag1 DOUBLE,
-    l2_name STRING,
-    l2_weight DOUBLE,
-    l2_volume DOUBLE,
-    l2_package_type STRING,
-    l2_length DOUBLE,
-    l2_width DOUBLE,
-    l2_height DOUBLE,
-    l2_packing_efficiency DOUBLE,
-    l2_itf_code STRING,
-    l2_erp_weight DOUBLE,
-    l2_erp_volume DOUBLE,
-    l2_erp_length DOUBLE,
-    l2_erp_width DOUBLE,
-    l2_erp_height DOUBLE,
-    l2_text_tag1 STRING,
-    l2_text_tag2 STRING,
-    l2_image STRING,
-    l2_num_tag1 DOUBLE,
-    l3_name STRING,
-    l3_weight DOUBLE,
-    l3_volume DOUBLE,
-    l3_package_type STRING,
-    l3_length DOUBLE,
-    l3_width DOUBLE,
-    l3_height DOUBLE,
-    l3_packing_efficiency DOUBLE,
-    l3_itf_code STRING,
-    l3_erp_weight DOUBLE,
-    l3_erp_volume DOUBLE,
-    l3_erp_length DOUBLE,
-    l3_erp_width DOUBLE,
-    l3_erp_height DOUBLE,
-    l3_text_tag1 STRING,
-    l3_text_tag2 STRING,
-    l3_image STRING,
-    l3_num_tag1 DOUBLE,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    proc_time AS PROCTIME(),
-    event_time AS CASE
-        WHEN updated_at > created_at THEN updated_at
-        ELSE created_at
-    END,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (sku_id) NOT ENFORCED
-) WITH (
-    'connector' = 'upsert-kafka',
-    'topic' = 'sbx_uat.encarta.public.skus_uoms_agg',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
-    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
-    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
-    'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
-);
--- skus_classifications_agg source table
-CREATE TABLE skus_classifications_agg (
-    sku_id STRING,
-    classifications STRING,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    proc_time AS PROCTIME(),
-    event_time AS CASE
-        WHEN updated_at > created_at THEN updated_at
-        ELSE created_at
-    END,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (sku_id) NOT ENFORCED
-) WITH (
-    'connector' = 'upsert-kafka',
-    'topic' = 'sbx_uat.encarta.public.skus_classifications_agg',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
-    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
-    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
-    'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
-);
--- products_classifications_agg source table
-CREATE TABLE products_classifications_agg (
-    product_id STRING,
-    product_classifications STRING,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    proc_time AS PROCTIME(),
-    event_time AS CASE
-        WHEN updated_at > created_at THEN updated_at
-        ELSE created_at
-    END,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (product_id) NOT ENFORCED
-) WITH (
-    'connector' = 'upsert-kafka',
-    'topic' = 'sbx_uat.encarta.public.products_classifications_agg',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
-    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
-    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
-    'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
-);
--- Create final summary table structure (destination table)
+-- =====================================================
+-- FINAL DESTINATION TABLE (Kafka Topic)
+-- =====================================================
 CREATE TABLE skus_master (
     id VARCHAR NOT NULL,
-    principal_id BIGINT NOT NULL,
-    node_id BIGINT NOT NULL,
-    category VARCHAR,
-    product VARCHAR,
-    category_group VARCHAR,
-    sub_brand VARCHAR,
-    brand VARCHAR,
+    principal_id BIGINT,
     code VARCHAR,
     name VARCHAR,
-    short_description VARCHAR,
     description VARCHAR,
-    fulfillment_type VARCHAR,
-    avg_l0_per_put INT,
-    inventory_type VARCHAR,
+    short_description VARCHAR,
+    product_id VARCHAR,
+    ingredients VARCHAR,
     shelf_life INT,
+    fulfillment_type VARCHAR,
+    active_from TIMESTAMP(3),
+    active_till TIMESTAMP(3),
     identifier1 VARCHAR,
     identifier2 VARCHAR,
+    invoice_life INT,
+    avg_l0_per_put INT,
+    inventory_type VARCHAR,
     tag1 VARCHAR,
     tag2 VARCHAR,
     tag3 VARCHAR,
@@ -503,17 +470,48 @@ CREATE TABLE skus_master (
     tag8 VARCHAR,
     tag9 VARCHAR,
     tag10 VARCHAR,
-    handling_unit_type VARCHAR,
-    cases_per_layer INT,
     layers INT,
-    active_from TIMESTAMP(3),
-    active_till TIMESTAMP(3),
+    cases_per_layer INT,
+    handling_unit_type VARCHAR,
+    batch_date_print_level VARCHAR,
+    product_code VARCHAR,
+    product_name VARCHAR,
+    product_description VARCHAR,
+    dangerous BOOLEAN,
+    spillable BOOLEAN,
+    fragile BOOLEAN,
+    flammable BOOLEAN,
+    alcohol BOOLEAN,
+    temperature_controlled BOOLEAN,
+    temp_min DOUBLE,
+    temp_max DOUBLE,
+    cold_chain BOOLEAN,
+    product_shelf_life INT,
+    product_invoice_life INT,
+    sub_category_id VARCHAR,
+    sub_category_code VARCHAR,
+    sub_category_name VARCHAR,
+    sub_category_description VARCHAR,
+    category_id VARCHAR,
+    category_code VARCHAR,
+    category_name VARCHAR,
+    category_description VARCHAR,
+    category_group_id VARCHAR,
+    category_group_code VARCHAR,
+    category_group_name VARCHAR,
+    category_group_description VARCHAR,
+    sub_brand_id VARCHAR,
+    sub_brand_code VARCHAR,
+    sub_brand_name VARCHAR,
+    sub_brand_description VARCHAR,
+    brand_id VARCHAR,
+    brand_code VARCHAR,
+    brand_name VARCHAR,
+    brand_description VARCHAR,
     l0_units INT,
     l1_units INT,
     l2_units INT,
-    l2_units_final INT,
     l3_units INT,
-    l3_units_final INT,
     l0_name VARCHAR,
     l0_weight DOUBLE PRECISION,
     l0_volume DOUBLE PRECISION,
@@ -586,19 +584,14 @@ CREATE TABLE skus_master (
     l3_text_tag2 VARCHAR,
     l3_image VARCHAR,
     l3_num_tag1 DOUBLE PRECISION,
-    active BOOLEAN NOT NULL,
-    classifications VARCHAR NOT NULL,
-    product_classifications VARCHAR NOT NULL,
-    is_deleted BOOLEAN NOT NULL,
-    created_at TIMESTAMP(3) NOT NULL,
-    updated_at TIMESTAMP(3) NOT NULL,
-    proc_time AS PROCTIME(),
-    event_time AS CASE
-        WHEN updated_at > created_at THEN updated_at
-        ELSE created_at
-    END,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (id) NOT ENFORCED
+    active BOOLEAN,
+    classifications VARCHAR,
+    product_classifications VARCHAR,
+    is_deleted BOOLEAN,
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
+    PRIMARY KEY (id) NOT ENFORCED,
+    WATERMARK FOR created_at AS created_at - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'upsert-kafka',
     'topic' = 'sbx_uat.encarta.public.skus_master',
@@ -609,7 +602,8 @@ CREATE TABLE skus_master (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.transaction.id.prefix' = 'encarta-skus-classifications-agg',
+    'properties.transaction.id.prefix' = 'encarta-skus-master-consolidated',
+    'properties.allow.auto.create.topics' = 'true',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -619,29 +613,440 @@ CREATE TABLE skus_master (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Continuously populate the summary table from source tables
--- Optimized INSERT statement using materialized aggregation tables
--- Uses regular LEFT JOINs for real-time latest data processing
-INSERT INTO skus_master
+-- =====================================================
+-- CONSOLIDATED INSERT STATEMENT WITH CTEs
+-- =====================================================
+INSERT INTO skus_master WITH uoms_agg AS (
+        SELECT u.sku_id,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.units
+                END
+            ) AS l0_units,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.units
+                END
+            ) AS l1_units,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.units
+                END
+            ) AS l2_units,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.units
+                END
+            ) AS l3_units,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.name
+                END
+            ) AS l0_name,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.weight
+                END
+            ) AS l0_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.volume
+                END
+            ) AS l0_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.package_type
+                END
+            ) AS l0_package_type,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.length
+                END
+            ) AS l0_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.width
+                END
+            ) AS l0_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.height
+                END
+            ) AS l0_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.packing_efficiency
+                END
+            ) AS l0_packing_efficiency,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.itf_code
+                END
+            ) AS l0_itf_code,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.erp_weight
+                END
+            ) AS l0_erp_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.erp_volume
+                END
+            ) AS l0_erp_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.erp_length
+                END
+            ) AS l0_erp_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.erp_width
+                END
+            ) AS l0_erp_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.erp_height
+                END
+            ) AS l0_erp_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.text_tag1
+                END
+            ) AS l0_text_tag1,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.text_tag2
+                END
+            ) AS l0_text_tag2,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.image
+                END
+            ) AS l0_image,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L0' THEN u.num_tag1
+                END
+            ) AS l0_num_tag1,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.name
+                END
+            ) AS l1_name,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.weight
+                END
+            ) AS l1_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.volume
+                END
+            ) AS l1_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.package_type
+                END
+            ) AS l1_package_type,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.length
+                END
+            ) AS l1_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.width
+                END
+            ) AS l1_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.height
+                END
+            ) AS l1_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.packing_efficiency
+                END
+            ) AS l1_packing_efficiency,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.itf_code
+                END
+            ) AS l1_itf_code,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.erp_weight
+                END
+            ) AS l1_erp_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.erp_volume
+                END
+            ) AS l1_erp_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.erp_length
+                END
+            ) AS l1_erp_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.erp_width
+                END
+            ) AS l1_erp_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.erp_height
+                END
+            ) AS l1_erp_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.text_tag1
+                END
+            ) AS l1_text_tag1,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.text_tag2
+                END
+            ) AS l1_text_tag2,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.image
+                END
+            ) AS l1_image,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L1' THEN u.num_tag1
+                END
+            ) AS l1_num_tag1,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.name
+                END
+            ) AS l2_name,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.weight
+                END
+            ) AS l2_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.volume
+                END
+            ) AS l2_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.package_type
+                END
+            ) AS l2_package_type,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.length
+                END
+            ) AS l2_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.width
+                END
+            ) AS l2_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.height
+                END
+            ) AS l2_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.packing_efficiency
+                END
+            ) AS l2_packing_efficiency,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.itf_code
+                END
+            ) AS l2_itf_code,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.erp_weight
+                END
+            ) AS l2_erp_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.erp_volume
+                END
+            ) AS l2_erp_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.erp_length
+                END
+            ) AS l2_erp_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.erp_width
+                END
+            ) AS l2_erp_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.erp_height
+                END
+            ) AS l2_erp_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.text_tag1
+                END
+            ) AS l2_text_tag1,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.text_tag2
+                END
+            ) AS l2_text_tag2,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.image
+                END
+            ) AS l2_image,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L2' THEN u.num_tag1
+                END
+            ) AS l2_num_tag1,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.name
+                END
+            ) AS l3_name,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.weight
+                END
+            ) AS l3_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.volume
+                END
+            ) AS l3_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.package_type
+                END
+            ) AS l3_package_type,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.length
+                END
+            ) AS l3_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.width
+                END
+            ) AS l3_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.height
+                END
+            ) AS l3_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.packing_efficiency
+                END
+            ) AS l3_packing_efficiency,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.itf_code
+                END
+            ) AS l3_itf_code,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.erp_weight
+                END
+            ) AS l3_erp_weight,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.erp_volume
+                END
+            ) AS l3_erp_volume,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.erp_length
+                END
+            ) AS l3_erp_length,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.erp_width
+                END
+            ) AS l3_erp_width,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.erp_height
+                END
+            ) AS l3_erp_height,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.text_tag1
+                END
+            ) AS l3_text_tag1,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.text_tag2
+                END
+            ) AS l3_text_tag2,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.image
+                END
+            ) AS l3_image,
+            MAX(
+                CASE
+                    WHEN u.hierarchy = 'L3' THEN u.num_tag1
+                END
+            ) AS l3_num_tag1,
+            MIN(u.created_at) AS created_at,
+            MAX(u.updated_at) AS updated_at
+        FROM uoms u
+        WHERE u.active = true
+        GROUP BY u.sku_id
+    ),
+    sku_classifications_agg AS (
+        SELECT sc.sku_id,
+            COALESCE(
+                CAST(
+                    JSON_OBJECTAGG(KEY sc.type VALUE sc.`value`) AS STRING
+                ),
+                '{}'
+            ) AS classifications,
+            MIN(sc.created_at) AS created_at,
+            MAX(sc.updated_at) AS updated_at
+        FROM classifications sc
+        GROUP BY sc.sku_id
+    ),
+    product_classifications_agg AS (
+        SELECT pc.product_id,
+            COALESCE(
+                CAST(
+                    JSON_OBJECTAGG(KEY pc.type VALUE pc.`value`) AS STRING
+                ),
+                '{}'
+            ) AS product_classifications,
+            MIN(pc.created_at) AS created_at,
+            MAX(pc.updated_at) AS updated_at
+        FROM t_product_classifications pc
+        GROUP BY pc.product_id
+    )
 SELECT s.id,
-    -- Primary key from source matches target primary key
     s.principal_id,
-    s.principal_id AS node_id,
-    cat.code AS category,
-    p.code AS product,
-    cg.code AS category_group,
-    sb.code AS sub_brand,
-    b.code AS brand,
     s.code,
     s.name,
-    s.short_description,
     s.description,
-    s.fulfillment_type,
-    s.avg_l0_per_put,
-    s.inventory_type,
+    s.short_description,
+    s.product_id,
+    s.ingredients,
     s.shelf_life,
+    s.fulfillment_type,
+    s.active_from,
+    s.active_till,
     s.identifier1,
     s.identifier2,
+    s.invoice_life,
+    s.avg_l0_per_put,
+    s.inventory_type,
     s.tag1,
     s.tag2,
     s.tag3,
@@ -652,17 +1057,48 @@ SELECT s.id,
     s.tag8,
     s.tag9,
     s.tag10,
-    s.handling_unit_type,
-    s.cases_per_layer,
     s.layers,
-    s.active_from,
-    s.active_till,
-    COALESCE(uom_agg.l0_units, 0) AS l0_units,
-    COALESCE(uom_agg.l1_units, 0) AS l1_units,
-    COALESCE(uom_agg.l2_units, 0) AS l2_units,
-    COALESCE(uom_agg.l2_units, 0) AS l2_units_final,
-    COALESCE(uom_agg.l3_units, 0) AS l3_units,
-    COALESCE(uom_agg.l3_units, 0) AS l3_units_final,
+    s.cases_per_layer,
+    s.handling_unit_type,
+    s.batch_date_print_level,
+    p.code AS product_code,
+    p.name AS product_name,
+    p.description AS product_description,
+    p.dangerous,
+    p.spillable,
+    p.fragile,
+    p.flammable,
+    p.alcohol,
+    p.temperature_controlled,
+    p.temp_min,
+    p.temp_max,
+    p.cold_chain,
+    p.shelf_life AS product_shelf_life,
+    p.invoice_life AS product_invoice_life,
+    subcat.id AS sub_category_id,
+    subcat.code AS sub_category_code,
+    subcat.name AS sub_category_name,
+    subcat.description AS sub_category_description,
+    cat.id AS category_id,
+    cat.code AS category_code,
+    cat.name AS category_name,
+    cat.description AS category_description,
+    cg.id AS category_group_id,
+    cg.code AS category_group_code,
+    cg.name AS category_group_name,
+    cg.description AS category_group_description,
+    sb.id AS sub_brand_id,
+    sb.code AS sub_brand_code,
+    sb.name AS sub_brand_name,
+    sb.description AS sub_brand_description,
+    b.id AS brand_id,
+    b.code AS brand_code,
+    b.name AS brand_name,
+    b.description AS brand_description,
+    uom_agg.l0_units,
+    uom_agg.l1_units,
+    uom_agg.l2_units,
+    uom_agg.l3_units,
     uom_agg.l0_name,
     uom_agg.l0_weight,
     uom_agg.l0_volume,
@@ -765,9 +1201,9 @@ SELECT s.id,
         COALESCE(b.updated_at, TIMESTAMP '1970-01-01 00:00:00')
     ) AS updated_at
 FROM skus s
-    LEFT JOIN skus_uoms_agg AS uom_agg ON s.id = uom_agg.sku_id
-    LEFT JOIN skus_classifications_agg AS class_agg ON s.id = class_agg.sku_id
-    LEFT JOIN products_classifications_agg AS prod_class_agg ON s.product_id = prod_class_agg.product_id
+    LEFT JOIN uoms_agg AS uom_agg ON s.id = uom_agg.sku_id
+    LEFT JOIN sku_classifications_agg AS class_agg ON s.id = class_agg.sku_id
+    LEFT JOIN product_classifications_agg AS prod_class_agg ON s.product_id = prod_class_agg.product_id
     LEFT JOIN products AS p ON s.product_id = p.id
     LEFT JOIN sub_categories AS subcat ON p.sub_category_id = subcat.id
     LEFT JOIN categories AS cat ON subcat.category_id = cat.id
