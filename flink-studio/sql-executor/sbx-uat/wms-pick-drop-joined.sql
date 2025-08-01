@@ -1,4 +1,5 @@
 SET 'pipeline.name' = 'WMS Pick Drop Joined';
+SET 'table.exec.sink.not-null-enforcer' = 'drop';
 -- Source Table 1: Pick Items
 CREATE TABLE pick_items (
     id STRING,
@@ -92,18 +93,18 @@ CREATE TABLE pick_items (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_item',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'properties.auto.offset.reset' = 'earliest'
 );
 -- Source Table 2: Drop Items
 CREATE TABLE drop_items (
@@ -182,18 +183,18 @@ CREATE TABLE drop_items (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_drop_item',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'properties.auto.offset.reset' = 'earliest'
 );
 -- Source Table 3: Pick Drop Mapping
 CREATE TABLE pick_drop_mapping (
@@ -210,18 +211,18 @@ CREATE TABLE pick_drop_mapping (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_drop_mapping',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'properties.auto.offset.reset' = 'earliest'
 );
 -- Source Table 4: Tasks
 CREATE TABLE tasks (
@@ -251,18 +252,18 @@ CREATE TABLE tasks (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.task',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'properties.auto.offset.reset' = 'earliest'
 );
 -- Source Table 5: Sessions
 CREATE TABLE `sessions` (
@@ -283,18 +284,18 @@ CREATE TABLE `sessions` (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.session',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'properties.auto.offset.reset' = 'earliest'
 );
 -- Source Table 6: Trips
 CREATE TABLE trips (
@@ -319,18 +320,18 @@ CREATE TABLE trips (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.trip',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'properties.auto.offset.reset' = 'earliest'
 );
 -- Source Table 7: Trip Relations
 CREATE TABLE trip_relation (
@@ -348,18 +349,18 @@ CREATE TABLE trip_relation (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.trip_relation',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'properties.auto.offset.reset' = 'earliest'
 );
 -- Sink Table - sbx_uat.wms.public.pick_drop_joined
 CREATE TABLE pick_drop_joined (
