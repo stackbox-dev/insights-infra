@@ -785,24 +785,24 @@ SELECT pi.`whId` AS wh_id,
     mm_trip.`dockdoorId` AS mm_dockdoor_id,
     mm_trip.`vehicleId` AS mm_vehicle_id
 FROM pick_items pi
-    INNER JOIN `sessions` s ON pi.`sessionId` = s.id
-    AND s.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
-    AND pi.`updatedAt` + INTERVAL '12' HOUR
+    LEFT JOIN `sessions` s ON pi.`sessionId` = s.id
+    AND s.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
+    AND pi.`updatedAt` + INTERVAL '48' HOUR
     LEFT JOIN tasks t ON pi.`taskId` = t.id
-    AND t.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
-    AND pi.`updatedAt` + INTERVAL '12' HOUR
+    AND t.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
+    AND pi.`updatedAt` + INTERVAL '48' HOUR
     LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
-    AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
-    AND pi.`updatedAt` + INTERVAL '6' HOUR
+    AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
+    AND pi.`updatedAt` + INTERVAL '12' HOUR
     LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
-    AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
-    AND pi.`updatedAt` + INTERVAL '6' HOUR
+    AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
+    AND pi.`updatedAt` + INTERVAL '12' HOUR
     LEFT JOIN trips lm_trip ON pi.`lmTripId` = lm_trip.id
-    AND lm_trip.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
-    AND pi.`updatedAt` + INTERVAL '12' HOUR
+    AND lm_trip.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
+    AND pi.`updatedAt` + INTERVAL '48' HOUR
     LEFT JOIN trip_relation tmap ON lm_trip.id = tmap.`childTripId`
-    AND tmap.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
-    AND pi.`updatedAt` + INTERVAL '12' HOUR
+    AND tmap.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
+    AND pi.`updatedAt` + INTERVAL '48' HOUR
     LEFT JOIN trips mm_trip ON tmap.`parentTripId` = mm_trip.id
-    AND mm_trip.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
-    AND pi.`updatedAt` + INTERVAL '12' HOUR;
+    AND mm_trip.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
+    AND pi.`updatedAt` + INTERVAL '48' HOUR;
