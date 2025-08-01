@@ -1,3 +1,0 @@
-sbx-uat.encarta.public.skus_denormalized=skus_denormalized
-sbx-uat.encarta.public.inventory=inventory
-sbx-uat.wms.public.storage_bin_summary=storage_bin_summary
