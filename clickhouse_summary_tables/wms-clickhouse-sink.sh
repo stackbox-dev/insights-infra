@@ -35,9 +35,10 @@ fi
 
 
 export CLICKHOUSE_ADMIN_PASSWORD=$(kubectl get secret clickhouse-admin -n kafka -o jsonpath='{.data.password}' | base64 --decode)
-export SCHEMA_REGISTRY_AUTH=$(kubectl get secret schema-registry-credentials -n kafka -o jsonpath='{.data.credentials}' | base64 --decode)
-export CLUSTER_USER_NAME=$(kubectl get secret confluent-cloud-credentials -n kafka -o jsonpath='{.data.username}' | base64 --decode)
-export CLUSTER_PASSWORD=$(kubectl get secret confluent-cloud-credentials -n kafka -o jsonpath='{.data.password}' | base64 --decode)
+export SCHEMA_REGISTRY_AUTH=$(kubectl get secret aiven-credentials -n kafka -o jsonpath='{.data.userinfo}' | base64 --decode)
+export CLUSTER_USER_NAME=$(kubectl get secret aiven-credentials -n kafka -o jsonpath='{.data.username}' | base64 --decode)
+export CLUSTER_PASSWORD=$(kubectl get secret aiven-credentials -n kafka -o jsonpath='{.data.password}' | base64 --decode)
+export AIVEN_TRUSTSTORE=$(kubectl get secret kafka-truststore-secret -n kafka -o jsonpath='{.data.truststore-password}' | base64 --decode)
 
 
 if [ -z "$CLICKHOUSE_ADMIN_PASSWORD" ]; then
@@ -60,6 +61,11 @@ if [ -z "$CLUSTER_PASSWORD" ]; then
   exit 1
 fi
 
+if [ -z "$AIVEN_TRUSTSTORE" ]; then
+  echo "Error: AIVEN_TRUSTSTORE environment variable is not set"
+  exit 1
+fi
+
 # The rest of the script uses these environment variables
 curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/config -H "Content-Type: application/json" \
 -d  '{
@@ -70,20 +76,21 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "database": "sbx_uat",
       "errors.retry.timeout": "60",
       "exactlyOnce": "false",
-      "hostname": "clickhouse-headless",
-      "port": "8123",
-      "username": "default",
+      "hostname": "sbx-stag-clickhouse-stackbox.h.aivencloud.com",
+      "port": "22155",
+      "jdbcConnectionProperties": "?ssl=true",
+      "username": "avnadmin",
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
-      "topics": "sbx-uat.wms.public.inventory,sbx-uat.wms.public.storage_bin_summary",
+      "topics": "sbx_uat.wms.public.inventory,sbx_uat.wms.public.storage_bin_summary",
       "value.converter.schemas.enable": "false",
       "clickhouse.debug": "true",
       "clickhouse.log.level": "DEBUG",
-      "topic2TableMap": "sbx-uat.wms.public.inventory=inventory,sbx-uat.wms.public.storage_bin_summary=storage_bin_summary",
+      "topic2TableMap": "sbx_uat.wms.public.inventory=inventory,sbx_uat.wms.public.storage_bin_summary=storage_bin_summary",
 
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
-      "key.converter.schema.registry.url": "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud",
-      "value.converter.schema.registry.url": "https://psrc-mkzxq1.asia-south1.gcp.confluent.cloud",
+      "key.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
+      "value.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
       "key.converter.basic.auth.credentials.source": "USER_INFO",
       "value.converter.basic.auth.credentials.source": "USER_INFO",
       "key.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
@@ -92,18 +99,30 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "errors.tolerance": "all",
       "errors.log.enable": "true",
       "errors.log.include.messages": "true",
+      "ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
+      "ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
+      "ssl.endpoint.identification.algorithm": "",
 
       "producer.security.protocol": "SASL_SSL",
-      "producer.sasl.mechanism": "PLAIN",
-      "producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
+      "producer.sasl.mechanism": "SCRAM-SHA-512",
+      "producer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
+      "producer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
+      "producer.ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
+      "producer.ssl.endpoint.identification.algorithm": "",
   
       "consumer.security.protocol": "SASL_SSL",
-      "consumer.sasl.mechanism": "PLAIN",
-      "consumer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
+      "consumer.sasl.mechanism": "SCRAM-SHA-512",
+      "consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
+      "consumer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
+      "consumer.ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
+      "consumer.ssl.endpoint.identification.algorithm": "",
 
       "admin.security.protocol": "SASL_SSL",
-      "admin.sasl.mechanism": "PLAIN",
-      "admin.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";"
+      "admin.sasl.mechanism": "SCRAM-SHA-512",
+      "admin.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
+      "admin.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
+      "admin.ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
+      "admin.ssl.endpoint.identification.algorithm": ""
 }'
 
 # Stop port forwarding

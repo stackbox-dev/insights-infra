@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS sbx_uat.storage_bin_summary
+CREATE TABLE IF NOT EXISTS storage_bin_summary
 (
     wh_id Int64,
     bin_code String,
@@ -58,7 +58,11 @@ CREATE TABLE IF NOT EXISTS sbx_uat.storage_bin_summary
     dockdoor_y_coordinate Float64 DEFAULT 0,
     sb_status String DEFAULT '',
     sbt_active Bool DEFAULT false,
-    bin_mapping String DEFAULT 'DYNAMIC'
+    bin_mapping String DEFAULT 'DYNAMIC',
+    is_deleted Bool DEFAULT FALSE,
+    createdAt DateTime64(3),
+    updatedAt DateTime64(3),
+    event_time DateTime64(3) DEFAULT if(updatedAt > createdAt, updatedAt, createdAt)
 )
 ENGINE = ReplacingMergeTree()
 ORDER BY ("wh_id", "bin_code", "quality","sd_code");

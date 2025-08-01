@@ -17,28 +17,25 @@ This guide provides a step-by-step walkthrough to set up a streaming pipeline fr
 7. [Documentation Reference](#documentation-reference)
 ---
 
-## Step 1: Create a Custom Kafka Connect Image with Required Plugins
+## Step 1: Deploy Automated Kafka Connect with Custom SMT Plugins
 
-To use the `io.debezium.connector.postgresql.PostgresConnector` and `com.clickhouse.kafka.connect.ClickHouseSinkConnector` in your Kafka Connect setup, you need to create a custom Docker image with these plugins. You can use the Dockerfile provided in the following repository as a reference:
+To use the `io.debezium.connector.postgresql.PostgresConnector` and `com.clickhouse.kafka.connect.ClickHouseSinkConnector` in your Kafka Connect setup, you need to create a custom Docker image with these plugins.
 
+The Kafka Connect image building is now automated using Cloud Build CI/CD pipeline. This includes:
 
-- [Reference Dockerfile](https://github.com/stackbox-dev/devops-edge-replication/blob/9d996eb04ce22fc8a1c312dfc61c7a088be1448e/kafka-apps/connect/Dockerfile)
+- **Debezium PostgreSQL Connector**: `io.debezium.connector.postgresql.PostgresConnector`
+- **ClickHouse Sink Connector**: `com.clickhouse.kafka.connect.ClickHouseSinkConnector`  
+- **Custom SMT Transformation Plugins**: For data transformation during streaming
 
-### 1.1 Steps to Build and Deploy the Custom Image
-1. Clone the Repository: Clone the repository containing the Dockerfile:
-   ```bash
-   git clone https://github.com/stackbox-dev/devops-edge-replication.git
-   cd devops-edge-replication/kafka-apps/connect
-   ```
-2. Build the Docker Image: Use the provided Dockerfile to build the custom Kafka Connect image
-   ```bash
-   docker buildx build --platform linux/amd64 -t asia-docker.pkg.dev/sbx-ci-cd/public/devops-replication-kafka-connect:latest .
-   ```
-3. Push the Image to a Container Registry (Optional): If you are using a container registry (e.g., Docker Hub, Google Container Registry), push the image:
-   ```bash
-   docker push asia-docker.pkg.dev/sbx-ci-cd/public/devops-replication-kafka-connect:latest
-   ```
-4. Update the Kubernetes Deployment: Modify your Kafka Connect deployment YAML to use the custom image.
+### 1.1 Automated Image Building
+
+The custom Kafka Connect image is automatically built via Cloud Build CI/CD when changes are pushed to the repository. The build process:
+
+1. **Triggers**: Automatically triggered on code changes
+2. **Build Process**: Uses [devops-kafka-connect/cloudbuild.yaml](devops-kafka-connect/cloudbuild.yaml)
+3. **Plugin Installation**: Automated via [install-plugins.sh scripts](devops-kafka-connect/install-plugins.sh)
+4. **Registry Push**: Automatically pushes to `asia-docker.pkg.dev/sbx-ci-cd/public/devops-kafka-connectt:latest`
+
 
 ### 1.2 Deploy Kafka Connect with Debezium
 
@@ -141,24 +138,13 @@ DROP PUBLICATION dbz_publication;
 3. Deploy the connector using sample config:
 
    ```bash
-   # this is just a example command to add connector
-   curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @kafka/samples/debezium-postgres.json
+   ./insights-infra/Aiven/connectors/backbone_debezium_postgres.sh
    ```
-
-   To update the connector:
-
-   ```bash
-    # this is just a example command to update connector
-   curl -X PUT http://localhost:8083/connectors/postgres-source/config \
-        -H "Content-Type: application/json" \
-        -d @kafka/samples/debezium-postgres-update.json
-   ```
-
    To delete the connector:
 
    ```bash
    # this is just a example command to delete connector
-   curl -X DELETE http://localhost:8083/connectors/postgres-source
+   curl -X DELETE http://localhost:8083/connectors/<connector>
    ```
 ---
 

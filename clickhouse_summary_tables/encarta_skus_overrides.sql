@@ -1,6 +1,6 @@
-CREATE TABLE IF NOT EXISTS skus_master
+CREATE TABLE IF NOT EXISTS skus_overrides 
 (
-    id String DEFAULT '',
+    sku_id String DEFAULT '',
     principal_id Int64 DEFAULT 0,
     node_id Int64 DEFAULT 0,
     category String DEFAULT '',
@@ -119,6 +119,6 @@ CREATE TABLE IF NOT EXISTS skus_master
     created_at DateTime64(3),
     updated_at DateTime64(3),
     event_time DateTime64(3) DEFAULT if(updated_at > created_at, updated_at, created_at)
-) 
+)
 ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (id);
+ORDER BY (sku_id);

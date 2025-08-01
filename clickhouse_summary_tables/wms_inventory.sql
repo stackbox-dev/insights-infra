@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS sbx_uat.inventory 
+CREATE TABLE IF NOT EXISTS inventory 
 (
     whId Int64,
     id UUID,
