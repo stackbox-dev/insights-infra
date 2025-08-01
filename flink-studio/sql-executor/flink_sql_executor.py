@@ -1607,9 +1607,13 @@ class FlinkSQLExecutor:
         enable_job_tracking: bool = True,
         db_path: str = "flink_jobs.db",
         flink_rest_url: str = None,
+        operation_timeout: int = 60,
+        max_fetch_attempts: int = 20,
     ):
         self.sql_gateway_url = sql_gateway_url.rstrip("/")
         self.session_timeout = session_timeout
+        self.operation_timeout = operation_timeout
+        self.max_fetch_attempts = max_fetch_attempts
         self.session_handle: Optional[str] = None
         self.logger = logging.getLogger(__name__)
 
@@ -1897,9 +1901,12 @@ class FlinkSQLExecutor:
         operation_handle: str,
         statement_name: str,
         format_style: str = "table",
-        max_wait: int = 60,
+        max_wait: int = None,
     ) -> Tuple[bool, Dict]:
         """Poll operation status until completion"""
+        if max_wait is None:
+            max_wait = self.operation_timeout
+
         url = f"{self.sql_gateway_url}/v1/sessions/{self.session_handle}/operations/{operation_handle}/status"
 
         start_time = time.time()
@@ -2032,9 +2039,12 @@ class FlinkSQLExecutor:
         return False, {"error": error_msg, "timeout": True}
 
     def _fetch_operation_result(
-        self, operation_handle: str, max_fetch_attempts: int = 20
+        self, operation_handle: str, max_fetch_attempts: int = None
     ) -> Optional[Dict]:
         """Fetch the result data from a completed operation using proper pagination protocol"""
+        if max_fetch_attempts is None:
+            max_fetch_attempts = self.max_fetch_attempts
+
         all_results = {
             "results": {"columns": [], "data": []},
             "resultType": None,
@@ -2130,7 +2140,10 @@ class FlinkSQLExecutor:
                 # If we received no data in this batch but have nextResultUri, wait briefly
                 if not data_in_batch and next_result_uri:
                     # If we keep getting nextResultUri but no data for too many attempts, stop
-                    if len(all_results["results"]["data"]) == 0 and fetch_attempts >= 5:
+                    if (
+                        len(all_results["results"]["data"]) == 0
+                        and fetch_attempts >= max_fetch_attempts
+                    ):
                         self.logger.debug(
                             f"🛑 Stopping after {fetch_attempts} attempts with no data - likely empty result set"
                         )
@@ -2184,11 +2197,126 @@ class FlinkSQLExecutor:
             job_id = result_data.get("jobID", "N/A")
 
             # Count actual data rows (excluding metadata)
-            actual_data_rows = (
+            # Handle different types of streaming results:
+            # - INSERT: Regular insert operations or final converted streaming results
+            # - UPDATE_AFTER: Final state in streaming aggregations (like COUNT)
+            # - UPDATE_BEFORE: Previous state (we usually don't want these for final results)
+            insert_rows = (
                 [row for row in data_rows if row.get("kind") == "INSERT"]
                 if data_rows
                 else []
-            )  # API uses 'kind' not 'kind'
+            )
+            update_after_rows = (
+                [row for row in data_rows if row.get("kind") == "UPDATE_AFTER"]
+                if data_rows
+                else []
+            )
+            update_before_rows = (
+                [row for row in data_rows if row.get("kind") == "UPDATE_BEFORE"]
+                if data_rows
+                else []
+            )
+
+            # Debug logging for all row types
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(
+                    f"🔍 Row type analysis: INSERT={len(insert_rows)}, UPDATE_AFTER={len(update_after_rows)}, UPDATE_BEFORE={len(update_before_rows)}"
+                )
+                if update_after_rows:
+                    # Show the progression of UPDATE_AFTER values to understand the final count
+                    final_values = []
+                    for i, row in enumerate(
+                        update_after_rows[-5:]
+                    ):  # Show last 5 values
+                        if "fields" in row and len(row["fields"]) > 0:
+                            final_values.append(str(row["fields"][0]))
+                    self.logger.debug(f"🔍 Last 5 UPDATE_AFTER values: {final_values}")
+                    self.logger.debug(
+                        f"🔍 Final UPDATE_AFTER row: {update_after_rows[-1]}"
+                    )
+
+            # For streaming aggregations (like COUNT), we want the final UPDATE_AFTER result
+            # But sometimes Flink converts the final result to INSERT format - handle both cases
+            if update_after_rows:
+                # Check if this is a GROUP BY query with multiple final states or single aggregation
+                # For GROUP BY, we need all final UPDATE_AFTER rows
+                # For single aggregation (no GROUP BY), we only want the last UPDATE_AFTER
+
+                # Heuristic: If we have many UPDATE_AFTER rows but similar number of UPDATE_BEFORE rows,
+                # this suggests GROUP BY aggregation where each group gets updated
+                if len(update_after_rows) > 1 and len(update_before_rows) > 0:
+                    # This looks like GROUP BY aggregation - use all final UPDATE_AFTER rows
+                    # We need to filter out intermediate updates and keep only the final state for each group
+
+                    # Group UPDATE_AFTER rows by their key (first few fields usually represent the grouping key)
+                    group_finals = {}
+                    for row in update_after_rows:
+                        if "fields" in row and len(row["fields"]) > 0:
+                            # Use first 2 fields as grouping key (node_id, sku_id in this case)
+                            key_fields = (
+                                tuple(row["fields"][:2])
+                                if len(row["fields"]) >= 2
+                                else tuple(row["fields"])
+                            )
+                            group_finals[key_fields] = (
+                                row  # Keep the latest UPDATE_AFTER for this group
+                            )
+
+                    actual_data_rows = list(group_finals.values())
+                    if self.logger.isEnabledFor(logging.DEBUG):
+                        self.logger.debug(
+                            f"🔍 GROUP BY aggregation detected: using {len(actual_data_rows)} final UPDATE_AFTER rows"
+                        )
+                        self.logger.debug(
+                            f"🔍 Sample final rows: {actual_data_rows[:3]}"
+                        )
+                else:
+                    # Single aggregation - use the last UPDATE_AFTER row
+                    final_row = update_after_rows[-1]  # Take the final result
+                    actual_data_rows = [final_row]
+                    if self.logger.isEnabledFor(logging.DEBUG):
+                        self.logger.debug(
+                            f"🔍 Single streaming aggregation detected: using final UPDATE_AFTER row"
+                        )
+                        self.logger.debug(f"🔍 Final row data: {final_row}")
+                        if "fields" in final_row:
+                            self.logger.debug(
+                                f"🔍 Final field values: {final_row['fields']}"
+                            )
+            elif insert_rows and update_before_rows:
+                # This might be a streaming aggregation where final result was converted to INSERT
+                # If we have UPDATE_BEFORE rows, it suggests streaming aggregation occurred
+                # Use the INSERT row but validate it makes sense
+                final_row = insert_rows[-1]  # Take the last INSERT row
+                actual_data_rows = [final_row]
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(
+                        f"🔍 Possible converted streaming aggregation: INSERT after UPDATE_BEFORE rows"
+                    )
+                    self.logger.debug(f"🔍 Final INSERT row: {final_row}")
+                    if "fields" in final_row:
+                        self.logger.debug(
+                            f"🔍 Final field values: {final_row['fields']}"
+                        )
+            elif insert_rows:
+                # Regular insert operations
+                actual_data_rows = insert_rows
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(
+                        f"🔍 Regular INSERT operations: {len(insert_rows)} rows"
+                    )
+            else:
+                # Fallback to all non-UPDATE_BEFORE rows
+                actual_data_rows = (
+                    [row for row in data_rows if row.get("kind") != "UPDATE_BEFORE"]
+                    if data_rows
+                    else []
+                )
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(
+                        f"🔍 Fallback: using all non-UPDATE_BEFORE rows: {len(actual_data_rows)} rows"
+                    )
+
             data_rows_count = len(actual_data_rows)
 
             if self.logger.isEnabledFor(logging.DEBUG):
@@ -2261,25 +2389,48 @@ class FlinkSQLExecutor:
                 if format_style == "json":
                     # Convert data to JSON format
                     json_data = []
+
+                    # Debug logging for JSON conversion
+                    if self.logger.isEnabledFor(logging.DEBUG):
+                        self.logger.debug(
+                            f"🔍 Converting {len(actual_data_rows)} rows to JSON"
+                        )
+                        for i, row_data in enumerate(actual_data_rows):
+                            self.logger.debug(f"🔍 Row {i}: {row_data}")
+
                     for row_data in actual_data_rows:
                         if isinstance(row_data, dict):
                             if "fields" in row_data:
                                 fields = row_data["fields"]
+                                if self.logger.isEnabledFor(logging.DEBUG):
+                                    self.logger.debug(
+                                        f"🔍 Extracted fields from dict: {fields}"
+                                    )
                             else:
                                 fields = [
                                     row_data.get(col.get("name", f"col_{i}"), None)
                                     for i, col in enumerate(columns)
                                 ]
+                                if self.logger.isEnabledFor(logging.DEBUG):
+                                    self.logger.debug(
+                                        f"🔍 Extracted fields by column name: {fields}"
+                                    )
                         else:
                             fields = (
                                 row_data if isinstance(row_data, list) else [row_data]
                             )
+                            if self.logger.isEnabledFor(logging.DEBUG):
+                                self.logger.debug(
+                                    f"🔍 Row data is not dict, using as fields: {fields}"
+                                )
 
                         # Create a dictionary for this row
                         row_dict = {}
                         for i, header in enumerate(headers):
                             value = fields[i] if i < len(fields) else None
                             row_dict[header] = value
+                            if self.logger.isEnabledFor(logging.DEBUG):
+                                self.logger.debug(f"🔍 Setting {header} = {value}")
                         json_data.append(row_dict)
 
                     # Pretty print the JSON
@@ -2953,12 +3104,17 @@ def load_config(config_file: str = "config.yaml") -> Dict:
                 "session_timeout": 300,
                 "poll_interval": 2,
                 "max_wait_time": 60,
+                "max_fetch_attempts": 20,
             },
             "logging": {
                 "level": "INFO",
                 "format": "%(asctime)s - %(levelname)s - %(message)s",
             },
-            "execution": {"continue_on_error": False},
+            "execution": {
+                "continue_on_error": False,
+                "operation_timeout": 60,
+                "fetch_attempts": 20,
+            },
             "connection": {"timeout": 30, "retry_count": 3, "retry_delay": 5},
         }
 
@@ -3240,6 +3396,16 @@ def main():
     )
     default_log_level = config.get("logging", {}).get("level", "INFO")
 
+    # Execution timeout configuration
+    execution_config = config.get("execution", {})
+    sql_gateway_config = config.get("sql_gateway", {})
+    default_operation_timeout = execution_config.get(
+        "operation_timeout", sql_gateway_config.get("max_wait_time", 60)
+    )
+    default_fetch_attempts = execution_config.get(
+        "fetch_attempts", sql_gateway_config.get("max_fetch_attempts", 20)
+    )
+
     # Job management configuration
     job_config = config.get("job_management", {})
     flink_cluster_config = config.get("flink_cluster", {})
@@ -3283,6 +3449,16 @@ Examples:
     # Output in JSON format
     python flink_sql_executor.py --sql "SELECT * FROM my_table" --format json
     python flink_sql_executor.py --sql "SELECT * FROM my_table" --json
+
+Timeout Configuration Examples:
+    # Set custom operation timeout (default: 60 seconds)
+    python flink_sql_executor.py --file /path/to/my_query.sql --operation-timeout 120
+    
+    # Set custom fetch attempts (default: 20 attempts)
+    python flink_sql_executor.py --file /path/to/my_query.sql --fetch-attempts 50
+    
+    # Combine both timeout settings for long-running queries
+    python flink_sql_executor.py --file /path/to/my_query.sql --operation-timeout 300 --fetch-attempts 100
 
 Job Management Examples:
     # List all jobs from Flink cluster
@@ -3441,6 +3617,20 @@ Dry Run Examples (preview actions without executing):
         "--keep-session",
         action="store_true",
         help="Keep the SQL Gateway session open after execution (don't close it)",
+    )
+
+    parser.add_argument(
+        "--operation-timeout",
+        type=int,
+        default=default_operation_timeout,
+        help=f"Maximum time in seconds to wait for SQL operation completion (default: {default_operation_timeout})",
+    )
+
+    parser.add_argument(
+        "--fetch-attempts",
+        type=int,
+        default=default_fetch_attempts,
+        help=f"Maximum number of attempts to fetch result data (default: {default_fetch_attempts})",
     )
 
     # Job Management Arguments
@@ -3706,6 +3896,8 @@ Dry Run Examples (preview actions without executing):
                         enable_job_tracking=enable_database,
                         db_path=args.db_path,
                         flink_rest_url=args.flink_rest_url,
+                        operation_timeout=args.operation_timeout,
+                        max_fetch_attempts=args.fetch_attempts,
                     )
 
                     if not check_sql_gateway_connectivity(args.sql_gateway_url):
@@ -3780,6 +3972,8 @@ Dry Run Examples (preview actions without executing):
                         enable_job_tracking=enable_database,
                         db_path=args.db_path,
                         flink_rest_url=args.flink_rest_url,
+                        operation_timeout=args.operation_timeout,
+                        max_fetch_attempts=args.fetch_attempts,
                     )
 
                     if not check_sql_gateway_connectivity(args.sql_gateway_url):
@@ -3857,6 +4051,8 @@ Dry Run Examples (preview actions without executing):
                         enable_job_tracking=enable_database,
                         db_path=args.db_path,
                         flink_rest_url=args.flink_rest_url,
+                        operation_timeout=args.operation_timeout,
+                        max_fetch_attempts=args.fetch_attempts,
                     )
 
                     if not check_sql_gateway_connectivity(args.sql_gateway_url):
@@ -3894,6 +4090,8 @@ Dry Run Examples (preview actions without executing):
                     enable_job_tracking=enable_database,
                     db_path=args.db_path,
                     flink_rest_url=args.flink_rest_url,
+                    operation_timeout=args.operation_timeout,
+                    max_fetch_attempts=args.fetch_attempts,
                 )
 
                 jobs = executor.list_pausable_jobs()
@@ -3916,6 +4114,8 @@ Dry Run Examples (preview actions without executing):
                     enable_job_tracking=enable_database,
                     db_path=args.db_path,
                     flink_rest_url=args.flink_rest_url,
+                    operation_timeout=args.operation_timeout,
+                    max_fetch_attempts=args.fetch_attempts,
                 )
 
                 jobs = executor.list_resumable_jobs()
@@ -3938,6 +4138,8 @@ Dry Run Examples (preview actions without executing):
                     enable_job_tracking=enable_database,
                     db_path=args.db_path,
                     flink_rest_url=args.flink_rest_url,
+                    operation_timeout=args.operation_timeout,
+                    max_fetch_attempts=args.fetch_attempts,
                 )
 
                 try:
@@ -3965,6 +4167,8 @@ Dry Run Examples (preview actions without executing):
                     enable_job_tracking=enable_database,
                     db_path=args.db_path,
                     flink_rest_url=args.flink_rest_url,
+                    operation_timeout=args.operation_timeout,
+                    max_fetch_attempts=args.fetch_attempts,
                 )
 
                 try:
@@ -4018,6 +4222,8 @@ Dry Run Examples (preview actions without executing):
                 enable_job_tracking=enable_database,
                 db_path=args.db_path,
                 flink_rest_url=args.flink_rest_url,
+                operation_timeout=args.operation_timeout,
+                max_fetch_attempts=args.fetch_attempts,
             )
 
             # For inline SQL, use it directly without variable substitution
@@ -4112,6 +4318,8 @@ Dry Run Examples (preview actions without executing):
                 enable_job_tracking=enable_database,
                 db_path=args.db_path,
                 flink_rest_url=args.flink_rest_url,
+                operation_timeout=args.operation_timeout,
+                max_fetch_attempts=args.fetch_attempts,
             )
 
             if not args.dry_run:
