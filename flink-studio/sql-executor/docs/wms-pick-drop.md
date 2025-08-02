@@ -779,7 +779,7 @@ CREATE TABLE pick_drop_summary
 ENGINE = MergeTree()
 PRIMARY KEY (wh_id, pick_item_id, drop_item_id)
 ORDER BY (wh_id, pick_item_id, drop_item_id, picked_at)
-PARTITION BY toYYYYMM(picked_at)
+PARTITION BY toYYYYMM(pick_item_created_at)
 SETTINGS index_granularity = 8192;
 ```
 
@@ -791,7 +791,7 @@ SETTINGS index_granularity = 8192;
 - Supports unique record identification
 
 **Partitioning:**
-- Monthly partitions by `picked_at` timestamp
+- Monthly partitions by `pick_item_created_at` timestamp
 - Optimizes time-range queries
 - Facilitates data lifecycle management
 
