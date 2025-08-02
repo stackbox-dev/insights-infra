@@ -21,7 +21,7 @@ spec:
       serviceAccountName: flink
       containers:
         - name: flink-sql-gateway
-          image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:latest
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:2.0.0-scala_2.12-java21
           imagePullPolicy: Always
           command: ["/opt/flink/bin/sql-gateway.sh"]
           args:

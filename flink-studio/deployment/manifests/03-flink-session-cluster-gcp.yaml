@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: flink-cluster
     app.kubernetes.io/cloud: gcp
 spec:
-  image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:latest
+  image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:2.0.0-scala_2.12-java21
   flinkVersion: v2_0
   imagePullPolicy: Always
   flinkConfiguration:

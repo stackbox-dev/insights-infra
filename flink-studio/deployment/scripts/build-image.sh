@@ -37,13 +37,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER_DIR="${SCRIPT_DIR}/../docker"
 IMAGE_REGISTRY="asia-docker.pkg.dev/sbx-ci-cd/public"
 IMAGE_NAME="flink"
-
-# Allow custom tag from command line argument
-if [[ -n "$1" ]]; then
-    IMAGE_TAG="$1"
-else
-    IMAGE_TAG="latest"
-fi
+IMAGE_TAG="2.0.0-scala_2.12-java21"
 
 FULL_IMAGE_NAME="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
