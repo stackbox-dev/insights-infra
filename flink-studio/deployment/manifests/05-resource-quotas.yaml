@@ -8,11 +8,11 @@ metadata:
     app.kubernetes.io/component: resource-quota
 spec:
   hard:
-    requests.cpu: "16"
-    requests.memory: 48Gi
+    requests.cpu: "32"
+    requests.memory: 96Gi
     limits.cpu: "32"
     limits.memory: 96Gi
-    persistentvolumeclaims: "10"
+    persistentvolumeclaims: "20"
     pods: "50"
     services: "10"
     secrets: "20"
@@ -35,14 +35,14 @@ spec:
       cpu: "100m"
       memory: 256Mi
     max:
-      cpu: "8"
-      memory: 16Gi
+      cpu: "16"
+      memory: 32Gi
     min:
       cpu: "50m"
       memory: 128Mi
     type: Container
   - max:
-      storage: 100Gi
+      storage: 500Gi
     min:
       storage: 1Gi
     type: PersistentVolumeClaim

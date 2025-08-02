@@ -13,7 +13,7 @@
         "artifactId": "commons-compress",
         "description": "Apache Commons Compress",
         "groupId": "org.apache.commons",
-        "version": "1.27.1"
+        "version": "1.28.0"
       },
       "lz4-java": {
         "artifactId": "lz4-java",
@@ -39,13 +39,13 @@
         "artifactId": "flink-avro",
         "description": "Flink Avro Connector",
         "groupId": "org.apache.flink",
-        "version": "2.0.0"
+        "version": "2.1.0"
       },
       "flink-avro-confluent-registry": {
         "artifactId": "flink-avro-confluent-registry",
         "description": "Flink Confluent Avro Registry Connector",
         "groupId": "org.apache.flink",
-        "version": "2.0.0"
+        "version": "2.1.0"
       },
       "flink-connector-kafka": {
         "artifactId": "flink-connector-kafka",
@@ -57,7 +57,7 @@
         "artifactId": "flink-sql-avro",
         "description": "Flink SQL Avro Connector",
         "groupId": "org.apache.flink",
-        "version": "2.0.0"
+        "version": "2.1.0"
       },
       "flink-sql-connector-kafka": {
         "artifactId": "flink-sql-connector-kafka",
@@ -238,7 +238,7 @@
         "artifactId": "swagger-annotations",
         "description": "Swagger Annotations",
         "groupId": "io.swagger.core.v3",
-        "version": "2.2.34"
+        "version": "2.2.35"
       }
     },
     "opencensus": {
@@ -259,6 +259,6 @@
   "metadata": {
     "description": "Dependency versions for Flink Docker image preparation",
     "flink_version": "2.0.0",
-    "last_updated": "2025-07-29"
+    "last_updated": "2025-08-02"
   }
 }

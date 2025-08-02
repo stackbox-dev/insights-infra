@@ -38,6 +38,22 @@ spec:
             - "-Dsql-gateway.worker.threads.min=5"
             - "-Dsql-gateway.worker.threads.max=500"
             - "-Dsql-gateway.worker.keepalive-time=5min"
+            # Parallelism Configuration
+            - "-Dparallelism.default=2"
+            # Checkpointing Configuration
+            - "-Dexecution.checkpointing.interval=300s"
+            - "-Dexecution.checkpointing.mode=AT_LEAST_ONCE"
+            - "-Dexecution.checkpointing.timeout=10min"
+            - "-Dexecution.checkpointing.incremental=true"
+            - "-Dexecution.checkpointing.dir=gs://sbx-stag-flink-storage/flink-checkpoints"
+            - "-Dexecution.checkpointing.externalized-checkpoint-retention=RETAIN_ON_CANCELLATION"
+            - "-Dexecution.checkpointing.unaligned.enabled=true"
+            - "-Dexecution.checkpointing.tolerable-failure-number=5"
+            - "-Dstate.savepoints.format=native"
+            # Table and SQL Configuration
+            - "-Dtable.exec.source.idle-timeout=30s"
+            - "-Dtable.exec.resource.default-parallelism=2"
+            - "-Dtable.optimizer.join-reorder-enabled=true"
           ports:
             - containerPort: 80
               name: rest-api
