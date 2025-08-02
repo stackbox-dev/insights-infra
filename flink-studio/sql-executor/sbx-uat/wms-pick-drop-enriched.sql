@@ -963,7 +963,7 @@ INSERT INTO pick_drop_summary
 SELECT
     /*+ USE_HASH_JOIN */
     pb.wh_id AS wh_id,
-    CAST(NULL AS BIGINT) AS principal_id,
+    COALESCE(sm.principal_id, 0) AS principal_id,
     pb.pick_item_id AS pick_item_id,
     pb.drop_item_id AS drop_item_id,
     pb.picked_bin AS picked_bin,
