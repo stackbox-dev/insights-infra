@@ -53,7 +53,7 @@ spec:
     restart-strategy.failure-rate.failure-rate-interval: "10 min"
     restart-strategy.failure-rate.delay: "30 s"
     execution.checkpointing.interval: "300 s" # 5 minutes
-    execution.checkpointing.mode: AT_LEAST_ONCE
+    execution.checkpointing.mode: EXACTLY_ONCE
     execution.checkpointing.timeout: "5 min"
     execution.checkpointing.incremental: true
     execution.checkpointing.dir: gs://sbx-stag-flink-storage/flink-checkpoints
