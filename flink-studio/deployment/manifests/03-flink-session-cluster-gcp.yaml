@@ -126,6 +126,14 @@ spec:
     podTemplate:
       spec:
         serviceAccountName: flink
+        # Schedule TaskManager pods on GKE spot instances for cost optimization
+        nodeSelector:
+          cloud.google.com/gke-spot: "true"
+        tolerations:
+          - key: instance_type
+            operator: Equal
+            value: spot
+            effect: NoSchedule
         initContainers:
           - name: rocksdb-init
             image: busybox:1.35
