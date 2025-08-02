@@ -411,6 +411,77 @@ CREATE TABLE skus_uoms_agg (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
+-- Create intermediate views to break join chain and enable parallelization
+-- Category hierarchy view - pre-joins category chain to reduce join complexity
+CREATE VIEW category_hierarchy AS
+SELECT subcat.id as sub_category_id,
+    cat.code AS category,
+    cg.code AS category_group,
+    GREATEST(
+        COALESCE(
+            subcat.updated_at,
+            TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        COALESCE(cat.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(cg.updated_at, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS updated_at,
+    subcat.proc_time,
+    subcat.event_time
+FROM sub_categories subcat
+    LEFT JOIN categories cat ON subcat.category_id = cat.id
+    LEFT JOIN category_groups cg ON cat.category_group_id = cg.id;
+-- Brand hierarchy view - pre-joins brand chain to reduce join complexity  
+CREATE VIEW brand_hierarchy AS
+SELECT sb.id as sub_brand_id,
+    sb.code AS sub_brand,
+    b.code AS brand,
+    GREATEST(
+        COALESCE(sb.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(b.updated_at, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS updated_at,
+    sb.proc_time,
+    sb.event_time
+FROM sub_brands sb
+    LEFT JOIN brands b ON sb.brand_id = b.id;
+-- Products enriched view - joins products with pre-computed hierarchies
+CREATE VIEW products_enriched AS
+SELECT p.id,
+    p.principal_id,
+    p.code,
+    p.name,
+    p.description,
+    p.sub_category_id,
+    p.sub_brand_id,
+    p.dangerous,
+    p.spillable,
+    p.fragile,
+    p.flammable,
+    p.alcohol,
+    p.temperature_controlled,
+    p.temp_min,
+    p.temp_max,
+    p.cold_chain,
+    p.shelf_life,
+    p.invoice_life,
+    p.classifications,
+    p.active,
+    p.created_at,
+    p.updated_at,
+    p.is_deleted,
+    ch.category,
+    ch.category_group,
+    bh.sub_brand,
+    bh.brand,
+    GREATEST(
+        COALESCE(p.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(ch.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(bh.updated_at, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS final_updated_at,
+    p.proc_time,
+    p.event_time
+FROM products p
+    LEFT JOIN category_hierarchy ch ON p.sub_category_id = ch.sub_category_id
+    LEFT JOIN brand_hierarchy bh ON p.sub_brand_id = bh.sub_brand_id;
 -- Create final summary table structure (destination table)
 CREATE TABLE skus_master (
     id VARCHAR NOT NULL,
@@ -559,19 +630,19 @@ CREATE TABLE skus_master (
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Continuously populate the summary table from source tables
--- Optimized INSERT statement using materialized aggregation tables
--- Uses regular LEFT JOINs for real-time latest data processing
+-- Optimized INSERT statement using pre-computed hierarchy views
+-- Reduces 7-table join chain to just 3 main joins for better parallelization
 INSERT INTO skus_master
 SELECT s.id,
     -- Primary key from source matches target primary key
     s.principal_id,
     s.principal_id AS node_id,
-    cat.code AS category,
-    p.code AS product,
-    p.id AS product_id,
-    cg.code AS category_group,
-    sb.code AS sub_brand,
-    b.code AS brand,
+    pe.category AS category,
+    pe.code AS product,
+    pe.id AS product_id,
+    pe.category_group AS category_group,
+    pe.sub_brand AS sub_brand,
+    pe.brand AS brand,
     s.code,
     s.name,
     s.short_description,
@@ -677,7 +748,7 @@ SELECT s.id,
     uom_agg.l3_num_tag1,
     COALESCE(s.active, FALSE) AS active,
     COALESCE(s.classifications, '{}') AS classifications,
-    COALESCE(p.classifications, '{}') AS product_classifications,
+    COALESCE(pe.classifications, '{}') AS product_classifications,
     COALESCE(s.is_deleted, FALSE) AS is_deleted,
     s.created_at,
     GREATEST(
@@ -686,21 +757,11 @@ SELECT s.id,
             uom_agg.updated_at,
             TIMESTAMP '1970-01-01 00:00:00'
         ),
-        COALESCE(p.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(
-            subcat.updated_at,
+            pe.final_updated_at,
             TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(cat.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(cg.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(sb.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(b.updated_at, TIMESTAMP '1970-01-01 00:00:00')
+        )
     ) AS updated_at
 FROM skus s
     LEFT JOIN skus_uoms_agg AS uom_agg ON s.id = uom_agg.sku_id
-    LEFT JOIN products AS p ON s.product_id = p.id
-    LEFT JOIN sub_categories AS subcat ON p.sub_category_id = subcat.id
-    LEFT JOIN categories AS cat ON subcat.category_id = cat.id
-    LEFT JOIN category_groups AS cg ON cat.category_group_id = cg.id
-    LEFT JOIN sub_brands AS sb ON p.sub_brand_id = sb.id
-    LEFT JOIN brands AS b ON sb.brand_id = b.id;
+    LEFT JOIN products_enriched AS pe ON s.product_id = pe.id;
