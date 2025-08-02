@@ -1,5 +1,19 @@
-SET 'pipeline.name' = 'WMS Pick Drop Joined';
+SET 'pipeline.name' = 'WMS Pick Drop Basic Processing';
 SET 'table.exec.sink.not-null-enforcer' = 'drop';
+SET 'parallelism.default' = '2';
+SET 'table.optimizer.join-reorder-enabled' = 'true';
+SET 'table.exec.resource.default-parallelism' = '2';
+-- Performance optimizations
+SET 'taskmanager.memory.managed.fraction' = '0.8';
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '1s';
+SET 'table.exec.mini-batch.size' = '5000';
+SET 'execution.checkpointing.interval' = '600000';
+SET 'execution.checkpointing.timeout' = '1800000';
+SET 'state.backend.incremental' = 'true';
+SET 'state.backend.rocksdb.compression.type' = 'LZ4';
+SET 'pipeline.operator-chaining' = 'true';
+SET 'table.optimizer.multiple-input-enabled' = 'true';
 -- Source Table 1: Pick Items
 CREATE TABLE pick_items (
     id STRING,
@@ -87,13 +101,12 @@ CREATE TABLE pick_items (
     iloc STRING,
     `destIloc` STRING,
     `is_deleted` BOOLEAN,
-    proc_time AS PROCTIME(),
     WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_item',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-basic',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
@@ -183,7 +196,7 @@ CREATE TABLE drop_items (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_drop_item',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-basic',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
@@ -211,7 +224,7 @@ CREATE TABLE pick_drop_mapping (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_drop_mapping',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
+    'properties.group.id' = 'sbx-uat-wms-pick-drop-basic',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
@@ -224,150 +237,15 @@ CREATE TABLE pick_drop_mapping (
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'properties.auto.offset.reset' = 'earliest'
 );
--- Source Table 4: Tasks
-CREATE TABLE tasks (
-    `whId` BIGINT,
-    id STRING,
-    `sessionId` STRING,
-    kind STRING,
-    code STRING,
-    seq INT,
-    exclusive BOOLEAN,
-    state STRING,
-    attrs STRING,
-    progress STRING,
-    `createdAt` TIMESTAMP(3),
-    `updatedAt` TIMESTAMP(3),
-    active BOOLEAN,
-    `allowForceComplete` BOOLEAN,
-    `autoComplete` BOOLEAN,
-    wave INT,
-    `forceCompleteTaskId` STRING,
-    `forceCompleted` BOOLEAN,
-    `subKind` STRING,
-    label STRING,
-    `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND
-) WITH (
-    'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.task',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
-    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
-    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
-    'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'properties.auto.offset.reset' = 'earliest'
-);
--- Source Table 5: Sessions
-CREATE TABLE `sessions` (
-    `whId` BIGINT,
-    id STRING,
-    kind STRING,
-    code STRING,
-    attrs STRING,
-    `createdAt` TIMESTAMP(3),
-    `updatedAt` TIMESTAMP(3),
-    active BOOLEAN,
-    state STRING,
-    progress STRING,
-    `autoComplete` BOOLEAN,
-    `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND
-) WITH (
-    'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.session',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
-    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
-    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
-    'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'properties.auto.offset.reset' = 'earliest'
-);
--- Source Table 6: Trips
-CREATE TABLE trips (
-    `sessionCreatedAt` TIMESTAMP(3),
-    `whId` BIGINT,
-    `sessionId` STRING,
-    id STRING,
-    `createdAt` TIMESTAMP(3),
-    `bbId` STRING,
-    code STRING,
-    `type` STRING,
-    priority INT,
-    `dockdoorId` STRING,
-    `dockdoorCode` STRING,
-    `vehicleId` STRING,
-    `vehicleNo` STRING,
-    `vehicleType` STRING,
-    `deliveryDate` DATE,
-    `is_deleted` BOOLEAN,
-    WATERMARK FOR `createdAt` AS `createdAt` - INTERVAL '5' SECOND
-) WITH (
-    'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.trip',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
-    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
-    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
-    'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'properties.auto.offset.reset' = 'earliest'
-);
--- Source Table 7: Trip Relations
-CREATE TABLE trip_relation (
-    `whId` BIGINT,
-    id STRING,
-    `sessionId` STRING,
-    xdock STRING,
-    `parentTripId` STRING,
-    `childTripId` STRING,
-    `is_deleted` BOOLEAN,
-    `createdAt` TIMESTAMP(3),
-    proc_time AS PROCTIME(),
-    WATERMARK FOR `createdAt` AS `createdAt` - INTERVAL '5' SECOND
-) WITH (
-    'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.trip_relation',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'properties.group.id' = 'sbx-uat-wms-pick-drop-joined',
-    'properties.security.protocol' = 'SASL_SSL',
-    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
-    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
-    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
-    'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'properties.auto.offset.reset' = 'earliest'
-);
--- Sink Table - sbx_uat.wms.public.pick_drop_joined
-CREATE TABLE pick_drop_joined (
-    wh_id BIGINT,
-    principal_id BIGINT,
+-- Intermediate sink table for basic pick-drop data
+CREATE TABLE pick_drop_basic (
     pick_item_id STRING,
     drop_item_id STRING,
+    wh_id BIGINT,
+    session_id STRING,
+    task_id STRING,
+    lm_trip_id STRING,
+    -- Pick item fields
     picked_bin STRING,
     picked_sku STRING,
     picked_batch STRING,
@@ -400,14 +278,13 @@ CREATE TABLE pick_drop_joined (
     old_batch STRING,
     dest_bucket STRING,
     original_source_bin_code STRING,
-    lm_trip_id STRING,
     picked_inner_hu_code STRING,
     picked_inner_hu_kind_code STRING,
     picked_quant_bucket STRING,
     pick_auto_complete BOOLEAN,
     pick_hu BOOLEAN,
     short_allocation_reason STRING,
-    drop_item_previous_task_id STRING,
+    -- Drop item fields
     dropped_sku STRING,
     dropped_batch STRING,
     dropped_uom STRING,
@@ -442,42 +319,10 @@ CREATE TABLE pick_drop_joined (
     quant_slotting_for_hus BOOLEAN,
     processed_on_drop_at TIMESTAMP(3),
     allow_hu_break_v2 BOOLEAN,
-    task_kind STRING,
-    task_code STRING,
-    task_sequence INT,
-    task_state STRING,
-    task_attrs STRING,
-    task_progress STRING,
-    task_created_at TIMESTAMP(3),
-    task_updated_at TIMESTAMP(3),
-    allow_force_complete BOOLEAN,
-    wave INT,
-    force_completed BOOLEAN,
-    task_subkind STRING,
-    `label` STRING,
-    session_kind STRING,
-    session_code STRING,
-    session_attrs STRING,
-    session_created_at TIMESTAMP(3),
-    session_updated_at TIMESTAMP(3),
-    active BOOLEAN,
-    session_state STRING,
-    session_progress STRING,
-    session_auto_complete BOOLEAN,
-    lm_trip_code STRING,
-    lm_trip_priority INT,
-    lm_dockdoor STRING,
-    lm_vehicle_no STRING,
-    lm_vehicle_type STRING,
-    lm_delivery_date DATE,
-    xdock STRING,
-    mm_trip_code STRING,
-    mm_trip_priority INT,
-    mm_dockdoor STRING,
-    mm_vehicle_no STRING,
-    mm_vehicle_type STRING,
-    mm_delivery_date DATE,
-    -- Additional Pick Items columns
+    -- Mapping fields
+    mapping_id STRING,
+    mapping_created_at TIMESTAMP(3),
+    -- Additional fields for enrichment pipeline
     bin_id STRING,
     bin_hu_id STRING,
     destination_bin_id STRING,
@@ -517,7 +362,6 @@ CREATE TABLE pick_drop_joined (
     pick_attrs STRING,
     iloc STRING,
     dest_iloc STRING,
-    -- Additional Drop Items columns
     source_bin_id STRING,
     source_bin_hu_id STRING,
     drop_bin_id STRING,
@@ -541,32 +385,10 @@ CREATE TABLE pick_drop_joined (
     drop_mhe_id STRING,
     drop_iloc STRING,
     source_iloc STRING,
-    -- Additional Pick Drop Mapping columns
-    mapping_id STRING,
-    mapping_created_at TIMESTAMP(3),
-    -- Additional Tasks columns
-    task_exclusive BOOLEAN,
-    task_active BOOLEAN,
-    task_auto_complete BOOLEAN,
-    force_complete_task_id STRING,
-    -- Additional Trips columns (LM)
-    lm_session_created_at TIMESTAMP(3),
-    lm_trip_created_at TIMESTAMP(3),
-    lm_bb_id STRING,
-    lm_trip_type STRING,
-    lm_dockdoor_id STRING,
-    lm_vehicle_id STRING,
-    -- Additional Trips columns (MM)
-    mm_session_created_at TIMESTAMP(3),
-    mm_trip_created_at TIMESTAMP(3),
-    mm_bb_id STRING,
-    mm_trip_type STRING,
-    mm_dockdoor_id STRING,
-    mm_vehicle_id STRING,
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx_uat.wms.public.pick_drop_joined',
+    'topic' = 'sbx_uat.wms.internal.pick_drop_basic',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -575,6 +397,9 @@ CREATE TABLE pick_drop_joined (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
+    'sink.buffer-flush.max-rows' = '2000',
+    'sink.buffer-flush.interval' = '5s',
+    'sink.parallelism' = '2',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -584,12 +409,17 @@ CREATE TABLE pick_drop_joined (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Continuously populate the summary table
-INSERT INTO pick_drop_joined
-SELECT pi.`whId` AS wh_id,
-    CAST(NULL AS BIGINT) AS principal_id,
+-- Basic pick-drop processing with 4-hour time windows
+INSERT INTO pick_drop_basic
+SELECT
+    /*+ USE_HASH_JOIN */
     pi.id AS pick_item_id,
-    COALESCE(di.id, 'NO_DROP') AS drop_item_id,
+    COALESCE(pdm.`dropItemId`, 'NO_DROP') AS drop_item_id,
+    pi.`whId` AS wh_id,
+    pi.`sessionId` AS session_id,
+    pi.`taskId` AS task_id,
+    pi.`lmTripId` AS lm_trip_id,
+    -- Pick item fields
     pi.`binCode` AS picked_bin,
     pi.`skuId` AS picked_sku,
     pi.batch AS picked_batch,
@@ -622,20 +452,19 @@ SELECT pi.`whId` AS wh_id,
     pi.`oldBatch` AS old_batch,
     pi.`destBucket` AS dest_bucket,
     pi.`originalSourceBinCode` AS original_source_bin_code,
-    pi.`lmTripId` AS lm_trip_id,
     pi.`innerHUCode` AS picked_inner_hu_code,
     pi.`innerHUKindCode` AS picked_inner_hu_kind_code,
     pi.`quantBucket` AS picked_quant_bucket,
     pi.`autoCompleted` AS pick_auto_complete,
     pi.`pickHU` AS pick_hu,
     pi.`shortAllocationReason` AS short_allocation_reason,
-    pi.`pdPreviousTaskId` AS drop_item_previous_task_id,
-    di.`skuId` AS dropped_sku,
-    di.batch AS dropped_batch,
-    di.uom AS dropped_uom,
-    di.bucket AS drop_bucket,
+    -- Drop item fields
+    COALESCE(di.`skuId`, '') AS dropped_sku,
+    COALESCE(di.batch, '') AS dropped_batch,
+    COALESCE(di.uom, '') AS dropped_uom,
+    COALESCE(di.bucket, '') AS drop_bucket,
     pi.`huCode` AS picked_hu_code,
-    di.`binCode` AS dropped_bin_code,
+    COALESCE(di.`binCode`, '') AS dropped_bin_code,
     COALESCE(di.`droppedQty`, 0) AS dropped_qty,
     di.`droppedAt` AS dropped_at,
     CAST(di.`updatedAt` AS TIMESTAMP) AS drop_item_updated_at,
@@ -664,42 +493,10 @@ SELECT pi.`whId` AS wh_id,
     di.`quantSlottingForHUs` AS quant_slotting_for_hus,
     di.`processedOnDropAt` AS processed_on_drop_at,
     di.`allowHUBreakV2` AS allow_hu_break_v2,
-    t.kind AS task_kind,
-    t.code AS task_code,
-    COALESCE(t.seq, 0) AS task_sequence,
-    t.state AS task_state,
-    t.attrs AS task_attrs,
-    t.progress AS task_progress,
-    t.`createdAt` AS task_created_at,
-    CAST(t.`updatedAt` AS TIMESTAMP) AS task_updated_at,
-    t.`allowForceComplete` AS allow_force_complete,
-    COALESCE(t.wave, 0) AS wave,
-    t.`forceCompleted` AS force_completed,
-    t.`subKind` AS task_subkind,
-    t.label,
-    s.kind AS session_kind,
-    s.code AS session_code,
-    s.attrs AS session_attrs,
-    s.`createdAt` AS session_created_at,
-    CAST(s.`updatedAt` AS TIMESTAMP) AS session_updated_at,
-    s.active,
-    s.state AS session_state,
-    s.progress AS session_progress,
-    s.`autoComplete` AS session_auto_complete,
-    lm_trip.code AS lm_trip_code,
-    COALESCE(lm_trip.priority, 0) AS lm_trip_priority,
-    lm_trip.`dockdoorCode` AS lm_dockdoor,
-    lm_trip.`vehicleNo` AS lm_vehicle_no,
-    lm_trip.`vehicleType` AS lm_vehicle_type,
-    lm_trip.`deliveryDate` AS lm_delivery_date,
-    tmap.xdock AS xdock,
-    mm_trip.code AS mm_trip_code,
-    COALESCE(mm_trip.priority, 0) AS mm_trip_priority,
-    mm_trip.`dockdoorCode` AS mm_dockdoor,
-    mm_trip.`vehicleNo` AS mm_vehicle_no,
-    mm_trip.`vehicleType` AS mm_vehicle_type,
-    mm_trip.`deliveryDate` AS mm_delivery_date,
-    -- Additional Pick Items columns
+    -- Mapping fields
+    COALESCE(pdm.id, '') AS mapping_id,
+    CAST(pdm.`createdAt` AS TIMESTAMP) AS mapping_created_at,
+    -- Additional pick item fields
     pi.`binId` AS bin_id,
     pi.`binHUId` AS bin_hu_id,
     pi.`destinationBinId` AS destination_bin_id,
@@ -739,17 +536,17 @@ SELECT pi.`whId` AS wh_id,
     pi.attrs AS pick_attrs,
     pi.iloc AS iloc,
     pi.`destIloc` AS dest_iloc,
-    -- Additional Drop Items columns
-    di.`sourceBinId` AS source_bin_id,
-    di.`sourceBinHUId` AS source_bin_hu_id,
-    di.`binId` AS drop_bin_id,
-    di.`binHUId` AS drop_bin_hu_id,
+    -- Additional drop item fields
+    COALESCE(di.`sourceBinId`, '') AS source_bin_id,
+    COALESCE(di.`sourceBinHUId`, '') AS source_bin_hu_id,
+    COALESCE(di.`binId`, '') AS drop_bin_id,
+    COALESCE(di.`binHUId`, '') AS drop_bin_hu_id,
     di.`createdAt` AS drop_created_at,
     di.`deactivatedAt` AS drop_deactivated_at,
     di.`deactivatedBy` AS drop_deactivated_by,
     di.`droppedBy` AS dropped_by,
     di.`destHUId` AS dest_hu_id,
-    di.`sourceBucket` AS source_bucket,
+    COALESCE(di.`sourceBucket`, '') AS source_bucket,
     di.`originalDestinationBinId` AS original_destination_bin_id,
     di.`lmTripId` AS drop_lm_trip_id,
     di.`processedForPickAt` AS processed_for_pick_at,
@@ -762,48 +559,18 @@ SELECT pi.`whId` AS wh_id,
     di.attrs AS drop_attrs,
     di.`mheId` AS drop_mhe_id,
     di.iloc AS drop_iloc,
-    di.`sourceIloc` AS source_iloc,
-    -- Additional Pick Drop Mapping columns
-    pdm.id AS mapping_id,
-    CAST(pdm.`createdAt` AS TIMESTAMP) AS mapping_created_at,
-    -- Additional Tasks columns
-    t.exclusive AS task_exclusive,
-    t.active AS task_active,
-    t.`autoComplete` AS task_auto_complete,
-    t.`forceCompleteTaskId` AS force_complete_task_id,
-    -- Additional Trips columns (LM)
-    lm_trip.`sessionCreatedAt` AS lm_session_created_at,
-    CAST(lm_trip.`createdAt` AS TIMESTAMP) AS lm_trip_created_at,
-    lm_trip.`bbId` AS lm_bb_id,
-    lm_trip.`type` AS lm_trip_type,
-    lm_trip.`dockdoorId` AS lm_dockdoor_id,
-    lm_trip.`vehicleId` AS lm_vehicle_id,
-    -- Additional Trips columns (MM)
-    mm_trip.`sessionCreatedAt` AS mm_session_created_at,
-    CAST(mm_trip.`createdAt` AS TIMESTAMP) AS mm_trip_created_at,
-    mm_trip.`bbId` AS mm_bb_id,
-    mm_trip.`type` AS mm_trip_type,
-    mm_trip.`dockdoorId` AS mm_dockdoor_id,
-    mm_trip.`vehicleId` AS mm_vehicle_id
-FROM pick_items pi
-    LEFT JOIN `sessions` s ON pi.`sessionId` = s.id
-    AND s.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
-    AND pi.`updatedAt` + INTERVAL '48' HOUR
-    LEFT JOIN tasks t ON pi.`taskId` = t.id
-    AND t.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
-    AND pi.`updatedAt` + INTERVAL '48' HOUR
+    di.`sourceIloc` AS source_iloc
+FROM pick_items pi -- Join with pick-drop mapping (2-hour window)
     LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
-    AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
-    AND pi.`updatedAt` + INTERVAL '12' HOUR
+    AND pi.`whId` = pdm.`whId`
+    AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '2' HOUR
+    AND pi.`updatedAt` + INTERVAL '2' HOUR
+    AND pdm.`is_deleted` = false -- Join with drop items (2-hour window)
     LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
-    AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '12' HOUR
-    AND pi.`updatedAt` + INTERVAL '12' HOUR
-    LEFT JOIN trips lm_trip ON pi.`lmTripId` = lm_trip.id
-    AND lm_trip.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
-    AND pi.`updatedAt` + INTERVAL '48' HOUR
-    LEFT JOIN trip_relation tmap ON lm_trip.id = tmap.`childTripId`
-    AND tmap.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
-    AND pi.`updatedAt` + INTERVAL '48' HOUR
-    LEFT JOIN trips mm_trip ON tmap.`parentTripId` = mm_trip.id
-    AND mm_trip.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '48' HOUR
-    AND pi.`updatedAt` + INTERVAL '48' HOUR;
+    AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '2' HOUR
+    AND pi.`updatedAt` + INTERVAL '2' HOUR
+    AND (
+        di.`is_deleted` = false
+        OR di.`is_deleted` IS NULL
+    )
+WHERE pi.`is_deleted` = false;
