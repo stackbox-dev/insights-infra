@@ -560,15 +560,15 @@ SELECT
     di.`mheId` AS drop_mhe_id,
     di.iloc AS drop_iloc,
     di.`sourceIloc` AS source_iloc
-FROM pick_items pi -- Join with pick-drop mapping (2-hour window)
+FROM pick_items pi -- Join with pick-drop mapping (6-hour window)
     LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
     AND pi.`whId` = pdm.`whId`
-    AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '2' HOUR
-    AND pi.`updatedAt` + INTERVAL '2' HOUR
-    AND pdm.`is_deleted` = false -- Join with drop items (2-hour window)
+    AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
+    AND pi.`updatedAt` + INTERVAL '6' HOUR
+    AND pdm.`is_deleted` = false -- Join with drop items (6-hour window)
     LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
-    AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '2' HOUR
-    AND pi.`updatedAt` + INTERVAL '2' HOUR
+    AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
+    AND pi.`updatedAt` + INTERVAL '6' HOUR
     AND (
         di.`is_deleted` = false
         OR di.`is_deleted` IS NULL

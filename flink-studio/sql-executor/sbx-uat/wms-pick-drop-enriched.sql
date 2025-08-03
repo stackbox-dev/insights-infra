@@ -209,7 +209,12 @@ CREATE TABLE tasks (
     `subKind` STRING,
     label STRING,
     `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    `is_snapshot` BOOLEAN,
+    event_time AS CASE
+        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE `updatedAt`
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -244,7 +249,12 @@ CREATE TABLE `sessions` (
     progress STRING,
     `autoComplete` BOOLEAN,
     `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    `is_snapshot` BOOLEAN,
+    event_time AS CASE
+        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE `updatedAt`
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -321,7 +331,12 @@ CREATE TABLE workers (
     `mheKindIds` STRING,
     `eligibleZones` STRING,
     `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    `is_snapshot` BOOLEAN,
+    event_time AS CASE
+        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE `updatedAt`
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -359,7 +374,12 @@ CREATE TABLE handling_units (
     `lockTaskId` STRING,
     `effectiveStorageId` STRING,
     `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    `is_snapshot` BOOLEAN,
+    event_time AS CASE
+        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE `updatedAt`
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -494,14 +514,13 @@ CREATE TABLE sku_overrides (
     l3_text_tag2 STRING,
     l3_image STRING,
     l3_num_tag1 DOUBLE,
-    active BOOLEAN,
-    classifications STRING,
-    product_classifications STRING,
-    is_deleted BOOLEAN,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    event_time TIMESTAMP(3),
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
+    active BOOLEAN NOT NULL,
+    classifications STRING NOT NULL,
+    product_classifications STRING NOT NULL,
+    is_deleted BOOLEAN NOT NULL,
+    is_snapshot BOOLEAN NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL,
+    updated_at TIMESTAMP(3) NOT NULL,
     PRIMARY KEY (sku_id, node_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -636,14 +655,13 @@ CREATE TABLE sku_masters (
     l3_text_tag2 STRING,
     l3_image STRING,
     l3_num_tag1 DOUBLE,
-    active BOOLEAN,
-    classifications STRING,
-    product_classifications STRING,
-    is_deleted BOOLEAN,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
-    event_time TIMESTAMP(3),
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
+    active BOOLEAN NOT NULL,
+    classifications STRING NOT NULL,
+    product_classifications STRING NOT NULL,
+    is_deleted BOOLEAN NOT NULL,
+    is_snapshot BOOLEAN NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL,
+    updated_at TIMESTAMP(3) NOT NULL,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
