@@ -33,7 +33,7 @@ data:
         eventslog_default_log=1             # Log all queries
         
         # Connection handling
-        have_ssl=false
+        have_ssl=true
         have_compress=false
         multiplexing=false
         sessions_sort=false
@@ -44,12 +44,15 @@ data:
     mysql_servers:
     (
       {
-        address="clickhouse"      # ClickHouse IP/hostname
-        port=9004                  # ClickHouse MySQL protocol port
+        address="sbx-stag-clickhouse-stackbox.h.aivencloud.com"      # ClickHouse IP/hostname
+        port=22156                                                   # ClickHouse MySQL protocol port
         hostgroup_id=0
         max_connections=200
         weight=1000
         compression=0
+        use_ssl=1
+        ssl_cipher=""
+        ssl_verify_server_cert=0
       }
     )
 
@@ -57,9 +60,9 @@ data:
     mysql_users:
     (
       {
-        username="default"
-        password="PKvnzDLrQF2cAnjVsuQy"
-        database="sbx_uat_insights"
+        username="avnadmin"
+        password="{{CLICKHOUSE_PASSWORD}}"
+        database="sbx_uat"
         active=1
         default_hostgroup=0
         max_connections=200
@@ -104,6 +107,12 @@ spec:
             - "-c"
             - "/etc/proxysql.cnf"
             - "--idle-threads"
+          env: 
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-admin
+                  key: password
           ports:
             - name: mysql
               containerPort: 6033 # For Frappe Insights client connections

@@ -81,11 +81,11 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "jdbcConnectionProperties": "?ssl=true",
       "username": "avnadmin",
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
-      "topics": "sbx_uat.wms.public.inventory,sbx_uat.wms.public.storage_bin_summary",
+      "topics": "sbx_uat.wms.public.inventory,sbx_uat.wms.public.storage_bin_summary,sbx_uat.wms.public.pick_drop_summary",
       "value.converter.schemas.enable": "false",
       "clickhouse.debug": "true",
       "clickhouse.log.level": "DEBUG",
-      "topic2TableMap": "sbx_uat.wms.public.inventory=inventory,sbx_uat.wms.public.storage_bin_summary=storage_bin_summary",
+      "topic2TableMap": "sbx_uat.wms.public.inventory=inventory,sbx_uat.wms.public.storage_bin_summary=storage_bin_summary,sbx_uat.wms.public.pick_drop_summary=pick_drop_summary",
 
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
