@@ -14,13 +14,13 @@ topic_names=$(echo "$topics_response" | jq -r '.topics[].name' 2>/dev/null)
 
 # Validate output
 if [ -z "$topic_names" ] || [ "$topic_names" == "null" ]; then
-  echo "Error: No topics found or could not parse the response"
-  echo "API Response: $topics_response"
+  echo "❌ Error: No topics found or could not parse the response"
+  echo "📦 API Response: $topics_response"
   exit 1
 fi
 
 # Step 3: Display the topics
-echo "Found topics:"
+echo "✅ Found topics:"
 echo "$topic_names"
 
 
@@ -33,8 +33,12 @@ for topic in $topic_names; do
   fi
 
   echo -n "Deleting topic: $topic ... "
-  status=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-          "${KAFKA_REST_URL}/api/clusters/${KAFKA_CLUSTER_NAME}/topics/${topic}")
+  response=$(curl -s -w "\n%{http_code}" -X DELETE \
+    "${KAFKA_REST_URL}/api/clusters/${KAFKA_CLUSTER_NAME}/topics/${topic}" \
+    --header "Content-Type: application/json")
+
+  body=$(echo "$response" | head -n1)
+  status=$(echo "$response" | tail -n1)
 
   if [ "$status" = "204" ] || [ "$status" = "200" ]; then
     echo "✅ Deleted"
@@ -42,5 +46,7 @@ for topic in $topic_names; do
     echo "⚠️ Not Found"
   else
     echo "❌ Error (HTTP $status)"
+    echo "↪️  Response Body: $body"
+    exit 1
   fi
 done
