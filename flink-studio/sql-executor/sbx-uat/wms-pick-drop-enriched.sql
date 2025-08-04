@@ -521,6 +521,11 @@ CREATE TABLE sku_overrides (
     is_snapshot BOOLEAN NOT NULL,
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
+    event_time AS CASE
+        WHEN is_snapshot = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE updated_at
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id, node_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -662,6 +667,11 @@ CREATE TABLE sku_masters (
     is_snapshot BOOLEAN NOT NULL,
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
+    event_time AS CASE
+        WHEN is_snapshot = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE updated_at
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
