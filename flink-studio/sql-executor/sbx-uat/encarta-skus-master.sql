@@ -38,8 +38,8 @@ CREATE TABLE skus (
     is_deleted BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -91,8 +91,8 @@ CREATE TABLE products (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -131,8 +131,8 @@ CREATE TABLE categories (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -171,8 +171,8 @@ CREATE TABLE sub_categories (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -210,8 +210,8 @@ CREATE TABLE category_groups (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -250,8 +250,8 @@ CREATE TABLE brands (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -290,8 +290,8 @@ CREATE TABLE sub_brands (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',

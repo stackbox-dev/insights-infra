@@ -21,8 +21,8 @@ CREATE TABLE node_overrides (
     cases_per_layer INT,
     handling_unit_type STRING,
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -62,8 +62,8 @@ CREATE TABLE product_node_overrides (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',

@@ -209,8 +209,8 @@ CREATE TABLE tasks (
     `subKind` STRING,
     label STRING,
     `is_deleted` BOOLEAN,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(`__source_snapshot` IN (
+    `__snapshot` STRING,
+    is_snapshot AS COALESCE(`__snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -256,8 +256,8 @@ CREATE TABLE `sessions` (
     progress STRING,
     `autoComplete` BOOLEAN,
     `is_deleted` BOOLEAN,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(`__source_snapshot` IN (
+    `__snapshot` STRING,
+    is_snapshot AS COALESCE(`__snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -345,8 +345,8 @@ CREATE TABLE workers (
     `mheKindIds` STRING,
     `eligibleZones` STRING,
     `is_deleted` BOOLEAN,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(`__source_snapshot` IN (
+    `__snapshot` STRING,
+    is_snapshot AS COALESCE(`__snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -395,8 +395,8 @@ CREATE TABLE handling_units (
     `lockTaskId` STRING,
     `effectiveStorageId` STRING,
     `is_deleted` BOOLEAN,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(`__source_snapshot` IN (
+    `__snapshot` STRING,
+    is_snapshot AS COALESCE(`__snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -546,8 +546,8 @@ CREATE TABLE sku_overrides (
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
     is_deleted BOOLEAN NOT NULL,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
@@ -699,8 +699,8 @@ CREATE TABLE sku_masters (
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
     is_deleted BOOLEAN NOT NULL,
-    __source_snapshot STRING,
-    is_snapshot AS COALESCE(__source_snapshot IN (
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
