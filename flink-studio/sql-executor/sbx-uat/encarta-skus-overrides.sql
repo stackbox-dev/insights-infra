@@ -22,13 +22,13 @@ CREATE TABLE node_overrides (
     handling_unit_type STRING,
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -63,13 +63,13 @@ CREATE TABLE product_node_overrides (
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',

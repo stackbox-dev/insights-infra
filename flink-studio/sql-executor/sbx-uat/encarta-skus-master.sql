@@ -39,13 +39,13 @@ CREATE TABLE skus (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -92,13 +92,13 @@ CREATE TABLE products (
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -132,13 +132,13 @@ CREATE TABLE categories (
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -172,13 +172,13 @@ CREATE TABLE sub_categories (
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -211,13 +211,13 @@ CREATE TABLE category_groups (
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -251,13 +251,13 @@ CREATE TABLE brands (
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -291,13 +291,13 @@ CREATE TABLE sub_brands (
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',

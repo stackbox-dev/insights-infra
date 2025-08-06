@@ -210,13 +210,13 @@ CREATE TABLE tasks (
     label STRING,
     `is_deleted` BOOLEAN,
     `__source_snapshot` STRING,
-    is_snapshot AS `__source_snapshot` IN (
+    is_snapshot AS COALESCE(`__source_snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -257,13 +257,13 @@ CREATE TABLE `sessions` (
     `autoComplete` BOOLEAN,
     `is_deleted` BOOLEAN,
     `__source_snapshot` STRING,
-    is_snapshot AS `__source_snapshot` IN (
+    is_snapshot AS COALESCE(`__source_snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -346,13 +346,13 @@ CREATE TABLE workers (
     `eligibleZones` STRING,
     `is_deleted` BOOLEAN,
     `__source_snapshot` STRING,
-    is_snapshot AS `__source_snapshot` IN (
+    is_snapshot AS COALESCE(`__source_snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -396,13 +396,13 @@ CREATE TABLE handling_units (
     `effectiveStorageId` STRING,
     `is_deleted` BOOLEAN,
     `__source_snapshot` STRING,
-    is_snapshot AS `__source_snapshot` IN (
+    is_snapshot AS COALESCE(`__source_snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -547,13 +547,13 @@ CREATE TABLE sku_overrides (
     product_classifications STRING NOT NULL,
     is_deleted BOOLEAN NOT NULL,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
     event_time AS CASE
@@ -700,13 +700,13 @@ CREATE TABLE sku_masters (
     product_classifications STRING NOT NULL,
     is_deleted BOOLEAN NOT NULL,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
     event_time AS CASE

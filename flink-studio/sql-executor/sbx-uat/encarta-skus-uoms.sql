@@ -29,13 +29,13 @@ CREATE TABLE uoms (
     num_tag1 DOUBLE,
     is_deleted BOOLEAN,
     __source_snapshot STRING,
-    is_snapshot AS __source_snapshot IN (
+    is_snapshot AS COALESCE(__source_snapshot IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
-    ),
+    ), FALSE),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
