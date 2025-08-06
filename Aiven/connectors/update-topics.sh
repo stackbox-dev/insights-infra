@@ -41,17 +41,44 @@ esac
 echo ""
 echo "Fetching topics..."
 
-topics_response=$(curl -s -X GET "${KAFKA_REST_URL}/api/clusters/${KAFKA_CLUSTER_NAME}/topics" \
-  --header "Content-Type: application/json" \
-  --header "Accept: application/json" )
+# Fetch all pages of topics
+all_topics=""
+page=1
 
-# Step 2: Extract topic names using jq
-topic_names=$(echo "$topics_response" | jq -r '.topics[].name' 2>/dev/null)
+while true; do
+  topics_response=$(curl -s -X GET "${KAFKA_REST_URL}/api/clusters/${KAFKA_CLUSTER_NAME}/topics?page=${page}&perPage=100" \
+    --header "Content-Type: application/json" \
+    --header "Accept: application/json" )
+  
+  # Extract topic names from this page
+  page_topics=$(echo "$topics_response" | jq -r '.topics[].name' 2>/dev/null)
+  
+  # If no topics on this page, we're done
+  if [ -z "$page_topics" ] || [ "$page_topics" == "null" ]; then
+    break
+  fi
+  
+  # Add to our list
+  if [ -z "$all_topics" ]; then
+    all_topics="$page_topics"
+  else
+    all_topics="$all_topics"$'\n'"$page_topics"
+  fi
+  
+  # Check if we've fetched all pages
+  total_pages=$(echo "$topics_response" | jq '.pageCount' 2>/dev/null)
+  if [ "$page" -ge "$total_pages" ]; then
+    break
+  fi
+  
+  ((page++))
+done
+
+topic_names="$all_topics"
 
 # Validate output
 if [ -z "$topic_names" ] || [ "$topic_names" == "null" ]; then
   echo "❌ Error: No topics found or could not parse the response"
-  echo "📦 API Response: $topics_response"
   exit 1
 fi
 
@@ -94,6 +121,9 @@ for topic in $topic_names; do
 
   echo -n "Updating topic: $topic to $policy ... "
 
+  # Debug: Show what we're sending
+  # echo "[DEBUG] Sending: $config_json"
+  
   response=$(curl -s -w "\n%{http_code}" -X PATCH \
     "${KAFKA_REST_URL}/api/clusters/${KAFKA_CLUSTER_NAME}/topics/${topic}" \
     --header "Content-Type: application/json" \
