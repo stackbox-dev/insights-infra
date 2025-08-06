@@ -112,17 +112,15 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-backbone/config -H "
       "producer.override.delivery.timeout.ms": "120000",
       "time.precision.mode":"connect",
 
-      "transforms": "unwrap,castSnapshot,castDelete,renameDelete,ts2epoch",
+      "transforms": "unwrap,castDelete,renameDelete,ts2epoch",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "transforms.unwrap.drop.tombstones": "false",
       "transforms.unwrap.delete.handling.mode": "rewrite",
-      "transforms.unwrap.add.fields": "source.snapshot,__deleted",
-      "transforms.castSnapshot.type": "org.apache.kafka.connect.transforms.Cast$Value",
-      "transforms.castSnapshot.spec": "__source_snapshot:boolean",
+      "transforms.unwrap.add.fields": "snapshot,__deleted",
       "transforms.castDelete.type": "org.apache.kafka.connect.transforms.Cast$Value",
       "transforms.castDelete.spec": "__deleted:boolean",
       "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
-      "transforms.renameDelete.renames": "__source_snapshot:is_snapshot,__deleted:is_deleted",
+      "transforms.renameDelete.renames": "__deleted:is_deleted",
       "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch"
 }'
 
