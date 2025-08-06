@@ -208,3 +208,5 @@ __marimo__/
 # DB
 *.db
 *.sqlite3
+
+ignore.txt

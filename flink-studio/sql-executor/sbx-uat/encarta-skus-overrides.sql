@@ -21,7 +21,14 @@ CREATE TABLE node_overrides (
     cases_per_layer INT,
     handling_unit_type STRING,
     is_deleted BOOLEAN,
-    is_snapshot BOOLEAN,
+    __source_snapshot STRING,
+    is_snapshot AS __source_snapshot IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -55,7 +62,14 @@ CREATE TABLE product_node_overrides (
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
     is_deleted BOOLEAN,
-    is_snapshot BOOLEAN,
+    __source_snapshot STRING,
+    is_snapshot AS __source_snapshot IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',

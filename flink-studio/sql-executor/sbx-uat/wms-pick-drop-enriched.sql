@@ -209,7 +209,14 @@ CREATE TABLE tasks (
     `subKind` STRING,
     label STRING,
     `is_deleted` BOOLEAN,
-    `is_snapshot` BOOLEAN,
+    `__source_snapshot` STRING,
+    is_snapshot AS `__source_snapshot` IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -249,7 +256,14 @@ CREATE TABLE `sessions` (
     progress STRING,
     `autoComplete` BOOLEAN,
     `is_deleted` BOOLEAN,
-    `is_snapshot` BOOLEAN,
+    `__source_snapshot` STRING,
+    is_snapshot AS `__source_snapshot` IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -331,7 +345,14 @@ CREATE TABLE workers (
     `mheKindIds` STRING,
     `eligibleZones` STRING,
     `is_deleted` BOOLEAN,
-    `is_snapshot` BOOLEAN,
+    `__source_snapshot` STRING,
+    is_snapshot AS `__source_snapshot` IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -374,7 +395,14 @@ CREATE TABLE handling_units (
     `lockTaskId` STRING,
     `effectiveStorageId` STRING,
     `is_deleted` BOOLEAN,
-    `is_snapshot` BOOLEAN,
+    `__source_snapshot` STRING,
+    is_snapshot AS `__source_snapshot` IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     event_time AS CASE
         WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
@@ -518,7 +546,14 @@ CREATE TABLE sku_overrides (
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
     is_deleted BOOLEAN NOT NULL,
-    is_snapshot BOOLEAN NOT NULL,
+    __source_snapshot STRING,
+    is_snapshot AS __source_snapshot IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
     event_time AS CASE
@@ -664,7 +699,14 @@ CREATE TABLE sku_masters (
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
     is_deleted BOOLEAN NOT NULL,
-    is_snapshot BOOLEAN NOT NULL,
+    __source_snapshot STRING,
+    is_snapshot AS __source_snapshot IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ),
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
     event_time AS CASE
