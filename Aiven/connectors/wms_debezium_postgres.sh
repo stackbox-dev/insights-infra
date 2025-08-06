@@ -71,7 +71,7 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-wms/config -H "Conte
       "database.dbname": "postgres",
       "database.server.name": "postgres",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.storage_dockdoor_position,public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.inventory,public.storage_bin_fixed_mapping,public.pd_pick_item,public.pd_pick_drop_mapping,public.pd_drop_item,public.task,public.session,public.worker,public.handling_unit,public.trip_relation,public.trip,public.inb_receive_item,public.ob_load_item,public.inb_palletization_item,public.inb_serialization_item,public.inb_qc_item_v2,public.ira_bin_items,public.ob_qa_lineitem", 
+      "table.include.list": "public.storage_dockdoor_position,public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.inventory,public.storage_bin_fixed_mapping,public.pd_pick_item,public.pd_pick_drop_mapping,public.pd_drop_item,public.task,public.session,public.worker,public.handling_unit,public.trip_relation,public.trip,public.inb_receive_item,public.ob_load_item,public.inb_palletization_item,public.inb_serialization_item,public.inb_qc_item_v2,public.ira_bin_items,public.ob_qa_lineitem,public.handling_unit_kind,public.handling_unit_quant_event,public.handling_unit_event", 
       "database.history.kafka.topic": "schema-changes.postgres",
       "publication.name": "dbz_publication",
       "slot.name": "aiven_dbz",
@@ -112,17 +112,15 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-wms/config -H "Conte
       "producer.override.delivery.timeout.ms": "120000",
       "time.precision.mode":"connect",
 
-      "transforms": "unwrap,castSnapshot,castDelete,renameDelete,ts2epoch",
+      "transforms": "unwrap,castDelete,renameDelete,ts2epoch",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "transforms.unwrap.drop.tombstones": "false",
       "transforms.unwrap.delete.handling.mode": "rewrite",
-      "transforms.unwrap.add.fields": "source.snapshot,__deleted",
-      "transforms.castSnapshot.type": "org.apache.kafka.connect.transforms.Cast$Value",
-      "transforms.castSnapshot.spec": "__source_snapshot:boolean",
+      "transforms.unwrap.add.fields": "snapshot,__deleted",
       "transforms.castDelete.type": "org.apache.kafka.connect.transforms.Cast$Value",
       "transforms.castDelete.spec": "__deleted:boolean",
       "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
-      "transforms.renameDelete.renames": "__source_snapshot:is_snapshot,__deleted:is_deleted",
+      "transforms.renameDelete.renames": "__deleted:is_deleted",
       "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch"
 }'
 
