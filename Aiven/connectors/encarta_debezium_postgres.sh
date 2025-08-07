@@ -100,12 +100,13 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-encarta/config -H "C
       "key.converter.schemas.enable": "true",
       "value.converter.schemas.enable": "true",
 
-      "transforms": "unwrap",
+      "transforms": "unwrap,ts2epoch",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "transforms.unwrap.drop.tombstones": "false",
       "transforms.unwrap.delete.handling.mode": "drop",
       "transforms.unwrap.add.fields": "op,source.ts_ms,source.snapshot",
       "transforms.unwrap.add.fields.prefix": "__",
+      "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch",
 
       "topic.creation.default.replication.factor": 3,
       "topic.creation.default.partitions": 1,
