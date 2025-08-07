@@ -295,23 +295,41 @@ GREATEST(
    - Pipeline ignores deletes by default
 
 5. **CDC Field Forwarding**
-   - ALWAYS forward `__op`, `__source_ts_ms`, and `__source_snapshot` to sink tables
-   - These fields are essential for downstream processing and debugging
-   - Include them even in simple 1:1 rekey pipelines
-   - Example:
-     ```sql
-     INSERT INTO sink_table
-     SELECT 
-         -- business fields
-         field1, field2, ...,
-         -- CDC metadata (always include)
-         `__op`,
-         `__source_ts_ms`, 
-         `__source_snapshot`,
-         `event_time`
-     FROM source_table
-     WHERE `event_time` > TIMESTAMP '1970-01-01 00:00:00';
-     ```
+   - For **simple pipelines** (1:1 transformations, rekeying):
+     - ALWAYS forward `__op`, `__source_ts_ms`, and `__source_snapshot` to sink tables
+     - These fields are essential for downstream processing and debugging
+     - Example:
+       ```sql
+       INSERT INTO sink_table
+       SELECT 
+           -- business fields
+           field1, field2, ...,
+           -- CDC metadata (always include for 1:1 pipelines)
+           `__op`,
+           `__source_ts_ms`, 
+           `__source_snapshot`,
+           `event_time`
+       FROM source_table
+       WHERE `event_time` > TIMESTAMP '1970-01-01 00:00:00';
+       ```
+   
+   - For **aggregation pipelines** (GROUP BY, pivoting, combining records):
+     - DO NOT forward CDC metadata fields (`__op`, `__source_ts_ms`, `__source_snapshot`)
+     - These fields lose meaning when aggregating multiple records
+     - Only keep `event_time` for watermarking (use MAX or appropriate aggregate)
+     - Example:
+       ```sql
+       INSERT INTO aggregated_sink
+       SELECT 
+           key_field,
+           -- aggregated business fields
+           SUM(amount) AS total_amount,
+           -- Only event_time for watermarking, no CDC metadata
+           MAX(event_time) AS event_time
+       FROM source_table
+       WHERE active = true  -- Business logic filters, not event_time filter
+       GROUP BY key_field;
+       ```
 
 ### Data Type Mappings
 

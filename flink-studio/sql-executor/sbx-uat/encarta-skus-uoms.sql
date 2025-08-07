@@ -16,8 +16,10 @@ CREATE TABLE uoms (
     packing_efficiency DOUBLE,
     active BOOLEAN,
     itf_code STRING,
-    created_at TIMESTAMP(3),
-    updated_at TIMESTAMP(3),
+    created_at STRING,
+    -- ZonedTimestamp from Debezium
+    updated_at STRING,
+    -- ZonedTimestamp from Debezium
     erp_weight DOUBLE,
     erp_volume DOUBLE,
     erp_length DOUBLE,
@@ -28,14 +30,24 @@ CREATE TABLE uoms (
     image STRING,
     num_tag1 DOUBLE,
     is_deleted BOOLEAN,
-    __snapshot STRING,
-    is_snapshot AS COALESCE(__snapshot IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
+    `__op` STRING,
+    `__source_ts_ms` BIGINT,
+    `__source_snapshot` STRING,
+    is_snapshot AS COALESCE(
+        `__source_snapshot` IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ),
+        FALSE
+    ),
+    `event_time` AS COALESCE(
+        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -137,8 +149,12 @@ CREATE TABLE skus_uoms_agg (
     l3_text_tag2 STRING,
     l3_image STRING,
     l3_num_tag1 DOUBLE,
-    created_at TIMESTAMP(3) NOT NULL,
-    updated_at TIMESTAMP(3) NOT NULL,
+    created_at STRING NOT NULL,
+    -- ZonedTimestamp
+    updated_at STRING NOT NULL,
+    -- ZonedTimestamp
+    `event_time` TIMESTAMP(3) NOT NULL,
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -546,7 +562,8 @@ SELECT u.sku_id,
         END
     ) AS l3_num_tag1,
     MIN(u.created_at) AS created_at,
-    MAX(u.updated_at) AS updated_at
+    MAX(u.updated_at) AS updated_at,
+    MAX(u.`event_time`) AS `event_time`
 FROM uoms u
 WHERE u.active = true
 GROUP BY u.sku_id;
