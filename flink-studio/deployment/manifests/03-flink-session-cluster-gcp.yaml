@@ -42,7 +42,7 @@ spec:
     # state.changelog.dstl.dfs.base-path: gs://sbx-stag-flink-storage/changelog
     # Force session cluster to start TaskManager pods immediately
     slotmanager.number-of-slots.min: "1"
-    slotmanager.number-of-slots.max: "16"
+    slotmanager.number-of-slots.max: "24"
     slotmanager.slot-request-timeout: "300000"
     # GCS paths for Flink state management - removed duplicate state.checkpoints.dir
     state.savepoints.dir: gs://sbx-stag-flink-storage/savepoints
@@ -122,7 +122,7 @@ spec:
     resource:
       memory: "8192m"
       cpu: 2
-    replicas: 8
+    replicas: 16
     podTemplate:
       spec:
         serviceAccountName: flink
