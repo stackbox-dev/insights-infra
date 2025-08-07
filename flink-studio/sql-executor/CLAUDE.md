@@ -49,13 +49,25 @@ CREATE TABLE <source_table_name> (
     field1 TYPE,
     field2 TYPE,
     ...
-    -- CDC fields (if using Debezium)
-    `__source_ts_ms` BIGINT,  -- NOT TIMESTAMP! It's milliseconds since epoch
-    -- Computed event time for watermarking (handles nulls)
+    -- Business timestamp fields (now directly as TIMESTAMP(3) with AllTimestamptzToEpoch transform)
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
+    -- CDC snapshot field (READ from true source tables, but never forward directly)
+    `__source_snapshot` STRING,  -- Only for reading from Debezium sources
+    -- Computed event time from business timestamps (handles nulls)
     `event_time` AS COALESCE(
-        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        updated_at,
+        created_at,
         TIMESTAMP '1970-01-01 00:00:00'
     ),
+    -- Computed is_snapshot field for CDC snapshot detection (true source tables)
+    `is_snapshot` AS COALESCE(`__source_snapshot` IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ), FALSE),
     -- Watermark on computed event_time, not raw fields
     WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     -- Primary key if using upsert-kafka
@@ -81,11 +93,22 @@ CREATE TABLE <source_table_name> (
 );
 ```
 
-#### Important Notes on Data Types:
-- **Timestamps from Debezium**: Use STRING for ZonedTimestamp fields (e.g., `createdAt STRING`)
-- **CDC Metadata**: `__source_ts_ms` is BIGINT (milliseconds), not TIMESTAMP
-- **Watermarking**: Always use computed columns with COALESCE to handle nulls
-- **Schema Verification**: ALWAYS check the Avro schema registry before defining tables
+#### Key Concepts for Source Tables:
+
+**1. Timestamp Handling:**
+- PostgreSQL timestamptz fields are converted to `TIMESTAMP(3)` via `AllTimestamptzToEpoch` transform
+- Generate `event_time` from business timestamps: `COALESCE(updated_at, created_at, TIMESTAMP '1970-01-01 00:00:00')`
+- Ignore `__source_ts_ms` entirely - use business timestamps only
+
+**2. Snapshot Detection:**
+- Read `__source_snapshot` from Debezium sources (don't include `__op` or `__source_ts_ms`)
+- Compute `is_snapshot` field, never forward raw `__source_snapshot`
+- Combine multiple sources with AND logic: `s1.is_snapshot AND s2.is_snapshot`
+
+**3. Essential Rules:**
+- Always propagate `event_time` and `is_snapshot` to sink tables (except aggregations)
+- Use watermarks on computed `event_time` field
+- Check schema registry for exact data types before defining tables
 
 ### 4. Intermediate Views (Optional)
 Create views to simplify complex joins:
@@ -107,7 +130,8 @@ CREATE TABLE <sink_table_name> (
     field1 TYPE NOT NULL,
     field2 TYPE,
     ...
-    -- Event time for downstream processing
+    -- Always include these computed fields for downstream processing
+    is_snapshot BOOLEAN NOT NULL,
     event_time TIMESTAMP(3) NOT NULL,
     -- Watermark for event time
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -125,19 +149,30 @@ CREATE TABLE <sink_table_name> (
 ```
 
 ### 6. Data Processing Logic (INSERT)
+
+**When to filter by event_time:**
+- ✅ **Simple pipelines**: Filter out tombstones/deletes with `WHERE event_time > TIMESTAMP '1970-01-01 00:00:00'`
+- ❌ **Aggregation pipelines**: Use business logic filters only, not event_time filters
+
 ```sql
+-- Simple pipeline - filter event_time
 INSERT INTO <sink_table>
 SELECT
-    -- Transformation logic
-    field1,
-    COALESCE(field2, default_value) AS field2,
-    ...
-FROM source_table1 s1
-    LEFT JOIN source_table2 s2 ON s1.id = s2.foreign_id
-    -- Time-windowed joins for streaming
-    AND s2.event_time BETWEEN s1.event_time - INTERVAL '6' HOUR
-    AND s1.event_time + INTERVAL '6' HOUR
-WHERE s1.is_deleted = false;
+    field1, field2, ...,
+    is_snapshot,
+    event_time
+FROM source_table
+WHERE event_time > TIMESTAMP '1970-01-01 00:00:00';  -- Filters out tombstones
+
+-- Aggregation pipeline - NO event_time filter
+INSERT INTO <aggregated_sink>
+SELECT
+    key_field,
+    SUM(amount) AS total_amount,
+    MAX(event_time) AS event_time
+FROM source_table
+WHERE is_active = true  -- Business logic only, no event_time filter
+GROUP BY key_field;
 ```
 
 ## Common Patterns
@@ -146,9 +181,22 @@ WHERE s1.is_deleted = false;
 CDC data processing with proper event time handling.
 
 ### 2. Snapshot Detection
-For snapshot data:
+For true source tables from Debezium:
 ```sql
-is_snapshot AS __source_snapshot IN ('true', 'first', 'last')
+-- Compute is_snapshot from __source_snapshot field
+`is_snapshot` AS COALESCE(`__source_snapshot` IN (
+    'true',
+    'first',
+    'first_in_data_collection',
+    'last_in_data_collection',
+    'last'
+), FALSE)
+```
+
+When combining multiple source tables:
+```sql
+-- Use AND logic for multiple sources
+s1.is_snapshot AND s2.is_snapshot AS is_snapshot
 ```
 
 ### 3. Time-Windowed Joins
@@ -267,103 +315,111 @@ GREATEST(
    - Verify output in Kafka topics
    - Monitor checkpointing and backpressure
 
-## CDC and Watermarking Best Practices
+## CDC Field Forwarding Pattern
 
-### Handling CDC Fields
-1. **__source_ts_ms Field**
-   - Always define as `BIGINT` (not TIMESTAMP)
-   - Contains milliseconds since epoch from Debezium
-   - Convert to timestamp using `TO_TIMESTAMP_LTZ(__source_ts_ms, 3)`
+**Core Pattern:** READ `__source_snapshot` → COMPUTE `is_snapshot` → FORWARD only `is_snapshot`
 
-2. **Event Time Computation**
-   ```sql
-   -- Compute event_time with null handling
-   `event_time` AS COALESCE(
-       TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
-       TIMESTAMP '1970-01-01 00:00:00'
-   )
-   ```
+### For simple pipelines (1:1 transformations):
+- Always propagate `is_snapshot` and `event_time`
+- Never forward raw `__source_snapshot`
+```sql
+INSERT INTO sink_table
+SELECT 
+    field1, field2, ...,
+    is_snapshot,
+    event_time
+FROM source_table
+WHERE event_time > TIMESTAMP '1970-01-01 00:00:00';
+```
 
-3. **Watermarking Strategy**
-   - Use computed `event_time` field, not raw timestamps
-   - Filter out epoch timestamps: `WHERE event_time > TIMESTAMP '1970-01-01 00:00:00'`
-   - Forward greatest event_time to sink for multi-source joins
+### For pipelines with multiple sources:
+- Combine `is_snapshot` using AND: `s1.is_snapshot AND s2.is_snapshot`
+- Use GREATEST for event_time
+```sql
+INSERT INTO sink_table
+SELECT 
+    s1.field1, s2.field2, ...,
+    s1.is_snapshot AND s2.is_snapshot AS is_snapshot,
+    GREATEST(s1.event_time, s2.event_time) AS event_time
+FROM source_table1 s1
+JOIN source_table2 s2 ON s1.id = s2.foreign_id
+WHERE s1.event_time > TIMESTAMP '1970-01-01 00:00:00';
+```
 
-4. **Delete Tombstones**
-   - Delete events have null values except keys
-   - Will be filtered out when checking `event_time > epoch`
-   - Pipeline ignores deletes by default
-
-5. **CDC Field Forwarding**
-   - For **simple pipelines** (1:1 transformations, rekeying):
-     - ALWAYS forward `__op`, `__source_ts_ms`, and `__source_snapshot` to sink tables
-     - These fields are essential for downstream processing and debugging
-     - Example:
-       ```sql
-       INSERT INTO sink_table
-       SELECT 
-           -- business fields
-           field1, field2, ...,
-           -- CDC metadata (always include for 1:1 pipelines)
-           `__op`,
-           `__source_ts_ms`, 
-           `__source_snapshot`,
-           `event_time`
-       FROM source_table
-       WHERE `event_time` > TIMESTAMP '1970-01-01 00:00:00';
-       ```
-   
-   - For **aggregation pipelines** (GROUP BY, pivoting, combining records):
-     - DO NOT forward CDC metadata fields (`__op`, `__source_ts_ms`, `__source_snapshot`)
-     - These fields lose meaning when aggregating multiple records
-     - Only keep `event_time` for watermarking (use MAX or appropriate aggregate)
-     - Example:
-       ```sql
-       INSERT INTO aggregated_sink
-       SELECT 
-           key_field,
-           -- aggregated business fields
-           SUM(amount) AS total_amount,
-           -- Only event_time for watermarking, no CDC metadata
-           MAX(event_time) AS event_time
-       FROM source_table
-       WHERE active = true  -- Business logic filters, not event_time filter
-       GROUP BY key_field;
-       ```
+### For aggregation pipelines:
+- Don't forward `is_snapshot` (loses meaning)
+- Keep `event_time` using MAX
+```sql
+INSERT INTO aggregated_sink
+SELECT 
+    key_field,
+    SUM(amount) AS total_amount,
+    MAX(event_time) AS event_time
+FROM source_table
+WHERE active = true  -- Business logic only
+GROUP BY key_field;
+```
 
 ### Data Type Mappings
 
 | Avro/Debezium Type | Flink SQL Type | Notes |
 |-------------------|----------------|-------|
-| ZonedTimestamp | STRING | Don't use TIMESTAMP(3) |
-| long (ms since epoch) | BIGINT | For __source_ts_ms |
+| timestamp-millis (logical type) | TIMESTAMP(3) | PostgreSQL timestamptz fields converted by AllTimestamptzToEpoch transform |
 | UUID | STRING | Debezium UUIDs are strings |
 | Json | STRING | For JSON fields like attrs |
 
 ## Common Issues and Solutions
 
-1. **Schema Mismatch**
+1. **Computed Column Limitations**
+   - **IMPORTANT**: Computed columns cannot reference other computed columns in the same CREATE TABLE
+   - **Common scenario**: You cannot use a computed `event_time` in another computed field or WATERMARK
+   - Example that FAILS:
+     ```sql
+     CREATE TABLE source (
+         created_at TIMESTAMP(3),
+         updated_at TIMESTAMP(3),
+         `__source_snapshot` STRING,
+         -- First computed column
+         `event_time` AS COALESCE(updated_at, created_at, TIMESTAMP '1970-01-01 00:00:00'),
+         -- FAILS: Cannot reference event_time here
+         `is_valid` AS event_time > TIMESTAMP '2020-01-01 00:00:00'
+     )
+     ```
+   - Correct approach - repeat the logic:
+     ```sql
+     CREATE TABLE source (
+         created_at TIMESTAMP(3),
+         updated_at TIMESTAMP(3),
+         `__source_snapshot` STRING,
+         `event_time` AS COALESCE(updated_at, created_at, TIMESTAMP '1970-01-01 00:00:00'),
+         -- Repeat the COALESCE logic instead of referencing event_time
+         `is_valid` AS COALESCE(updated_at, created_at, TIMESTAMP '1970-01-01 00:00:00') > TIMESTAMP '2020-01-01 00:00:00',
+         `is_snapshot` AS COALESCE(`__source_snapshot` IN ('true', 'first', 'first_in_data_collection', 'last_in_data_collection', 'last'), FALSE)
+     )
+     ```
+
+2. **Schema Mismatch**
    - Verify field names match Kafka schema exactly
    - Check data types compatibility (especially timestamps)
    - Use schema registry to verify exact types
    - Common error: `Found string, expecting union[null, long]` means wrong data type
 
-2. **Avro Deserialization Errors**
-   - ZonedTimestamp fields must be STRING, not TIMESTAMP(3)
-   - __source_ts_ms must be BIGINT, not TIMESTAMP(3)
+3. **Avro Deserialization Errors**
+   - PostgreSQL timestamptz fields (with AllTimestamptzToEpoch transform) should be TIMESTAMP(3)
    - Always check schema registry for exact types
+   - Use business timestamps for event_time, not __source_ts_ms
 
-2. **Join Performance**
+4. **Join Performance**
    - Use time windows to bound state
    - Create intermediate views
    - Apply join hints
 
-3. **Checkpointing Failures**
+5. **Checkpointing Failures**
    - Increase checkpoint timeout
    - Reduce mini-batch size
    - Check memory configuration
 
-4. **Data Quality**
+6. **Data Quality**
    - Handle `is_deleted` flags
    - Filter snapshot data appropriately
    - Validate timestamp fields
