@@ -8,7 +8,7 @@ The `pick_drop_summary` table is the enriched output of the WMS Pick Drop pipeli
 - **Topic**: `sbx_uat.wms.public.pick_drop_summary`
 - **Primary Key**: `(pick_item_id, drop_item_id)` - Composite key ensuring uniqueness
 - **Connector**: `upsert-kafka` with Avro-Confluent format
-- **Total Columns**: 217
+- **Total Columns**: 229 (increased from 217 with trip relation and parent trip fields)
 
 ## Field Categories
 
@@ -185,6 +185,26 @@ The `pick_drop_summary` table is the enriched output of the WMS Pick Drop pipeli
 | `lm_dockdoor_id` | STRING | Yes | Dock door identifier |
 | `lm_vehicle_id` | STRING | Yes | Vehicle identifier |
 | `drop_lm_trip_id` | STRING | Yes | Last mile trip ID for drop |
+
+### Trip Relation Enrichment
+| Column | Data Type | Nullable | Description |
+|--------|-----------|----------|-------------|
+| `trip_relation_id` | STRING | Yes | Trip relation record identifier |
+| `trip_relation_xdock` | STRING | Yes | Cross-dock information for trip relation |
+| `trip_relation_parent_trip_id` | STRING | Yes | Parent trip ID from trip relation |
+| `trip_relation_created_at` | TIMESTAMP(3) | Yes | When trip relation was created |
+
+### Parent Trip Enrichment
+| Column | Data Type | Nullable | Description |
+|--------|-----------|----------|-------------|
+| `parent_trip_code` | STRING | Yes | Parent trip code |
+| `parent_trip_type` | STRING | Yes | Type of parent trip |
+| `parent_trip_priority` | INT | Yes | Priority of parent trip |
+| `parent_trip_dockdoor_code` | STRING | Yes | Dock door code for parent trip |
+| `parent_trip_vehicle_no` | STRING | Yes | Vehicle number for parent trip |
+| `parent_trip_vehicle_type` | STRING | Yes | Vehicle type for parent trip |
+| `parent_trip_delivery_date` | DATE | Yes | Delivery date for parent trip |
+| `parent_trip_created_at` | TIMESTAMP(3) | Yes | When parent trip was created |
 
 ### Worker Enrichment
 | Column | Data Type | Nullable | Description |
@@ -397,7 +417,8 @@ The dropped SKU enrichment follows the identical structure as picked SKU enrichm
 - `pick_drop_basic` - Core pick-drop event data
 - `sessions` - Session dimension
 - `tasks` - Task dimension  
-- `trips` - Trip dimension
+- `trips` - Trip dimension (both child and parent trips)
+- `trip_relation_rekeyed` - Trip hierarchy relationships
 - `workers` - Worker dimension
 - `handling_units` - Handling unit dimension
 - `sku_overrides` - Node-specific SKU overrides
@@ -552,6 +573,22 @@ CREATE TABLE pick_drop_summary
     lm_dockdoor_id String DEFAULT '',
     lm_vehicle_id String DEFAULT '',
     drop_lm_trip_id String DEFAULT '',
+    
+    -- Trip Relation Enrichment
+    trip_relation_id String DEFAULT '',
+    trip_relation_xdock String DEFAULT '',
+    trip_relation_parent_trip_id String DEFAULT '',
+    trip_relation_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- Parent Trip Enrichment
+    parent_trip_code String DEFAULT '',
+    parent_trip_type String DEFAULT '',
+    parent_trip_priority Int32 DEFAULT 0,
+    parent_trip_dockdoor_code String DEFAULT '',
+    parent_trip_vehicle_no String DEFAULT '',
+    parent_trip_vehicle_type String DEFAULT '',
+    parent_trip_delivery_date Date DEFAULT toDate('1970-01-01'),
+    parent_trip_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
     -- Worker Enrichment
     worker_code String DEFAULT '',

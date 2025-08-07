@@ -385,6 +385,7 @@ CREATE TABLE pick_drop_basic (
     drop_mhe_id STRING,
     drop_iloc STRING,
     source_iloc STRING,
+    is_deleted BOOLEAN,
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -559,18 +560,14 @@ SELECT
     di.attrs AS drop_attrs,
     di.`mheId` AS drop_mhe_id,
     di.iloc AS drop_iloc,
-    di.`sourceIloc` AS source_iloc
+    di.`sourceIloc` AS source_iloc,
+    -- Combined is_deleted status from all three tables
+    COALESCE(pi.`is_deleted`, false) OR COALESCE(pdm.`is_deleted`, false) OR COALESCE(di.`is_deleted`, false) AS is_deleted
 FROM pick_items pi -- Join with pick-drop mapping (6-hour window)
     LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
     AND pi.`whId` = pdm.`whId`
     AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
-    AND pi.`updatedAt` + INTERVAL '6' HOUR
-    AND pdm.`is_deleted` = false -- Join with drop items (6-hour window)
+    AND pi.`updatedAt` + INTERVAL '6' HOUR -- Join with drop items (6-hour window)
     LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
     AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
-    AND pi.`updatedAt` + INTERVAL '6' HOUR
-    AND (
-        di.`is_deleted` = false
-        OR di.`is_deleted` IS NULL
-    )
-WHERE pi.`is_deleted` = false;
+    AND pi.`updatedAt` + INTERVAL '6' HOUR;

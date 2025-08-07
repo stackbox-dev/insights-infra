@@ -218,7 +218,13 @@ CREATE TABLE tasks (
         'last'
     ), FALSE),
     event_time AS CASE
-        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        WHEN COALESCE(`__snapshot` IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -265,7 +271,13 @@ CREATE TABLE `sessions` (
         'last'
     ), FALSE),
     event_time AS CASE
-        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        WHEN COALESCE(`__snapshot` IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -328,7 +340,55 @@ CREATE TABLE trips (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Dimension Table 4: Workers
+-- Dimension Table 4: Trip Relations (rekeyed)
+CREATE TABLE trip_relation_rekeyed (
+    whId BIGINT,
+    id STRING,
+    sessionId STRING NOT NULL,
+    xdock STRING,
+    parentTripId STRING,
+    childTripId STRING NOT NULL,
+    createdAt TIMESTAMP(3),
+    __snapshot STRING,
+    is_snapshot AS COALESCE(__snapshot IN (
+        'true',
+        'first',
+        'first_in_data_collection',
+        'last_in_data_collection',
+        'last'
+    ), FALSE),
+    event_time AS CASE
+        WHEN COALESCE(__snapshot IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE createdAt
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
+    PRIMARY KEY (sessionId, childTripId) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx_uat.wms.internal.trip_relation_rekeyed1',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+);
+-- Dimension Table 5: Workers
 CREATE TABLE workers (
     `whId` BIGINT,
     id STRING,
@@ -354,7 +414,13 @@ CREATE TABLE workers (
         'last'
     ), FALSE),
     event_time AS CASE
-        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        WHEN COALESCE(`__snapshot` IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -378,7 +444,7 @@ CREATE TABLE workers (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Dimension Table 5: Handling Units
+-- Dimension Table 6: Handling Units
 CREATE TABLE handling_units (
     `whId` BIGINT,
     id STRING,
@@ -404,7 +470,13 @@ CREATE TABLE handling_units (
         'last'
     ), FALSE),
     event_time AS CASE
-        WHEN `is_snapshot` = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        WHEN COALESCE(`__snapshot` IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -428,7 +500,7 @@ CREATE TABLE handling_units (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Dimension Table 6: SKU Overrides (Encarta)
+-- Dimension Table 7: SKU Overrides (Encarta)
 CREATE TABLE sku_overrides (
     sku_id STRING,
     principal_id BIGINT,
@@ -557,7 +629,13 @@ CREATE TABLE sku_overrides (
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
     event_time AS CASE
-        WHEN is_snapshot = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        WHEN COALESCE(__snapshot IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE updated_at
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -581,7 +659,7 @@ CREATE TABLE sku_overrides (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Dimension Table 7: SKU Masters (Encarta)
+-- Dimension Table 8: SKU Masters (Encarta)
 CREATE TABLE sku_masters (
     id STRING,
     principal_id BIGINT,
@@ -710,7 +788,13 @@ CREATE TABLE sku_masters (
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
     event_time AS CASE
-        WHEN is_snapshot = TRUE THEN TIMESTAMP '1970-01-01 00:00:00'
+        WHEN COALESCE(__snapshot IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE updated_at
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -921,6 +1005,20 @@ CREATE TABLE pick_drop_summary (
     lm_trip_type STRING,
     lm_dockdoor_id STRING,
     lm_vehicle_id STRING,
+    -- Trip Relation enrichment fields
+    trip_relation_id STRING,
+    trip_relation_xdock STRING,
+    trip_relation_parent_trip_id STRING,
+    trip_relation_created_at TIMESTAMP(3),
+    -- Parent Trip enrichment fields
+    parent_trip_code STRING,
+    parent_trip_type STRING,
+    parent_trip_priority INT,
+    parent_trip_dockdoor_code STRING,
+    parent_trip_vehicle_no STRING,
+    parent_trip_vehicle_type STRING,
+    parent_trip_delivery_date DATE,
+    parent_trip_created_at TIMESTAMP(3),
     -- Worker enrichment fields
     worker_code STRING,
     worker_name STRING,
@@ -1283,6 +1381,20 @@ SELECT
     COALESCE(lm_trip.`type`, '') AS lm_trip_type,
     COALESCE(lm_trip.`dockdoorId`, '') AS lm_dockdoor_id,
     COALESCE(lm_trip.`vehicleId`, '') AS lm_vehicle_id,
+    -- Trip Relation enrichment fields
+    COALESCE(tr.id, '') AS trip_relation_id,
+    COALESCE(tr.xdock, '') AS trip_relation_xdock,
+    COALESCE(tr.parentTripId, '') AS trip_relation_parent_trip_id,
+    tr.createdAt AS trip_relation_created_at,
+    -- Parent Trip enrichment fields
+    COALESCE(parent_trip.code, '') AS parent_trip_code,
+    COALESCE(parent_trip.`type`, '') AS parent_trip_type,
+    COALESCE(parent_trip.priority, 0) AS parent_trip_priority,
+    COALESCE(parent_trip.`dockdoorCode`, '') AS parent_trip_dockdoor_code,
+    COALESCE(parent_trip.`vehicleNo`, '') AS parent_trip_vehicle_no,
+    COALESCE(parent_trip.`vehicleType`, '') AS parent_trip_vehicle_type,
+    parent_trip.`deliveryDate` AS parent_trip_delivery_date,
+    parent_trip.`createdAt` AS parent_trip_created_at,
     -- Worker enrichment fields
     COALESCE(w.code, '') AS worker_code,
     COALESCE(w.name, '') AS worker_name,
@@ -1561,6 +1673,9 @@ FROM pick_drop_basic pb
     LEFT JOIN `sessions` FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS s ON pb.session_id = s.id
     LEFT JOIN tasks FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS t ON pb.task_id = t.id
     LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS lm_trip ON pb.lm_trip_id = lm_trip.id
+    LEFT JOIN trip_relation_rekeyed FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS tr ON pb.session_id = tr.sessionId
+    AND pb.lm_trip_id = tr.childTripId
+    LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS parent_trip ON tr.parentTripId = parent_trip.id
     LEFT JOIN workers FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS w ON pb.picked_by_worker_id = w.id
     LEFT JOIN handling_units FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS hu ON pb.dropped_inner_hu_id = hu.id
     LEFT JOIN sku_overrides FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS pick_so ON pb.picked_sku_id = pick_so.sku_id
