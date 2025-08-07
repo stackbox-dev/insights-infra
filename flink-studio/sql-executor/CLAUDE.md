@@ -294,6 +294,25 @@ GREATEST(
    - Will be filtered out when checking `event_time > epoch`
    - Pipeline ignores deletes by default
 
+5. **CDC Field Forwarding**
+   - ALWAYS forward `__op`, `__source_ts_ms`, and `__source_snapshot` to sink tables
+   - These fields are essential for downstream processing and debugging
+   - Include them even in simple 1:1 rekey pipelines
+   - Example:
+     ```sql
+     INSERT INTO sink_table
+     SELECT 
+         -- business fields
+         field1, field2, ...,
+         -- CDC metadata (always include)
+         `__op`,
+         `__source_ts_ms`, 
+         `__source_snapshot`,
+         `event_time`
+     FROM source_table
+     WHERE `event_time` > TIMESTAMP '1970-01-01 00:00:00';
+     ```
+
 ### Data Type Mappings
 
 | Avro/Debezium Type | Flink SQL Type | Notes |

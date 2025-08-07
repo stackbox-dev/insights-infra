@@ -18,8 +18,16 @@ CREATE TABLE trip_relation_source (
     xdock STRING,
     parentTripId STRING,
     childTripId STRING,
-    createdAt TIMESTAMP(3),
-    __snapshot STRING
+    createdAt STRING,
+    -- ZonedTimestamp from Debezium
+    `__op` STRING,
+    `__source_ts_ms` BIGINT,
+    `__source_snapshot` STRING,
+    `event_time` AS COALESCE(
+        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.trip_relation',
@@ -48,8 +56,13 @@ CREATE TABLE trip_relation_rekeyed (
     xdock STRING,
     parentTripId STRING,
     childTripId STRING NOT NULL,
-    createdAt TIMESTAMP(3),
-    __snapshot STRING,
+    createdAt STRING,
+    -- ZonedTimestamp from Debezium
+    `__op` STRING,
+    `__source_ts_ms` BIGINT,
+    `__source_snapshot` STRING,
+    `event_time` TIMESTAMP(3) NOT NULL,
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (sessionId, childTripId) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -85,5 +98,9 @@ SELECT whId,
     parentTripId,
     childTripId,
     createdAt,
-    __snapshot
-FROM trip_relation_source;
+    `__op`,
+    `__source_ts_ms`,
+    `__source_snapshot`,
+    `event_time`
+FROM trip_relation_source
+WHERE `event_time` > TIMESTAMP '1970-01-01 00:00:00';
