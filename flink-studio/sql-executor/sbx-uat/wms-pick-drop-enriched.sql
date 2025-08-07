@@ -97,6 +97,7 @@ CREATE TABLE pick_drop_basic (
     quant_slotting_for_hus BOOLEAN,
     processed_on_drop_at TIMESTAMP(3),
     allow_hu_break_v2 BOOLEAN,
+    deactivated_at TIMESTAMP(3),
     -- Mapping fields
     mapping_id STRING,
     mapping_created_at TIMESTAMP(3),
@@ -163,7 +164,10 @@ CREATE TABLE pick_drop_basic (
     drop_mhe_id STRING,
     drop_iloc STRING,
     source_iloc STRING,
-    WATERMARK FOR pick_item_updated_at AS pick_item_updated_at - INTERVAL '5' SECOND,
+    -- Fields from the upstream pipeline
+    is_snapshot BOOLEAN,
+    event_time TIMESTAMP(3),
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -208,23 +212,28 @@ CREATE TABLE tasks (
     `forceCompleted` BOOLEAN,
     `subKind` STRING,
     label STRING,
-    `is_deleted` BOOLEAN,
-    `__snapshot` STRING,
-    is_snapshot AS COALESCE(`__snapshot` IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
-    event_time AS CASE
-        WHEN COALESCE(`__snapshot` IN (
+    `__source_snapshot` STRING,
+    is_snapshot AS COALESCE(
+        `__source_snapshot` IN (
             'true',
             'first',
             'first_in_data_collection',
             'last_in_data_collection',
             'last'
-        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        FALSE
+    ),
+    event_time AS CASE
+        WHEN COALESCE(
+            `__source_snapshot` IN (
+                'true',
+                'first',
+                'first_in_data_collection',
+                'last_in_data_collection',
+                'last'
+            ),
+            FALSE
+        ) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -261,23 +270,28 @@ CREATE TABLE `sessions` (
     state STRING,
     progress STRING,
     `autoComplete` BOOLEAN,
-    `is_deleted` BOOLEAN,
-    `__snapshot` STRING,
-    is_snapshot AS COALESCE(`__snapshot` IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
-    event_time AS CASE
-        WHEN COALESCE(`__snapshot` IN (
+    `__source_snapshot` STRING,
+    is_snapshot AS COALESCE(
+        `__source_snapshot` IN (
             'true',
             'first',
             'first_in_data_collection',
             'last_in_data_collection',
             'last'
-        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        FALSE
+    ),
+    event_time AS CASE
+        WHEN COALESCE(
+            `__source_snapshot` IN (
+                'true',
+                'first',
+                'first_in_data_collection',
+                'last_in_data_collection',
+                'last'
+            ),
+            FALSE
+        ) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -318,8 +332,31 @@ CREATE TABLE trips (
     `vehicleNo` STRING,
     `vehicleType` STRING,
     `deliveryDate` DATE,
-    `is_deleted` BOOLEAN,
-    WATERMARK FOR `createdAt` AS `createdAt` - INTERVAL '5' SECOND,
+    `__source_snapshot` STRING,
+    is_snapshot AS COALESCE(
+        `__source_snapshot` IN (
+            'true',
+            'first',
+            'first_in_data_collection',
+            'last_in_data_collection',
+            'last'
+        ),
+        FALSE
+    ),
+    event_time AS CASE
+        WHEN COALESCE(
+            `__source_snapshot` IN (
+                'true',
+                'first',
+                'first_in_data_collection',
+                'last_in_data_collection',
+                'last'
+            ),
+            FALSE
+        ) THEN TIMESTAMP '1970-01-01 00:00:00'
+        ELSE `createdAt`
+    END,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -349,24 +386,9 @@ CREATE TABLE trip_relation_rekeyed (
     parentTripId STRING,
     childTripId STRING NOT NULL,
     createdAt TIMESTAMP(3),
-    __snapshot STRING,
-    is_snapshot AS COALESCE(__snapshot IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
-    event_time AS CASE
-        WHEN COALESCE(__snapshot IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE createdAt
-    END,
+    -- Fields from the upstream pipeline
+    is_snapshot BOOLEAN,
+    event_time TIMESTAMP(3),
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (sessionId, childTripId) NOT ENFORCED
 ) WITH (
@@ -404,23 +426,28 @@ CREATE TABLE workers (
     `quantIdentifiers` STRING,
     `mheKindIds` STRING,
     `eligibleZones` STRING,
-    `is_deleted` BOOLEAN,
-    `__snapshot` STRING,
-    is_snapshot AS COALESCE(`__snapshot` IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
-    event_time AS CASE
-        WHEN COALESCE(`__snapshot` IN (
+    `__source_snapshot` STRING,
+    is_snapshot AS COALESCE(
+        `__source_snapshot` IN (
             'true',
             'first',
             'first_in_data_collection',
             'last_in_data_collection',
             'last'
-        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        FALSE
+    ),
+    event_time AS CASE
+        WHEN COALESCE(
+            `__source_snapshot` IN (
+                'true',
+                'first',
+                'first_in_data_collection',
+                'last_in_data_collection',
+                'last'
+            ),
+            FALSE
+        ) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -460,23 +487,28 @@ CREATE TABLE handling_units (
     `updatedAt` TIMESTAMP(3),
     `lockTaskId` STRING,
     `effectiveStorageId` STRING,
-    `is_deleted` BOOLEAN,
-    `__snapshot` STRING,
-    is_snapshot AS COALESCE(`__snapshot` IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
-    event_time AS CASE
-        WHEN COALESCE(`__snapshot` IN (
+    `__source_snapshot` STRING,
+    is_snapshot AS COALESCE(
+        `__source_snapshot` IN (
             'true',
             'first',
             'first_in_data_collection',
             'last_in_data_collection',
             'last'
-        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        FALSE
+    ),
+    event_time AS CASE
+        WHEN COALESCE(
+            `__source_snapshot` IN (
+                'true',
+                'first',
+                'first_in_data_collection',
+                'last_in_data_collection',
+                'last'
+            ),
+            FALSE
+        ) THEN TIMESTAMP '1970-01-01 00:00:00'
         ELSE `updatedAt`
     END,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
@@ -500,7 +532,7 @@ CREATE TABLE handling_units (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Dimension Table 7: SKU Overrides (Encarta)
+-- Dimension Table 7: SKU Overrides (Encarta) - Generated from another pipeline
 CREATE TABLE sku_overrides (
     sku_id STRING,
     principal_id BIGINT,
@@ -617,27 +649,11 @@ CREATE TABLE sku_overrides (
     active BOOLEAN NOT NULL,
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
-    is_deleted BOOLEAN NOT NULL,
-    __snapshot STRING,
-    is_snapshot AS COALESCE(__snapshot IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
-    event_time AS CASE
-        WHEN COALESCE(__snapshot IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE updated_at
-    END,
+    -- Fields from the upstream pipeline
+    is_snapshot BOOLEAN,
+    event_time TIMESTAMP(3),
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id, node_id) NOT ENFORCED
 ) WITH (
@@ -659,7 +675,7 @@ CREATE TABLE sku_overrides (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Dimension Table 8: SKU Masters (Encarta)
+-- Dimension Table 8: SKU Masters (Encarta) - Generated from another pipeline
 CREATE TABLE sku_masters (
     id STRING,
     principal_id BIGINT,
@@ -776,27 +792,11 @@ CREATE TABLE sku_masters (
     active BOOLEAN NOT NULL,
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
-    is_deleted BOOLEAN NOT NULL,
-    __snapshot STRING,
-    is_snapshot AS COALESCE(__snapshot IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
-    event_time AS CASE
-        WHEN COALESCE(__snapshot IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ), FALSE) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE updated_at
-    END,
+    -- Fields from the upstream pipeline
+    is_snapshot BOOLEAN,
+    event_time TIMESTAMP(3),
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
@@ -1036,7 +1036,6 @@ CREATE TABLE pick_drop_summary (
     dropped_hu_attrs STRING,
     dropped_hu_lock_task_id STRING,
     dropped_hu_effective_storage_id STRING,
-    dropped_hu_is_deleted BOOLEAN,
     dropped_hu_created_at TIMESTAMP(3),
     dropped_hu_updated_at TIMESTAMP(3),
     -- Picked SKU enrichment fields (comprehensive)
@@ -1412,7 +1411,6 @@ SELECT
     COALESCE(hu.attrs, '') AS dropped_hu_attrs,
     COALESCE(hu.`lockTaskId`, '') AS dropped_hu_lock_task_id,
     COALESCE(hu.`effectiveStorageId`, '') AS dropped_hu_effective_storage_id,
-    hu.`is_deleted` AS dropped_hu_is_deleted,
     hu.`createdAt` AS dropped_hu_created_at,
     hu.`updatedAt` AS dropped_hu_updated_at,
     -- Picked SKU enrichment fields (overrides prioritized over master)
@@ -1670,18 +1668,18 @@ SELECT
         ''
     ) AS dropped_sku_product_classifications
 FROM pick_drop_basic pb
-    LEFT JOIN `sessions` FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS s ON pb.session_id = s.id
-    LEFT JOIN tasks FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS t ON pb.task_id = t.id
-    LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS lm_trip ON pb.lm_trip_id = lm_trip.id
-    LEFT JOIN trip_relation_rekeyed FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS tr ON pb.session_id = tr.sessionId
+    LEFT JOIN `sessions` FOR SYSTEM_TIME AS OF pb.event_time AS s ON pb.session_id = s.id
+    LEFT JOIN tasks FOR SYSTEM_TIME AS OF pb.event_time AS t ON pb.task_id = t.id
+    LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.event_time AS lm_trip ON pb.lm_trip_id = lm_trip.id
+    LEFT JOIN trip_relation_rekeyed FOR SYSTEM_TIME AS OF pb.event_time AS tr ON pb.session_id = tr.sessionId
     AND pb.lm_trip_id = tr.childTripId
-    LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS parent_trip ON tr.parentTripId = parent_trip.id
-    LEFT JOIN workers FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS w ON pb.picked_by_worker_id = w.id
-    LEFT JOIN handling_units FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS hu ON pb.dropped_inner_hu_id = hu.id
-    LEFT JOIN sku_overrides FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS pick_so ON pb.picked_sku_id = pick_so.sku_id
+    LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.event_time AS parent_trip ON tr.parentTripId = parent_trip.id
+    LEFT JOIN workers FOR SYSTEM_TIME AS OF pb.event_time AS w ON pb.picked_by_worker_id = w.id
+    LEFT JOIN handling_units FOR SYSTEM_TIME AS OF pb.event_time AS hu ON pb.dropped_inner_hu_id = hu.id
+    LEFT JOIN sku_overrides FOR SYSTEM_TIME AS OF pb.event_time AS pick_so ON pb.picked_sku_id = pick_so.sku_id
     AND pb.wh_id = pick_so.node_id
-    LEFT JOIN sku_masters FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS pick_sm ON pb.picked_sku_id = pick_sm.id
-    LEFT JOIN sku_overrides FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS drop_so ON pb.dropped_sku_id = drop_so.sku_id
+    LEFT JOIN sku_masters FOR SYSTEM_TIME AS OF pb.event_time AS pick_sm ON pb.picked_sku_id = pick_sm.id
+    LEFT JOIN sku_overrides FOR SYSTEM_TIME AS OF pb.event_time AS drop_so ON pb.dropped_sku_id = drop_so.sku_id
     AND pb.wh_id = drop_so.node_id
-    LEFT JOIN sku_masters FOR SYSTEM_TIME AS OF pb.pick_item_updated_at AS drop_sm ON pb.dropped_sku_id = drop_sm.id;
+    LEFT JOIN sku_masters FOR SYSTEM_TIME AS OF pb.event_time AS drop_sm ON pb.dropped_sku_id = drop_sm.id;
 ---
