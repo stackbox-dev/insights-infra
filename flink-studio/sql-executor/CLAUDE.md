@@ -43,13 +43,21 @@ Define source tables from Kafka topics:
 
 ```sql
 CREATE TABLE <source_table_name> (
-    -- Column definitions matching Kafka schema
+    -- Column definitions matching Kafka schema EXACTLY
+    -- IMPORTANT: Check schema registry for exact data types!
     id STRING,
     field1 TYPE,
     field2 TYPE,
     ...
-    -- Watermark for event time processing
-    WATERMARK FOR <timestamp_field> AS <timestamp_field> - INTERVAL '5' SECOND,
+    -- CDC fields (if using Debezium)
+    `__source_ts_ms` BIGINT,  -- NOT TIMESTAMP! It's milliseconds since epoch
+    -- Computed event time for watermarking (handles nulls)
+    `event_time` AS COALESCE(
+        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    -- Watermark on computed event_time, not raw fields
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     -- Primary key if using upsert-kafka
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
@@ -72,6 +80,12 @@ CREATE TABLE <source_table_name> (
     'properties.auto.offset.reset' = 'earliest'
 );
 ```
+
+#### Important Notes on Data Types:
+- **Timestamps from Debezium**: Use STRING for ZonedTimestamp fields (e.g., `createdAt STRING`)
+- **CDC Metadata**: `__source_ts_ms` is BIGINT (milliseconds), not TIMESTAMP
+- **Watermarking**: Always use computed columns with COALESCE to handle nulls
+- **Schema Verification**: ALWAYS check the Avro schema registry before defining tables
 
 ### 4. Intermediate Views (Optional)
 Create views to simplify complex joins:

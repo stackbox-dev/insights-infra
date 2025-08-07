@@ -34,19 +34,19 @@ CREATE TABLE pick_items (
     `destinationBinId` STRING,
     `destinationBinHUId` STRING,
     `destinationBinCode` STRING,
-    `createdAt` TIMESTAMP(3),
-    `deactivatedAt` TIMESTAMP(3),
+    `createdAt` STRING,
+    `deactivatedAt` STRING,
     `deactivatedBy` STRING,
     `pickedQty` INT,
-    `pickedAt` TIMESTAMP(3),
+    `pickedAt` STRING,
     `pickedBy` STRING,
-    `movedAt` TIMESTAMP(3),
+    `movedAt` STRING,
     `movedBy` STRING,
-    `processedAt` TIMESTAMP(3),
+    `processedAt` STRING,
     `huEqUOM` STRING,
     `hasInnerHUs` BOOLEAN,
     `innerHUEqUOM` STRING,
-    `binAssignedAt` TIMESTAMP(3),
+    `binAssignedAt` STRING,
     `scanSourceHUKind` STRING,
     `pickSourceHUKind` STRING,
     `carrierHUKind` STRING,
@@ -58,7 +58,7 @@ CREATE TABLE pick_items (
     `carrierHUCode` STRING,
     `huKind` STRING,
     `sourceHUEqUOM` STRING,
-    `updatedAt` TIMESTAMP(3),
+    `updatedAt` STRING,
     `eligibleDropLocations` STRING,
     `parentItemId` STRING,
     `oldBatch` STRING,
@@ -79,10 +79,10 @@ CREATE TABLE pick_items (
     `provisionalItemId` STRING,
     `inputDestHUId` STRING,
     kind STRING,
-    `tpAssignedAt` TIMESTAMP(3),
+    `tpAssignedAt` STRING,
     `legIndex` INT,
     `lastLeg` BOOLEAN,
-    `epAssignedAt` TIMESTAMP(3),
+    `epAssignedAt` STRING,
     `carrierHUFormedId` STRING,
     `huIndex` INT,
     sequence INT,
@@ -100,8 +100,12 @@ CREATE TABLE pick_items (
     attrs STRING,
     iloc STRING,
     `destIloc` STRING,
-    `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND
+    `__source_ts_ms` BIGINT,
+    `event_time` AS COALESCE(
+        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_item',
@@ -138,13 +142,13 @@ CREATE TABLE drop_items (
     `binId` STRING,
     `binHUId` STRING,
     `binCode` STRING,
-    `createdAt` TIMESTAMP(3),
-    `deactivatedAt` TIMESTAMP(3),
+    `createdAt` STRING,
+    `deactivatedAt` STRING,
     `deactivatedBy` STRING,
     `droppedQty` INT,
-    `droppedAt` TIMESTAMP(3),
+    `droppedAt` STRING,
     `droppedBy` STRING,
-    `updatedAt` TIMESTAMP(3),
+    `updatedAt` STRING,
     `dropHUInBin` BOOLEAN,
     `scanDestHU` BOOLEAN,
     `allowHUBreak` BOOLEAN,
@@ -155,7 +159,7 @@ CREATE TABLE drop_items (
     `destHUCode` STRING,
     `droppedInnerHUId` STRING,
     `innerHUEqUOM` STRING,
-    `binAssignedAt` TIMESTAMP(3),
+    `binAssignedAt` STRING,
     `dropUOM` STRING,
     `eligibleDropLocations` STRING,
     `parentItemId` STRING,
@@ -165,7 +169,7 @@ CREATE TABLE drop_items (
     `originalDestinationBinId` STRING,
     `originalDestinationBinCode` STRING,
     `lmTripId` STRING,
-    `processedForLoadingAt` TIMESTAMP(3),
+    `processedForLoadingAt` STRING,
     `quantBucket` STRING,
     `innerHUId` STRING,
     `innerHUCode` STRING,
@@ -175,10 +179,10 @@ CREATE TABLE drop_items (
     `allowInnerHUBreak` BOOLEAN,
     `innerHUBroken` BOOLEAN,
     `autoCompleted` BOOLEAN,
-    `processedForPickAt` TIMESTAMP(3),
+    `processedForPickAt` STRING,
     `quantSlottingForHUs` BOOLEAN,
     `pdPreviousTaskId` STRING,
-    `processedOnDropAt` TIMESTAMP(3),
+    `processedOnDropAt` STRING,
     `provisionalItemId` STRING,
     `allowHUBreakV2` BOOLEAN,
     `inputDestHUId` STRING,
@@ -190,8 +194,12 @@ CREATE TABLE drop_items (
     `mheId` STRING,
     iloc STRING,
     `sourceIloc` STRING,
-    `is_deleted` BOOLEAN,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND
+    `__source_ts_ms` BIGINT,
+    `event_time` AS COALESCE(
+        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_drop_item',
@@ -217,9 +225,13 @@ CREATE TABLE pick_drop_mapping (
     `taskId` STRING,
     `pickItemId` STRING,
     `dropItemId` STRING,
-    `createdAt` TIMESTAMP(3),
-    `is_deleted` BOOLEAN,
-    WATERMARK FOR `createdAt` AS `createdAt` - INTERVAL '5' SECOND
+    `createdAt` STRING,
+    `__source_ts_ms` BIGINT,
+    `event_time` AS COALESCE(
+        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_drop_mapping',
@@ -254,16 +266,16 @@ CREATE TABLE pick_drop_basic (
     qty INT,
     hu_code STRING,
     destination_bin_code STRING,
-    pick_item_created_at TIMESTAMP(3),
+    pick_item_created_at STRING,
     picked_qty INT,
-    picked_at TIMESTAMP(3),
+    picked_at STRING,
     picked_by_worker_id STRING,
-    moved_at TIMESTAMP(3),
-    processed_at TIMESTAMP(3),
+    moved_at STRING,
+    processed_at STRING,
     picked_hu_eq_uom STRING,
     picked_has_inner_hus BOOLEAN,
     picked_inner_hu_eq_uom STRING,
-    picked_bin_assigned_at TIMESTAMP(3),
+    picked_bin_assigned_at STRING,
     scan_source_hu_kind STRING,
     pick_source_hu_kind STRING,
     carrier_hu_kind STRING,
@@ -272,7 +284,7 @@ CREATE TABLE pick_drop_basic (
     carrier_hu_code STRING,
     hu_kind STRING,
     source_hu_eq_uom STRING,
-    pick_item_updated_at TIMESTAMP(3),
+    pick_item_updated_at STRING,
     eligible_drop_locations STRING,
     parent_item_id STRING,
     old_batch STRING,
@@ -292,8 +304,8 @@ CREATE TABLE pick_drop_basic (
     picked_hu_code STRING,
     dropped_bin_code STRING,
     dropped_qty INT,
-    dropped_at TIMESTAMP(3),
-    drop_item_updated_at TIMESTAMP(3),
+    dropped_at STRING,
+    drop_item_updated_at STRING,
     drop_hu_in_bin BOOLEAN,
     scan_dest_hu BOOLEAN,
     allow_hu_break BOOLEAN,
@@ -303,12 +315,12 @@ CREATE TABLE pick_drop_basic (
     dest_hu_code STRING,
     dropped_inner_hu_id STRING,
     dropped_inner_hu_eq_uom STRING,
-    dest_bin_assigned_at TIMESTAMP(3),
+    dest_bin_assigned_at STRING,
     drop_uom STRING,
     drop_parent_item_id STRING,
     hu_broken BOOLEAN,
     drop_original_source_bin_code STRING,
-    processed_for_loading_at TIMESTAMP(3),
+    processed_for_loading_at STRING,
     drop_quant_bucket STRING,
     drop_inner_hu_code STRING,
     dropped_inner_hu_kind_code STRING,
@@ -317,17 +329,17 @@ CREATE TABLE pick_drop_basic (
     inner_hu_broken BOOLEAN,
     drop_auto_complete BOOLEAN,
     quant_slotting_for_hus BOOLEAN,
-    processed_on_drop_at TIMESTAMP(3),
+    processed_on_drop_at STRING,
     allow_hu_break_v2 BOOLEAN,
     -- Mapping fields
     mapping_id STRING,
-    mapping_created_at TIMESTAMP(3),
+    mapping_created_at STRING,
     -- Additional fields for enrichment pipeline
     bin_id STRING,
     bin_hu_id STRING,
     destination_bin_id STRING,
     destination_bin_hu_id STRING,
-    pick_deactivated_at TIMESTAMP(3),
+    pick_deactivated_at STRING,
     pick_deactivated_by STRING,
     moved_by STRING,
     scanned_source_hu_id STRING,
@@ -341,10 +353,10 @@ CREATE TABLE pick_drop_basic (
     provisional_item_id STRING,
     input_dest_hu_id STRING,
     pick_item_kind STRING,
-    tp_assigned_at TIMESTAMP(3),
+    tp_assigned_at STRING,
     leg_index INT,
     last_leg BOOLEAN,
-    ep_assigned_at TIMESTAMP(3),
+    ep_assigned_at STRING,
     carrier_hu_formed_id STRING,
     hu_index INT,
     pick_sequence INT,
@@ -366,15 +378,15 @@ CREATE TABLE pick_drop_basic (
     source_bin_hu_id STRING,
     drop_bin_id STRING,
     drop_bin_hu_id STRING,
-    drop_created_at TIMESTAMP(3),
-    drop_deactivated_at TIMESTAMP(3),
+    drop_created_at STRING,
+    drop_deactivated_at STRING,
     drop_deactivated_by STRING,
     dropped_by_worker_id STRING,
     dest_hu_id STRING,
     source_bucket STRING,
     original_destination_bin_id STRING,
     drop_lm_trip_id STRING,
-    processed_for_pick_at TIMESTAMP(3),
+    processed_for_pick_at STRING,
     drop_provisional_item_id STRING,
     drop_input_dest_hu_id STRING,
     drop_leg_index INT,
@@ -385,7 +397,8 @@ CREATE TABLE pick_drop_basic (
     drop_mhe_id STRING,
     drop_iloc STRING,
     source_iloc STRING,
-    is_deleted BOOLEAN,
+    event_time TIMESTAMP(3) NOT NULL,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -447,7 +460,7 @@ SELECT
     pi.`carrierHUCode` AS carrier_hu_code,
     pi.`huKind` AS hu_kind,
     pi.`sourceHUEqUOM` AS source_hu_eq_uom,
-    CAST(pi.`updatedAt` AS TIMESTAMP) AS pick_item_updated_at,
+    pi.`updatedAt` AS pick_item_updated_at,
     pi.`eligibleDropLocations` AS eligible_drop_locations,
     pi.`parentItemId` AS parent_item_id,
     pi.`oldBatch` AS old_batch,
@@ -468,7 +481,7 @@ SELECT
     COALESCE(di.`binCode`, '') AS dropped_bin_code,
     COALESCE(di.`droppedQty`, 0) AS dropped_qty,
     di.`droppedAt` AS dropped_at,
-    CAST(di.`updatedAt` AS TIMESTAMP) AS drop_item_updated_at,
+    di.`updatedAt` AS drop_item_updated_at,
     di.`dropHUInBin` AS drop_hu_in_bin,
     di.`scanDestHU` AS scan_dest_hu,
     di.`allowHUBreak` AS allow_hu_break,
@@ -496,7 +509,7 @@ SELECT
     di.`allowHUBreakV2` AS allow_hu_break_v2,
     -- Mapping fields
     COALESCE(pdm.id, '') AS mapping_id,
-    CAST(pdm.`createdAt` AS TIMESTAMP) AS mapping_created_at,
+    pdm.`createdAt` AS mapping_created_at,
     -- Additional pick item fields
     pi.`binId` AS bin_id,
     pi.`binHUId` AS bin_hu_id,
@@ -561,13 +574,21 @@ SELECT
     di.`mheId` AS drop_mhe_id,
     di.iloc AS drop_iloc,
     di.`sourceIloc` AS source_iloc,
-    -- Combined is_deleted status from all three tables
-    COALESCE(pi.`is_deleted`, false) OR COALESCE(pdm.`is_deleted`, false) OR COALESCE(di.`is_deleted`, false) AS is_deleted
+    -- Event time for watermarking (greatest of all source event times)
+    GREATEST(
+        COALESCE(pi.`event_time`, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(
+            pdm.`event_time`,
+            TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        COALESCE(di.`event_time`, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS event_time
 FROM pick_items pi -- Join with pick-drop mapping (6-hour window)
     LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
     AND pi.`whId` = pdm.`whId`
-    AND pdm.`createdAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
-    AND pi.`updatedAt` + INTERVAL '6' HOUR -- Join with drop items (6-hour window)
+    AND pdm.`event_time` BETWEEN pi.`event_time` - INTERVAL '6' HOUR
+    AND pi.`event_time` + INTERVAL '6' HOUR -- Join with drop items (6-hour window)
     LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
-    AND di.`updatedAt` BETWEEN pi.`updatedAt` - INTERVAL '6' HOUR
-    AND pi.`updatedAt` + INTERVAL '6' HOUR;
+    AND di.`event_time` BETWEEN pi.`event_time` - INTERVAL '6' HOUR
+    AND pi.`event_time` + INTERVAL '6' HOUR
+WHERE pi.`event_time` > TIMESTAMP '1970-01-01 00:00:00';
