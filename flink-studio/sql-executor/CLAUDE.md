@@ -143,10 +143,7 @@ WHERE s1.is_deleted = false;
 ## Common Patterns
 
 ### 1. CDC (Change Data Capture) Tables
-For tables with `is_deleted` flag:
-```sql
-WHERE is_deleted = false
-```
+CDC data processing with proper event time handling.
 
 ### 2. Snapshot Detection
 For snapshot data:
@@ -155,11 +152,11 @@ is_snapshot AS __source_snapshot IN ('true', 'first', 'last')
 ```
 
 ### 3. Time-Windowed Joins
-For streaming joins with bounded state:
+For streaming joins with bounded state (use event_time):
 ```sql
 LEFT JOIN table2 t2 ON t1.id = t2.ref_id
-    AND t2.timestamp BETWEEN t1.timestamp - INTERVAL '6' HOUR
-    AND t1.timestamp + INTERVAL '6' HOUR
+    AND t2.event_time BETWEEN t1.event_time - INTERVAL '6' HOUR
+    AND t1.event_time + INTERVAL '6' HOUR
 ```
 
 ### 4. Null Handling
@@ -270,12 +267,54 @@ GREATEST(
    - Verify output in Kafka topics
    - Monitor checkpointing and backpressure
 
+## CDC and Watermarking Best Practices
+
+### Handling CDC Fields
+1. **__source_ts_ms Field**
+   - Always define as `BIGINT` (not TIMESTAMP)
+   - Contains milliseconds since epoch from Debezium
+   - Convert to timestamp using `TO_TIMESTAMP_LTZ(__source_ts_ms, 3)`
+
+2. **Event Time Computation**
+   ```sql
+   -- Compute event_time with null handling
+   `event_time` AS COALESCE(
+       TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+       TIMESTAMP '1970-01-01 00:00:00'
+   )
+   ```
+
+3. **Watermarking Strategy**
+   - Use computed `event_time` field, not raw timestamps
+   - Filter out epoch timestamps: `WHERE event_time > TIMESTAMP '1970-01-01 00:00:00'`
+   - Forward greatest event_time to sink for multi-source joins
+
+4. **Delete Tombstones**
+   - Delete events have null values except keys
+   - Will be filtered out when checking `event_time > epoch`
+   - Pipeline ignores deletes by default
+
+### Data Type Mappings
+
+| Avro/Debezium Type | Flink SQL Type | Notes |
+|-------------------|----------------|-------|
+| ZonedTimestamp | STRING | Don't use TIMESTAMP(3) |
+| long (ms since epoch) | BIGINT | For __source_ts_ms |
+| UUID | STRING | Debezium UUIDs are strings |
+| Json | STRING | For JSON fields like attrs |
+
 ## Common Issues and Solutions
 
 1. **Schema Mismatch**
    - Verify field names match Kafka schema exactly
-   - Check data types compatibility
-   - Ensure nullable fields are handled
+   - Check data types compatibility (especially timestamps)
+   - Use schema registry to verify exact types
+   - Common error: `Found string, expecting union[null, long]` means wrong data type
+
+2. **Avro Deserialization Errors**
+   - ZonedTimestamp fields must be STRING, not TIMESTAMP(3)
+   - __source_ts_ms must be BIGINT, not TIMESTAMP(3)
+   - Always check schema registry for exact types
 
 2. **Join Performance**
    - Use time windows to bound state
