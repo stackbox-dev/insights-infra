@@ -1,14 +1,22 @@
-CREATE TABLE IF NOT EXISTS skus_master
+-- ClickHouse table for Encarta SKUs Master
+-- Optimized data types with non-nullable defaults
+-- Matches Flink sink table: sbx_uat.encarta.public.skus_master
+
+CREATE TABLE IF NOT EXISTS encarta_skus_master
 (
-    id String DEFAULT '',
+    -- Core Identifiers (Primary Key)
+    id String,  -- SKU ID, primary key
     principal_id Int64 DEFAULT 0,
-    node_id Int64 DEFAULT 0,
+    
+    -- Product Hierarchy
     category String DEFAULT '',
     product String DEFAULT '',
     product_id String DEFAULT '',
     category_group String DEFAULT '',
     sub_brand String DEFAULT '',
     brand String DEFAULT '',
+    
+    -- SKU Basic Information
     code String DEFAULT '',
     name String DEFAULT '',
     short_description String DEFAULT '',
@@ -17,8 +25,12 @@ CREATE TABLE IF NOT EXISTS skus_master
     avg_l0_per_put Int32 DEFAULT 0,
     inventory_type String DEFAULT '',
     shelf_life Int32 DEFAULT 0,
+    
+    -- SKU Identifiers
     identifier1 String DEFAULT '',
     identifier2 String DEFAULT '',
+    
+    -- SKU Tags
     tag1 String DEFAULT '',
     tag2 String DEFAULT '',
     tag3 String DEFAULT '',
@@ -29,17 +41,23 @@ CREATE TABLE IF NOT EXISTS skus_master
     tag8 String DEFAULT '',
     tag9 String DEFAULT '',
     tag10 String DEFAULT '',
+    
+    -- Packaging Configuration
     handling_unit_type String DEFAULT '',
     cases_per_layer Int32 DEFAULT 0,
     layers Int32 DEFAULT 0,
-    active_from DateTime64(3) DEFAULT '1970-01-01 00:00:00',
-    active_till DateTime64(3) DEFAULT '1970-01-01 00:00:00',
+    
+    -- Activity Period
+    active_from DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    active_till DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- Unit of Measure Hierarchy
     l0_units Int32 DEFAULT 0,
     l1_units Int32 DEFAULT 0,
     l2_units Int32 DEFAULT 0,
-    l2_units_final Int32 DEFAULT 0,
     l3_units Int32 DEFAULT 0,
-    l3_units_final Int32 DEFAULT 0,
+    
+    -- L0 (Base Unit) Specifications
     l0_name String DEFAULT '',
     l0_weight Float64 DEFAULT 0,
     l0_volume Float64 DEFAULT 0,
@@ -58,6 +76,8 @@ CREATE TABLE IF NOT EXISTS skus_master
     l0_text_tag2 String DEFAULT '',
     l0_image String DEFAULT '',
     l0_num_tag1 Float64 DEFAULT 0,
+    
+    -- L1 Unit Specifications
     l1_name String DEFAULT '',
     l1_weight Float64 DEFAULT 0,
     l1_volume Float64 DEFAULT 0,
@@ -76,6 +96,8 @@ CREATE TABLE IF NOT EXISTS skus_master
     l1_text_tag2 String DEFAULT '',
     l1_image String DEFAULT '',
     l1_num_tag1 Float64 DEFAULT 0,
+    
+    -- L2 Unit Specifications
     l2_name String DEFAULT '',
     l2_weight Float64 DEFAULT 0,
     l2_volume Float64 DEFAULT 0,
@@ -94,6 +116,8 @@ CREATE TABLE IF NOT EXISTS skus_master
     l2_text_tag2 String DEFAULT '',
     l2_image String DEFAULT '',
     l2_num_tag1 Float64 DEFAULT 0,
+    
+    -- L3 Unit Specifications
     l3_name String DEFAULT '',
     l3_weight Float64 DEFAULT 0,
     l3_volume Float64 DEFAULT 0,
@@ -112,13 +136,17 @@ CREATE TABLE IF NOT EXISTS skus_master
     l3_text_tag2 String DEFAULT '',
     l3_image String DEFAULT '',
     l3_num_tag1 Float64 DEFAULT 0,
-    active Bool DEFAULT FALSE,
-    classifications String DEFAULT '',
-    product_classifications String DEFAULT '',
-    is_deleted Bool DEFAULT FALSE,
-    created_at DateTime64(3),
-    updated_at DateTime64(3),
-    event_time DateTime64(3) DEFAULT if(updated_at > created_at, updated_at, created_at)
+    
+    -- System Fields
+    active Bool DEFAULT false,
+    classifications String DEFAULT '{}',  -- JSON, default empty object
+    product_classifications String DEFAULT '{}',  -- JSON, default empty object
+    is_snapshot Bool DEFAULT false,
+    created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
 ) 
-ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (id);
+ENGINE = ReplacingMergeTree(event_time)
+ORDER BY (principal_id, code)
+SETTINGS index_granularity = 8192
+COMMENT 'Encarta SKUs master data with complete product hierarchy and UOM specifications';

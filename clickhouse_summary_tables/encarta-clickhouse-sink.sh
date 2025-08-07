@@ -85,7 +85,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/
       "value.converter.schemas.enable": "false",
       "clickhouse.debug": "true",
       "clickhouse.log.level": "DEBUG",
-      "topic2TableMap": "sbx_uat.encarta.public.skus_master=skus_master,sbx_uat.encarta.public.skus_overrides=skus_overrides",
+      "topic2TableMap": "sbx_uat.encarta.public.skus_master=encarta_skus_master,sbx_uat.encarta.public.skus_overrides=encarta_skus_overrides",
 
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
