@@ -107,6 +107,10 @@ CREATE TABLE <sink_table_name> (
     field1 TYPE NOT NULL,
     field2 TYPE,
     ...
+    -- Event time for downstream processing
+    event_time TIMESTAMP(3) NOT NULL,
+    -- Watermark for event time
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
