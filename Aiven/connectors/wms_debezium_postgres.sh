@@ -75,6 +75,7 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-wms/config -H "Conte
       "database.history.kafka.topic": "schema-changes.postgres",
       "publication.name": "dbz_publication",
       "slot.name": "aiven_dbz",
+      "topic.cleanup.policy": "delete",
 
       "database.history.kafka.bootstrap.servers": "sbx-stag-kafka-stackbox.e.aivencloud.com:22167",
       "topic.prefix": "sbx_uat.wms",
