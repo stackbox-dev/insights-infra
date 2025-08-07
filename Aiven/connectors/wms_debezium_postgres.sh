@@ -100,6 +100,14 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-wms/config -H "Conte
       "key.converter.basic.auth.user.info.configurable": "true",
       "key.converter.schemas.enable": "true",
       "value.converter.schemas.enable": "true",
+
+      "transforms": "unwrap",
+      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+      "transforms.unwrap.drop.tombstones": "false",
+      "transforms.unwrap.delete.handling.mode": "rewrite",
+      "transforms.unwrap.add.fields": "op,source.ts_ms,source.snapshot",
+      "transforms.unwrap.add.fields.prefix": "__",
+
       "topic.creation.default.replication.factor": 3,
       "topic.creation.default.partitions": 1,
       "topic.creation.default.cleanup.policy": "compact",
