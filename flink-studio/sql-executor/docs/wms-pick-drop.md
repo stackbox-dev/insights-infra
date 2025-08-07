@@ -8,7 +8,7 @@ The `pick_drop_summary` table is the enriched output of the WMS Pick Drop pipeli
 - **Topic**: `sbx_uat.wms.public.pick_drop_summary`
 - **Primary Key**: `(pick_item_id, drop_item_id)` - Composite key ensuring uniqueness
 - **Connector**: `upsert-kafka` with Avro-Confluent format
-- **Total Columns**: 229 (increased from 217 with trip relation and parent trip fields)
+- **Total Columns**: 332
 
 ## Field Categories
 
@@ -228,7 +228,6 @@ The `pick_drop_summary` table is the enriched output of the WMS Pick Drop pipeli
 | `dropped_hu_attrs` | STRING | Yes | Attributes of dropped HU (JSON) |
 | `dropped_hu_lock_task_id` | STRING | Yes | Task ID that locked the HU |
 | `dropped_hu_effective_storage_id` | STRING | Yes | Effective storage location |
-| `dropped_hu_is_deleted` | BOOLEAN | Yes | Whether HU is marked as deleted |
 | `dropped_hu_created_at` | TIMESTAMP(3) | Yes | When dropped HU was created |
 | `dropped_hu_updated_at` | TIMESTAMP(3) | Yes | When dropped HU was last updated |
 
@@ -441,6 +440,7 @@ The dropped SKU enrichment follows the identical structure as picked SKU enrichm
 - One pick item can relate to multiple drop items
 - Each record represents a unique pick-drop pair
 - Enrichment provides 360-degree view of warehouse operations
+- Includes comprehensive SKU enrichment for both picked and dropped items
 
 ## ClickHouse DDL
 

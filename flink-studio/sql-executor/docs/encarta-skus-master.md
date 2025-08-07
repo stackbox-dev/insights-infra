@@ -8,7 +8,7 @@ The `skus_master` table is the comprehensive master data aggregation output of t
 - **Topic**: `sbx_uat.encarta.public.skus_master`
 - **Primary Key**: `id` - Unique SKU identifier
 - **Connector**: `upsert-kafka` with Avro-Confluent format
-- **Total Columns**: 107
+- **Total Columns**: 115
 
 ## Field Categories
 
@@ -17,7 +17,6 @@ The `skus_master` table is the comprehensive master data aggregation output of t
 |--------|-----------|----------|-------------|
 | `id` | STRING | No | Unique SKU identifier (PK) |
 | `principal_id` | BIGINT | No | Principal/tenant identifier |
-| `node_id` | BIGINT | No | Node/warehouse identifier |
 | `product_id` | STRING | Yes | Associated product identifier |
 
 ### Product Hierarchy
@@ -80,9 +79,7 @@ The `skus_master` table is the comprehensive master data aggregation output of t
 | `l0_units` | INT | Yes | Number of L0 (base) units |
 | `l1_units` | INT | Yes | Number of L1 units per L0 |
 | `l2_units` | INT | Yes | Number of L2 units per L1 |
-| `l2_units_final` | INT | Yes | Final L2 units calculation |
 | `l3_units` | INT | Yes | Number of L3 units per L2 |
-| `l3_units_final` | INT | Yes | Final L3 units calculation |
 
 ### L0 (Base Unit) Specifications
 | Column | Data Type | Nullable | Description |
@@ -178,28 +175,28 @@ The `skus_master` table is the comprehensive master data aggregation output of t
 | `active` | BOOLEAN | No | Whether SKU is currently active |
 | `classifications` | STRING | No | SKU classifications (JSON) |
 | `product_classifications` | STRING | No | Product-level classifications (JSON) |
-| `is_deleted` | BOOLEAN | No | Soft delete flag |
 | `is_snapshot` | BOOLEAN | No | Whether record is a snapshot |
 | `created_at` | TIMESTAMP(3) | No | Record creation timestamp |
 | `updated_at` | TIMESTAMP(3) | No | Last update timestamp |
+| `event_time` | TIMESTAMP(3) | No | Event time for stream processing |
 
 ## Data Quality Notes
 
 ### Nullability
-- Core identifiers (`id`, `principal_id`, `node_id`) and system fields are non-nullable
+- Core identifiers (`id`, `principal_id`) and system fields are non-nullable
 - Most business fields are nullable to accommodate partial data
 - Boolean system fields default to false when not specified
 
 ### Data Aggregation Logic
-- Combines data from 8 source tables through LEFT JOINs
+- Combines data from 8 source tables through INNER JOINs and views
 - Hierarchy: SKUs → Products → Sub-Categories → Categories → Category Groups
 - Brand hierarchy: Products → Sub-Brands → Brands
 - UOM data aggregated from dedicated UOM tables
 
 ### Filtering Rules
-- Only includes active, non-deleted records from all source tables
-- Uses `COALESCE(is_deleted, FALSE) = FALSE` to handle nulls as non-deleted
-- Filters apply at each join level to ensure data quality
+- Uses pre-computed hierarchy views to optimize join performance
+- Combines `is_snapshot` flags using AND logic across all sources
+- Uses GREATEST for event_time across all joined tables
 
 ## Pipeline Dependencies
 
@@ -211,12 +208,12 @@ The `skus_master` table is the comprehensive master data aggregation output of t
 5. `category_groups` - Category group definitions
 6. `brands` - Brand master data
 7. `sub_brands` - Sub-brand definitions
-8. `skus_uom` - Unit of measure specifications
+8. `skus_uoms_agg` - Aggregated unit of measure specifications
 
 ### Join Strategy
 - Primary path: SKU → Product → Sub-Category → Category → Category Group
 - Secondary path: Product → Sub-Brand → Brand
-- UOM enrichment: Direct join on SKU ID
+- UOM enrichment: Join with pre-aggregated UOM data
 
 ### Performance Characteristics
 - Upsert-kafka connector for exactly-once semantics
@@ -256,111 +253,3 @@ The `skus_master` table is the comprehensive master data aggregation output of t
 - Volume: Cubic meters (m³)
 - Packing Efficiency: Ratio (0.0 - 1.0)
 
----
-
-## Addendum: SKUs Override Table
-
-The `skus_overrides` table provides node-specific (warehouse-specific) overrides for SKU master data. This allows for location-specific customizations while maintaining global master data integrity.
-
-### Table Details
-- **Name**: `skus_overrides`
-- **Topic**: `sbx_uat.encarta.public.skus_overrides`
-- **Primary Key**: `(sku_id, node_id)` - Composite key for SKU-node combination
-- **Connector**: `upsert-kafka` with Avro-Confluent format
-
-### Override-Specific Fields
-
-The override table contains the same fields as `skus_master` with these key differences:
-
-#### Additional Key Field
-| Column | Data Type | Nullable | Description |
-|--------|-----------|----------|-------------|
-| `sku_id` | STRING | No | SKU identifier (part of composite PK) |
-| `node_id` | BIGINT | No | Node/warehouse identifier (part of composite PK) |
-
-### Override Logic
-
-The system applies a three-level priority hierarchy:
-1. **Node-specific SKU overrides** (highest priority)
-2. **Product-level node overrides** (medium priority)
-3. **Master data** (default/fallback)
-
-### Common Override Scenarios
-
-#### Location-Specific Attributes
-- Different packaging configurations per warehouse
-- Regional shelf life variations
-- Local fulfillment type assignments
-- Warehouse-specific handling unit types
-
-#### Operational Overrides
-- Temporary active/inactive status changes
-- Location-specific inventory types
-- Custom tag assignments for local operations
-- Regional classification adjustments
-
-### Integration with Master Data
-
-When querying SKU data for a specific node:
-```sql
-SELECT 
-    COALESCE(override.field, master.field) AS field
-FROM skus_master master
-LEFT JOIN skus_overrides override 
-    ON master.id = override.sku_id 
-    AND override.node_id = :target_node_id
-```
-
-### Data Governance
-
-#### Override Validation Rules
-- Override records must reference valid SKU IDs
-- Node IDs must correspond to active warehouse locations
-- System maintains audit trail via `updated_at` timestamp
-- Soft deletes (`is_deleted`) cascade from master to overrides
-
-#### Synchronization
-- Override records automatically invalidated when master SKU is deleted
-- Changes to master data do not overwrite existing overrides
-- Override removal reverts to master data values
-
-### Performance Considerations
-- Composite primary key enables efficient node-specific lookups
-- Partitioning by node_id optimizes warehouse-specific queries
-- Sparse table - only contains actual overrides, not full SKU set per node
-
-## Best Practices
-
-### When to Use Overrides
-✅ **Appropriate Use Cases:**
-- Warehouse-specific packaging variations
-- Regional compliance requirements
-- Temporary operational adjustments
-- Location-based fulfillment strategies
-
-❌ **Avoid Overrides For:**
-- Core product attributes (name, brand, category)
-- Global identifiers (SKU code, product ID)
-- System-wide classifications
-- Master data corrections (update master instead)
-
-### Maintenance Guidelines
-1. Regular audit of override necessity
-2. Document business justification for overrides
-3. Implement approval workflow for override creation
-4. Schedule periodic override cleanup reviews
-5. Monitor override-to-master data drift
-
-### Query Optimization
-For efficient override queries:
-```sql
--- Use node_id in WHERE clause for partition pruning
-WHERE node_id = :warehouse_id 
-    AND sku_id IN (...)
-
--- Leverage composite index
-ORDER BY sku_id, node_id
-
--- Minimize full table scans
-LIMIT override queries to specific nodes/SKUs
-```
