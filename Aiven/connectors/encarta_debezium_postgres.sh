@@ -83,7 +83,7 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-encarta/config -H "C
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
       "tombstones.on.delete": true,
-      "provide.transaction.metadata": true,
+      "provide.transaction.metadata": false,
       "binary.handling.mode": "base64",
       "snapshot.mode": "initial",
       "incremental.snapshot.enabled": "true",
@@ -110,19 +110,7 @@ curl -X PUT http://localhost:8083/connectors/source-sbx-uat-encarta/config -H "C
       "producer.override.request.timeout.ms": "30000",
       "producer.override.retries": "10",
       "producer.override.retry.backoff.ms": "1000",
-      "producer.override.delivery.timeout.ms": "120000",
-      "time.precision.mode":"connect",
-
-      "transforms": "unwrap,castDelete,renameDelete,ts2epoch",
-      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-      "transforms.unwrap.drop.tombstones": "false",
-      "transforms.unwrap.delete.handling.mode": "rewrite",
-      "transforms.unwrap.add.fields": "snapshot,__deleted",
-      "transforms.castDelete.type": "org.apache.kafka.connect.transforms.Cast$Value",
-      "transforms.castDelete.spec": "__deleted:boolean",
-      "transforms.renameDelete.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
-      "transforms.renameDelete.renames": "__deleted:is_deleted",
-      "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch"
+      "producer.override.delivery.timeout.ms": "120000"
 }'
 
 # Stop port forwarding
