@@ -20,15 +20,23 @@ CREATE TABLE node_overrides (
     layers INT,
     cases_per_layer INT,
     handling_unit_type STRING,
-    is_deleted BOOLEAN,
-    __snapshot STRING,
-    is_snapshot AS COALESCE(__snapshot IN (
+    -- CDC snapshot field (READ from true source tables, but never forward directly)
+    `__source_snapshot` STRING,
+    -- Computed is_snapshot field for CDC snapshot detection
+    `is_snapshot` AS COALESCE(`__source_snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
     ), FALSE),
+    -- Computed event time from business timestamps
+    `event_time` AS COALESCE(
+        updated_at,
+        created_at,
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -61,15 +69,23 @@ CREATE TABLE product_node_overrides (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    is_deleted BOOLEAN,
-    __snapshot STRING,
-    is_snapshot AS COALESCE(__snapshot IN (
+    -- CDC snapshot field (READ from true source tables, but never forward directly)
+    `__source_snapshot` STRING,
+    -- Computed is_snapshot field for CDC snapshot detection
+    `is_snapshot` AS COALESCE(`__source_snapshot` IN (
         'true',
         'first',
         'first_in_data_collection',
         'last_in_data_collection',
         'last'
     ), FALSE),
+    -- Computed event time from business timestamps
+    `event_time` AS COALESCE(
+        updated_at,
+        created_at,
+        TIMESTAMP '1970-01-01 00:00:00'
+    ),
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -94,7 +110,6 @@ CREATE TABLE product_node_overrides (
 CREATE TABLE skus_master (
     id STRING NOT NULL,
     principal_id BIGINT NOT NULL,
-    node_id BIGINT NOT NULL,
     category STRING,
     product STRING,
     product_id STRING,
@@ -129,9 +144,7 @@ CREATE TABLE skus_master (
     l0_units INT,
     l1_units INT,
     l2_units INT,
-    l2_units_final INT,
     l3_units INT,
-    l3_units_final INT,
     l0_name STRING,
     l0_weight DOUBLE,
     l0_volume DOUBLE,
@@ -207,10 +220,11 @@ CREATE TABLE skus_master (
     active BOOLEAN NOT NULL,
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
-    is_deleted BOOLEAN NOT NULL,
     is_snapshot BOOLEAN NOT NULL,
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
+    event_time TIMESTAMP(3) NOT NULL,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -270,9 +284,7 @@ CREATE TABLE skus_overrides (
     l0_units INT,
     l1_units INT,
     l2_units INT,
-    l2_units_final INT,
     l3_units INT,
-    l3_units_final INT,
     l0_name STRING,
     l0_weight DOUBLE,
     l0_volume DOUBLE,
@@ -348,10 +360,11 @@ CREATE TABLE skus_overrides (
     active BOOLEAN NOT NULL,
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
-    is_deleted BOOLEAN NOT NULL,
     is_snapshot BOOLEAN NOT NULL,
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
+    event_time TIMESTAMP(3) NOT NULL,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id, node_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -421,12 +434,10 @@ SELECT sno.sku_id,
     COALESCE(sno.active_till, sm.active_till) AS active_till,
     sm.l0_units,
     sm.l1_units,
-    sm.l2_units,
-    -- Apply node overrides for l2_units_final if available
-    COALESCE(sno.l2_units, sm.l2_units_final) AS l2_units_final,
-    sm.l3_units,
-    -- Apply node overrides for l3_units_final if available
-    COALESCE(sno.l3_units, sm.l3_units_final) AS l3_units_final,
+    -- Apply node overrides for l2_units if available
+    COALESCE(sno.l2_units, sm.l2_units) AS l2_units,
+    -- Apply node overrides for l3_units if available
+    COALESCE(sno.l3_units, sm.l3_units) AS l3_units,
     sm.l0_name,
     sm.l0_weight,
     sm.l0_volume,
@@ -503,22 +514,26 @@ SELECT sno.sku_id,
     COALESCE(sno.active, pno.active, sm.active) AS active,
     sm.classifications,
     sm.product_classifications,
-    COALESCE(sno.is_deleted, pno.is_deleted, sm.is_deleted) AS is_deleted,
-    sm.is_snapshot,
+    -- Combine is_snapshot from all sources
+    sno.is_snapshot AND sm.is_snapshot AND COALESCE(pno.is_snapshot, TRUE) AS is_snapshot,
     sm.created_at,
     -- Update timestamp should reflect the latest change from any source
     GREATEST(
         COALESCE(sm.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(sno.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(pno.updated_at, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updated_at
+    ) AS updated_at,
+    -- Compute event_time from all sources
+    GREATEST(
+        COALESCE(sm.event_time, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(sno.event_time, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(pno.event_time, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS event_time
 FROM node_overrides sno
     INNER JOIN skus_master sm ON sno.sku_id = sm.id
     LEFT JOIN product_node_overrides pno ON sm.product_id = pno.product_id
     AND sno.node_id = pno.node_id
-    AND COALESCE(pno.is_deleted, FALSE) = FALSE
-WHERE COALESCE(sno.is_deleted, FALSE) = FALSE
-    AND COALESCE(sm.is_deleted, FALSE) = FALSE
+WHERE sm.event_time > TIMESTAMP '1970-01-01 00:00:00'
 UNION ALL
 -- Records from product_node_overrides (product-level overrides) 
 -- Only for SKUs that don't have node-specific overrides
@@ -559,9 +574,7 @@ SELECT sm.id AS sku_id,
     sm.l0_units,
     sm.l1_units,
     sm.l2_units,
-    sm.l2_units_final,
     sm.l3_units,
-    sm.l3_units_final,
     sm.l0_name,
     sm.l0_weight,
     sm.l0_volume,
@@ -638,19 +651,23 @@ SELECT sm.id AS sku_id,
     COALESCE(pno.active, sm.active) AS active,
     sm.classifications,
     sm.product_classifications,
-    COALESCE(pno.is_deleted, sm.is_deleted) AS is_deleted,
-    sm.is_snapshot,
+    -- Combine is_snapshot from both sources
+    pno.is_snapshot AND sm.is_snapshot AS is_snapshot,
     sm.created_at,
     -- Update timestamp should reflect the latest change from any source
     GREATEST(
         COALESCE(sm.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(pno.updated_at, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updated_at
+    ) AS updated_at,
+    -- Compute event_time from both sources
+    GREATEST(
+        COALESCE(sm.event_time, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(pno.event_time, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS event_time
 FROM product_node_overrides pno
     INNER JOIN skus_master sm ON pno.product_id = sm.product_id
     LEFT JOIN node_overrides sno2 ON sno2.sku_id = sm.id
     AND sno2.node_id = pno.node_id
-    AND COALESCE(sno2.is_deleted, FALSE) = FALSE
-WHERE COALESCE(pno.is_deleted, FALSE) = FALSE
-    AND COALESCE(sm.is_deleted, FALSE) = FALSE -- Exclude SKUs that already have node-specific overrides for this node
+WHERE sm.event_time > TIMESTAMP '1970-01-01 00:00:00'
+    -- Exclude SKUs that already have node-specific overrides for this node
     AND sno2.sku_id IS NULL;

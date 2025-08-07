@@ -16,10 +16,8 @@ CREATE TABLE uoms (
     packing_efficiency DOUBLE,
     active BOOLEAN,
     itf_code STRING,
-    created_at STRING,
-    -- ZonedTimestamp from Debezium
-    updated_at STRING,
-    -- ZonedTimestamp from Debezium
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
     erp_weight DOUBLE,
     erp_volume DOUBLE,
     erp_length DOUBLE,
@@ -29,9 +27,7 @@ CREATE TABLE uoms (
     text_tag2 STRING,
     image STRING,
     num_tag1 DOUBLE,
-    is_deleted BOOLEAN,
-    `__op` STRING,
-    `__source_ts_ms` BIGINT,
+    -- CDC snapshot field (READ from true source tables, but never forward directly)
     `__source_snapshot` STRING,
     is_snapshot AS COALESCE(
         `__source_snapshot` IN (
@@ -43,8 +39,10 @@ CREATE TABLE uoms (
         ),
         FALSE
     ),
+    -- Computed event time from business timestamps
     `event_time` AS COALESCE(
-        TO_TIMESTAMP_LTZ(`__source_ts_ms`, 3),
+        updated_at,
+        created_at,
         TIMESTAMP '1970-01-01 00:00:00'
     ),
     WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
@@ -149,10 +147,9 @@ CREATE TABLE skus_uoms_agg (
     l3_text_tag2 STRING,
     l3_image STRING,
     l3_num_tag1 DOUBLE,
-    created_at STRING NOT NULL,
-    -- ZonedTimestamp
-    updated_at STRING NOT NULL,
-    -- ZonedTimestamp
+    created_at TIMESTAMP(3) NOT NULL,
+    updated_at TIMESTAMP(3) NOT NULL,
+    `is_snapshot` BOOLEAN NOT NULL,
     `event_time` TIMESTAMP(3) NOT NULL,
     WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id) NOT ENFORCED
@@ -563,6 +560,7 @@ SELECT u.sku_id,
     ) AS l3_num_tag1,
     MIN(u.created_at) AS created_at,
     MAX(u.updated_at) AS updated_at,
+    MIN(CAST(u.`is_snapshot` AS INT)) = 1 AS `is_snapshot`,
     MAX(u.`event_time`) AS `event_time`
 FROM uoms u
 WHERE u.active = true

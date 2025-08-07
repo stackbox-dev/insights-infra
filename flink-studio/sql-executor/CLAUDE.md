@@ -347,13 +347,17 @@ WHERE s1.event_time > TIMESTAMP '1970-01-01 00:00:00';
 ```
 
 ### For aggregation pipelines:
-- Don't forward `is_snapshot` (loses meaning)
+- Forward `is_snapshot` using appropriate aggregate function:
+  - Use `BOOL_AND(is_snapshot)` or `MIN(is_snapshot)` for "all records are snapshots" semantics
+  - Use `BOOL_OR(is_snapshot)` or `MAX(is_snapshot)` for "any record is a snapshot" semantics
+  - Choose based on business logic requirements
 - Keep `event_time` using MAX
 ```sql
 INSERT INTO aggregated_sink
 SELECT 
     key_field,
     SUM(amount) AS total_amount,
+    BOOL_AND(is_snapshot) AS is_snapshot,  -- All source records must be snapshots
     MAX(event_time) AS event_time
 FROM source_table
 WHERE active = true  -- Business logic only
