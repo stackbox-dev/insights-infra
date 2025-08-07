@@ -317,6 +317,31 @@ export KAFKA_PASSWORD="your-password"
 export TRUSTSTORE_PASSWORD="truststore-password"
 ```
 
+## Kafka Schema Registry Connection
+
+To connect to the Kafka schema registry, execute into a Flink SQL Gateway pod and use curl:
+
+```bash
+# Set credentials as environment variables (ask user or fetch from secure storage)
+export KAFKA_USERNAME="${KAFKA_USERNAME:-avnadmin}"
+export KAFKA_PASSWORD="${KAFKA_PASSWORD}"  # Must be set in environment
+
+# Get the flink-sql-gateway pod name
+kubectl get pods -n flink-studio | grep flink-sql-gateway
+
+# Connect to schema registry (replace POD_NAME with actual pod name)
+kubectl exec -n flink-studio POD_NAME -- curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects"
+
+# List all available subjects
+kubectl exec -n flink-studio POD_NAME -- curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects"
+
+# Get specific schema version
+kubectl exec -n flink-studio POD_NAME -- curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects/<SUBJECT_NAME>/versions/latest"
+```
+
+**Schema Registry URL:** `https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159`
+**Authentication:** Requires `KAFKA_USERNAME` and `KAFKA_PASSWORD` environment variables
+
 ## Additional Resources
 
 - Flink SQL Documentation: https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/sql/
