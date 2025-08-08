@@ -441,11 +441,11 @@ CREATE TABLE pick_drop_basic (
     deactivated_at TIMESTAMP(3),
     is_snapshot BOOLEAN NOT NULL,
     event_time TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND
+    -- No PRIMARY KEY needed for kafka connector
 ) WITH (
-    'connector' = 'upsert-kafka',
-    'topic' = 'sbx_uat.wms.internal.pick_drop_basic',
+    'connector' = 'kafka',
+    'topic' = 'sbx_uat.wms.internal.pick_drop_basic',  -- Original topic name
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -454,9 +454,9 @@ CREATE TABLE pick_drop_basic (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '5s',
     'sink.parallelism' = '2',
+    -- Define key fields for Kafka sink (pick_item_id and drop_item_id)
+    'key.fields' = 'pick_item_id;drop_item_id',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -464,7 +464,8 @@ CREATE TABLE pick_drop_basic (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.fields-include' = 'ALL'
 );
 -- Basic pick-drop processing with 4-hour time windows
 INSERT INTO pick_drop_basic
