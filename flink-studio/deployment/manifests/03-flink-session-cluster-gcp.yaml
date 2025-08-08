@@ -12,7 +12,7 @@ spec:
   flinkVersion: v2_0
   imagePullPolicy: Always
   flinkConfiguration:
-    taskmanager.numberOfTaskSlots: "2"
+    taskmanager.numberOfTaskSlots: "3"
     parallelism.default: "2"
     # Network and memory configuration for TaskManager
     taskmanager.memory.network.fraction: "0.15"
@@ -29,7 +29,7 @@ spec:
     state.backend.rocksdb.writebuffer.count: "3" # Standard count for medium state
     # Moderate block cache for medium datasets
     state.backend.rocksdb.block.cache-size: "384mb" # Balanced cache size
-    state.backend.rocksdb.thread.num: "2" # Conservative thread count
+    state.backend.rocksdb.thread.num: "3" # Conservative thread count
     # Configure memory ratios for medium-sized persistent storage
     state.backend.rocksdb.memory.write-buffer-ratio: "0.4"
     state.backend.rocksdb.memory.high-prio-pool-ratio: "0.08"
@@ -42,7 +42,7 @@ spec:
     # state.changelog.dstl.dfs.base-path: gs://sbx-stag-flink-storage/changelog
     # Force session cluster to start TaskManager pods immediately
     slotmanager.number-of-slots.min: "1"
-    slotmanager.number-of-slots.max: "24"
+    slotmanager.number-of-slots.max: "36"
     slotmanager.slot-request-timeout: "300000"
     # GCS paths for Flink state management - removed duplicate state.checkpoints.dir
     state.savepoints.dir: gs://sbx-stag-flink-storage/savepoints
