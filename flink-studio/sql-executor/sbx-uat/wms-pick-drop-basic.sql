@@ -471,7 +471,7 @@ INSERT INTO pick_drop_basic
 SELECT
     /*+ USE_HASH_JOIN */
     pi.id AS pick_item_id,
-    COALESCE(pdm.`dropItemId`, 'NO_DROP') AS drop_item_id,
+    COALESCE(pdm.`dropItemId`, '') AS drop_item_id,
     pi.`whId` AS wh_id,
     pi.`sessionId` AS session_id,
     pi.`taskId` AS task_id,
