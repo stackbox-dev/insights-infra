@@ -1,18 +1,24 @@
--- Historical WMS Inventory Events Enrichment Pipeline
+-- Real-time WMS Inventory Events Enrichment Pipeline
 -- 
--- Purpose: Enriches inventory events with handling unit, handling unit kind, and storage bin master data
--- Uses BATCH mode for processing all historical data
---
+-- Purpose: Processes new inventory events continuously after historical pipeline completion
+-- 
 -- Key Configuration:
--- 1. BATCH execution mode for processing complete historical dataset
--- 2. Starts from earliest offset to process all available data
--- 3. Uses kafka connector with scan.bounded.mode for bounded processing
--- 4. Creates views to get latest dimension data for joins
+-- 1. Uses 'kafka' connector (not upsert-kafka) for streaming semantics on source table
+-- 2. Starts from latest offset since historical pipeline has already processed past data
+-- 3. Uses 5-minute watermark delay to ensure dimension tables are fully loaded
+-- 4. Implements watermark alignment to synchronize progress across all sources
+-- 5. Maintains same consumer group 'sbx-uat-wms-inventory-enriched' for offset continuity
+-- 6. Simplified event_time logic - no snapshot handling needed for realtime data
 --
--- Usage: Run this first to process all historical data before starting real-time pipeline
+-- Watermark Strategy:
+-- - 5-minute delay allows dimension tables time to catch up with late-arriving data
+-- - Watermark alignment ensures all sources progress together within 5-minute drift
+-- - Idle timeout of 60s handles temporarily inactive partitions
+--
+-- Usage: Run this AFTER the historical pipeline (wms-inventory-enriched-historical.sql) completes
 
-SET 'pipeline.name' = 'WMS Inventory Events Historical Enrichment';
-SET 'execution.runtime-mode' = 'BATCH';
+SET 'pipeline.name' = 'WMS Inventory Events Real-time Enrichment';
+SET 'execution.runtime-mode' = 'STREAMING';
 SET 'table.exec.sink.not-null-enforcer' = 'drop';
 SET 'parallelism.default' = '4';
 SET 'table.optimizer.join-reorder-enabled' = 'false';
@@ -31,10 +37,16 @@ SET 'state.backend.rocksdb.compression.type' = 'LZ4';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.optimizer.multiple-input-enabled' = 'true';
 
--- Source idle timeout to handle temporarily inactive sources
-SET 'table.exec.source.idle-timeout' = '30s';
+-- Handle idle sources and watermark alignment for proper temporal join behavior
+SET 'table.exec.source.idle-timeout' = '60s';
 
--- Source: Inventory events basic data (bounded stream with processing time)
+-- Watermark alignment to ensure all sources progress together
+SET 'pipeline.watermark-alignment.group' = 'inventory-enrichment';
+SET 'pipeline.watermark-alignment.max-drift' = '5 min';
+SET 'pipeline.watermark-alignment.update-interval' = '30s';
+
+-- Source: Inventory events basic data (streaming mode with kafka connector)
+-- Uses kafka connector for streaming semantics and proper watermark handling
 CREATE TABLE inventory_events_basic (
     -- Handling unit event fields
     hu_event_id STRING NOT NULL,
@@ -62,30 +74,28 @@ CREATE TABLE inventory_events_basic (
     locked_by_task_id STRING,
     lock_mode STRING,
     qty_added INT,
-    -- Processing time for historical data
-    proc_time AS PROCTIME()
+    -- Watermark for streaming mode
+    WATERMARK FOR hu_event_timestamp AS hu_event_timestamp - INTERVAL '5' MINUTE
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.internal.inventory_events_basic',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.group.id' = 'sbx-uat-wms-inventory-enriched',
-    'properties.enable.auto.commit' = 'true',
-    'properties.auto.commit.interval.ms' = '5000',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'scan.startup.mode' = 'earliest-offset',
-    'scan.bounded.mode' = 'latest-offset',
+    -- Start from latest offset since historical pipeline has already processed past data
+    'scan.startup.mode' = 'latest-offset',
     'format' = 'avro-confluent',
     'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 
--- Dimension: Handling Units
+-- Dimension: Handling Units (versioned table for temporal joins)
 CREATE TABLE handling_units (
     `whId` BIGINT NOT NULL,
     id STRING NOT NULL,
@@ -101,29 +111,30 @@ CREATE TABLE handling_units (
     `updatedAt` TIMESTAMP(3),
     `lockTaskId` STRING,
     `effectiveStorageId` STRING,
-    -- Event time for versioning
-    event_time AS COALESCE(`updatedAt`, `createdAt`, TIMESTAMP '1970-01-01 00:00:00'),
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    proc_time AS PROCTIME()
+    -- Watermark for temporal join
+    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
+    'connector' = 'upsert-kafka',
     'topic' = 'sbx_uat.wms.public.handling_unit',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'scan.bounded.mode' = 'latest-offset',
-    'scan.startup.mode' = 'earliest-offset',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 
--- Dimension: Handling Unit Kinds
+-- Dimension: Handling Unit Kinds (versioned table for temporal joins)
 CREATE TABLE handling_unit_kinds (
     `whId` BIGINT NOT NULL,
     id STRING NOT NULL,
@@ -141,110 +152,62 @@ CREATE TABLE handling_unit_kinds (
     breadth DOUBLE,
     height DOUBLE,
     weight DOUBLE,
-    -- Event time for versioning
-    event_time AS COALESCE(`updatedAt`, `createdAt`, TIMESTAMP '1970-01-01 00:00:00'),
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    proc_time AS PROCTIME()
+    -- Watermark for temporal join
+    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
+    'connector' = 'upsert-kafka',
     'topic' = 'sbx_uat.wms.public.handling_unit_kind',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'scan.bounded.mode' = 'latest-offset',
-    'scan.startup.mode' = 'earliest-offset',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 
--- Dimension: Storage Bin Master  
--- Note: Primary key is (wh_id, bin_code) but we have bin_id in events
--- For historical batch mode, we'll join directly using bin_id
-CREATE TABLE storage_bin_master (
-    wh_id BIGINT NOT NULL,
-    bin_id STRING,
-    bin_code STRING NOT NULL,
-    bin_description STRING,
-    bin_status STRING,
-    bin_hu_id STRING,
-    multi_sku BOOLEAN,
-    multi_batch BOOLEAN,
-    picking_position INT,
-    putaway_position INT,
-    `rank` INT,
-    aisle STRING,
-    bay STRING,
-    level STRING,
-    `position` STRING,
-    depth STRING,
-    max_sku_count INT,
-    max_sku_batch_count INT,
-    bin_type_id STRING,
-    bin_type_code STRING,
-    bin_type_description STRING,
-    max_volume_in_cc DOUBLE,
-    max_weight_in_kg DOUBLE,
-    pallet_capacity INT,
-    storage_hu_type STRING,
-    auxiliary_bin BOOLEAN,
-    hu_multi_sku BOOLEAN,
-    hu_multi_batch BOOLEAN,
-    use_derived_pallet_best_fit BOOLEAN,
-    only_full_pallet BOOLEAN,
-    bin_type_active BOOLEAN,
-    zone_id STRING,
-    zone_code STRING,
-    zone_description STRING,
-    zone_face STRING,
-    peripheral BOOLEAN,
-    surveillance_config STRING,
-    zone_active BOOLEAN,
-    area_id STRING,
-    area_code STRING,
-    area_description STRING,
-    area_type STRING,
-    rolling_days INT,
-    area_active BOOLEAN,
-    x1 DOUBLE,
-    x2 DOUBLE,
-    y1 DOUBLE,
-    y2 DOUBLE,
-    position_active BOOLEAN,
-    attrs STRING,
-    bin_mapping STRING,
+-- Dimension: Storage Bin (for getting bin_code from bin_id)
+CREATE TABLE storage_bin (
+    `whId` BIGINT NOT NULL,
+    id STRING NOT NULL,
+    code STRING,
     `createdAt` TIMESTAMP(3),
     `updatedAt` TIMESTAMP(3),
-    -- Event time for versioning
-    event_time AS COALESCE(`updatedAt`, `createdAt`, TIMESTAMP '1970-01-01 00:00:00'),
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    proc_time AS PROCTIME()
+    -- Watermark for temporal join
+    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.storage_bin_master',
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx_uat.wms.public.storage_bin',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'scan.bounded.mode' = 'latest-offset',
-    'scan.startup.mode' = 'earliest-offset',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 
 -- Dimension: SKUs Master (from Encarta)
 CREATE TABLE skus_master (
-    id STRING,
+    id STRING NOT NULL,
     principal_id BIGINT,
     node_id BIGINT,
     category STRING,
@@ -361,57 +324,106 @@ CREATE TABLE skus_master (
     product_classifications STRING NOT NULL,
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
-    -- Event time for versioning
-    event_time AS COALESCE(updated_at, created_at, TIMESTAMP '1970-01-01 00:00:00'),
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND
+    -- Watermark for temporal join
+    WATERMARK FOR updated_at AS updated_at - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
+    'connector' = 'upsert-kafka',
     'topic' = 'sbx_uat.encarta.public.skus_master',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
-    'scan.bounded.mode' = 'latest-offset',
-    'scan.startup.mode' = 'earliest-offset',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 
--- Create views to get the latest version of each dimension record
--- This prevents cartesian products in joins when not using temporal joins
-
-CREATE VIEW handling_units_latest AS
-SELECT * FROM (
-    SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY id ORDER BY event_time DESC) as rn
-    FROM handling_units
-) WHERE rn = 1;
-
-CREATE VIEW handling_unit_kinds_latest AS
-SELECT * FROM (
-    SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY id ORDER BY event_time DESC) as rn
-    FROM handling_unit_kinds
-) WHERE rn = 1;
-
-CREATE VIEW storage_bin_master_latest AS
-SELECT * FROM (
-    SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY wh_id, bin_id ORDER BY event_time DESC) as rn
-    FROM storage_bin_master
-) WHERE rn = 1;
-
-CREATE VIEW skus_master_latest AS
-SELECT * FROM (
-    SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY id ORDER BY event_time DESC) as rn
-    FROM skus_master
-) WHERE rn = 1;
+-- Dimension: Storage Bin Master
+CREATE TABLE storage_bin_master (
+    wh_id BIGINT NOT NULL,
+    bin_id STRING NOT NULL,
+    bin_code STRING,
+    bin_description STRING,
+    bin_status STRING,
+    bin_hu_id STRING,
+    multi_sku BOOLEAN,
+    multi_batch BOOLEAN,
+    picking_position INT,
+    putaway_position INT,
+    `rank` INT,
+    aisle STRING,
+    bay STRING,
+    level STRING,
+    `position` STRING,
+    depth STRING,
+    max_sku_count INT,
+    max_sku_batch_count INT,
+    bin_type_id STRING,
+    bin_type_code STRING,
+    bin_type_description STRING,
+    max_volume_in_cc DOUBLE,
+    max_weight_in_kg DOUBLE,
+    pallet_capacity INT,
+    storage_hu_type STRING,
+    auxiliary_bin BOOLEAN,
+    hu_multi_sku BOOLEAN,
+    hu_multi_batch BOOLEAN,
+    use_derived_pallet_best_fit BOOLEAN,
+    only_full_pallet BOOLEAN,
+    bin_type_active BOOLEAN,
+    zone_id STRING,
+    zone_code STRING,
+    zone_description STRING,
+    zone_face STRING,
+    peripheral BOOLEAN,
+    surveillance_config STRING,
+    zone_active BOOLEAN,
+    area_id STRING,
+    area_code STRING,
+    area_description STRING,
+    area_type STRING,
+    rolling_days INT,
+    area_active BOOLEAN,
+    x1 DOUBLE,
+    x2 DOUBLE,
+    y1 DOUBLE,
+    y2 DOUBLE,
+    position_active BOOLEAN,
+    attrs STRING,
+    bin_mapping STRING,
+    `createdAt` TIMESTAMP(3),
+    `updatedAt` TIMESTAMP(3),
+    -- Watermark for temporal join
+    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
+    PRIMARY KEY (wh_id, bin_code) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx_uat.wms.public.storage_bin_master',
+    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+);
 
 -- Sink: Enriched inventory events
 CREATE TABLE inventory_events_enriched (
@@ -661,7 +673,7 @@ CREATE TABLE inventory_events_enriched (
     'value.fields-include' = 'ALL'
 );
 
--- Enrichment query using views with latest dimension data
+-- Enrichment query with temporal joins based on event time
 INSERT INTO inventory_events_enriched
 SELECT
     /*+ USE_HASH_JOIN */
@@ -889,25 +901,30 @@ SELECT
     COALESCE(outer_huk.weight, 0.0) AS outer_hu_kind_weight
     
 FROM inventory_events_basic ie
-    -- Regular LEFT JOIN with latest handling units view (no temporal join)
-    LEFT JOIN handling_units_latest hu
+    -- Event-time temporal join with handling units
+    LEFT JOIN handling_units FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS hu
         ON ie.hu_id = hu.id
-    -- Regular LEFT JOIN with latest handling unit kinds view via handling unit
-    LEFT JOIN handling_unit_kinds_latest huk
+    -- Event-time temporal join with handling unit kinds via handling unit
+    LEFT JOIN handling_unit_kinds FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS huk
         ON hu.`kindId` = huk.id
-    -- Regular LEFT JOIN with latest storage bin master view
-    LEFT JOIN storage_bin_master_latest sb
+    -- Event-time temporal join with storage_bin to get bin_code for storage_id
+    LEFT JOIN storage_bin FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS sbin
+        ON ie.storage_id = sbin.id
+    -- Event-time temporal join with storage bin master using bin_code
+    LEFT JOIN storage_bin_master FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS sb
         ON ie.wh_id = sb.wh_id
-        AND ie.storage_id = sb.bin_id
-    -- Regular LEFT JOIN with latest SKUs master view
-    LEFT JOIN skus_master_latest sku
+        AND sbin.code = sb.bin_code
+    -- Event-time temporal join with SKUs master
+    LEFT JOIN skus_master FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS sku
         ON ie.sku_id = sku.id
-    -- Join for effective_storage_id enrichment (direct to storage_bin_master)
-    LEFT JOIN storage_bin_master_latest eff_sb
+    -- Joins for effective_storage_id enrichment
+    LEFT JOIN storage_bin FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS eff_sbin
+        ON ie.effective_storage_id = eff_sbin.id
+    LEFT JOIN storage_bin_master FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS eff_sb
         ON ie.wh_id = eff_sb.wh_id
-        AND ie.effective_storage_id = eff_sb.bin_id
+        AND eff_sbin.code = eff_sb.bin_code
     -- Joins for outer_hu_id enrichment
-    LEFT JOIN handling_units_latest outer_hu
+    LEFT JOIN handling_units FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS outer_hu
         ON ie.outer_hu_id = outer_hu.id
-    LEFT JOIN handling_unit_kinds_latest outer_huk
+    LEFT JOIN handling_unit_kinds FOR SYSTEM_TIME AS OF ie.hu_event_timestamp AS outer_huk
         ON outer_hu.`kindId` = outer_huk.id;
