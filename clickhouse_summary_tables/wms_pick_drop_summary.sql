@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_summary
     lm_dockdoor String DEFAULT '',
     lm_vehicle_no String DEFAULT '',
     lm_vehicle_type String DEFAULT '',
-    lm_delivery_date Date DEFAULT toDate('1970-01-01'),
+    lm_delivery_date String DEFAULT '',
     
     -- Additional Pick Item IDs
     bin_id String DEFAULT '',
@@ -225,7 +225,7 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_summary
     parent_trip_dockdoor_code String DEFAULT '',
     parent_trip_vehicle_no String DEFAULT '',
     parent_trip_vehicle_type String DEFAULT '',
-    parent_trip_delivery_date Date DEFAULT toDate('1970-01-01'),
+    parent_trip_delivery_date String DEFAULT '',
     parent_trip_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
     -- Worker Fields

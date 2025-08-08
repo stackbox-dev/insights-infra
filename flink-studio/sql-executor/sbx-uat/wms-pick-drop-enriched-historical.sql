@@ -909,7 +909,7 @@ CREATE TABLE pick_drop_summary (
     lm_dockdoor STRING,
     lm_vehicle_no STRING,
     lm_vehicle_type STRING,
-    lm_delivery_date DATE,
+    lm_delivery_date STRING,
     -- Additional Pick Items columns
     bin_id STRING,
     bin_hu_id STRING,
@@ -1001,7 +1001,7 @@ CREATE TABLE pick_drop_summary (
     parent_trip_dockdoor_code STRING,
     parent_trip_vehicle_no STRING,
     parent_trip_vehicle_type STRING,
-    parent_trip_delivery_date DATE,
+    parent_trip_delivery_date STRING,
     parent_trip_created_at TIMESTAMP(3),
     -- Worker enrichment fields
     worker_code STRING,
@@ -1282,7 +1282,7 @@ SELECT
     COALESCE(lm_trip.`dockdoorCode`, '') AS lm_dockdoor,
     COALESCE(lm_trip.`vehicleNo`, '') AS lm_vehicle_no,
     COALESCE(lm_trip.`vehicleType`, '') AS lm_vehicle_type,
-    lm_trip.`deliveryDate` AS lm_delivery_date,
+    COALESCE(CAST(lm_trip.`deliveryDate` AS STRING), '') AS lm_delivery_date,
     -- Additional Pick Items columns
     pb.bin_id AS bin_id,
     pb.bin_hu_id AS bin_hu_id,
@@ -1374,7 +1374,7 @@ SELECT
     COALESCE(parent_trip.`dockdoorCode`, '') AS parent_trip_dockdoor_code,
     COALESCE(parent_trip.`vehicleNo`, '') AS parent_trip_vehicle_no,
     COALESCE(parent_trip.`vehicleType`, '') AS parent_trip_vehicle_type,
-    parent_trip.`deliveryDate` AS parent_trip_delivery_date,
+    COALESCE(CAST(parent_trip.`deliveryDate` AS STRING), '') AS parent_trip_delivery_date,
     parent_trip.`createdAt` AS parent_trip_created_at,
     -- Worker enrichment fields
     COALESCE(w.code, '') AS worker_code,
