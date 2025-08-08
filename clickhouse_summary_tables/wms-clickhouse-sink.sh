@@ -85,7 +85,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
       "tasks.max": "2",
-      "topics": "sbx_uat.wms.public.storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_summary",
+      "topics": "sbx_uat.wms.public.storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_summary,sbx_uat.wms.internal.inventory_events_enriched",
       
       "transforms": "dropNull",
       "transforms.dropNull.type": "org.apache.kafka.connect.transforms.Filter",
@@ -100,7 +100,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
       "database": "sbx_uat",
       "exactlyOnce": "false",
-      "topic2TableMap": "sbx_uat.wms.public.storage_area_sloc_mapping=wms_storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master=wms_storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master=wms_storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_summary=wms_pick_drop_summary",
+      "topic2TableMap": "sbx_uat.wms.public.storage_area_sloc_mapping=wms_storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master=wms_storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master=wms_storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_summary=wms_pick_drop_summary,sbx_uat.wms.internal.inventory_events_enriched=wms_inventory_events_enriched",
       "clickhouseSettings": "date_time_input_format=best_effort",
       
       "key.converter": "io.confluent.connect.avro.AvroConverter",
