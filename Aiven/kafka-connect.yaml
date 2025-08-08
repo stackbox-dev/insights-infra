@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: cp-connect
-          image: asia-docker.pkg.dev/sbx-ci-cd/private/devops-kafka-connect:latest
+          image: asia-docker.pkg.dev/sbx-ci-cd/private/devops-kafka-connect:4fa55cfcf54e052a505656c43ce0fb89a44cf557
           imagePullPolicy: Always
           ports:
             - containerPort: 8083
@@ -53,7 +53,7 @@ spec:
               value: "-server -XX:+UseG1GC -XX:GCTimeRatio=1
                 -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20
                 -XX:MaxGCPauseMillis=10000 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent
-                -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
+                -XX:MaxInlineLevel=15 -Djava.awt.headless=true -Duser.timezone=UTC"
             - name: CONNECT_KEY_CONVERTER
               value: "io.confluent.connect.avro.AvroConverter"
             - name: CONNECT_VALUE_CONVERTER
@@ -63,7 +63,7 @@ spec:
             - name: CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL
               value: "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159"
             - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL
-              value: "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159" 
+              value: "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159"
             - name: CONNECT_VALUE_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE
               value: "USER_INFO"
             - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO
@@ -96,14 +96,14 @@ spec:
                 secretKeyRef:
                   name: debezium-pg-pass
                   key: password
-            
+
             # RBAC
             - name: CONNECT_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: CONNECT_SASL_MECHANISM
               value: "SCRAM-SHA-512"
             - name: CONNECT_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
             - name: CONNECT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
               value: ""
             - name: CONNECT_SSL_TRUSTSTORE_LOCATION
@@ -113,14 +113,14 @@ spec:
                 secretKeyRef:
                   name: kafka-truststore-secret
                   key: truststore-password
-            
+
             # For consumers
             - name: CONNECT_CONSUMER_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: CONNECT_CONSUMER_SASL_MECHANISM
               value: "SCRAM-SHA-512"
             - name: CONNECT_CONSUMER_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
             - name: CONNECT_CONSUMER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
               value: ""
             - name: CONNECT_CONSUMER_SSL_TRUSTSTORE_LOCATION
@@ -130,14 +130,14 @@ spec:
                 secretKeyRef:
                   name: kafka-truststore-secret
                   key: truststore-password
-              
+
             # For producers
             - name: CONNECT_PRODUCER_SECURITY_PROTOCOL
               value: "SASL_SSL"
             - name: CONNECT_PRODUCER_SASL_MECHANISM
               value: "SCRAM-SHA-512"
             - name: CONNECT_PRODUCER_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
             - name: CONNECT_PRODUCER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
               value: ""
             - name: CONNECT_PRODUCER_SSL_TRUSTSTORE_LOCATION
@@ -154,7 +154,7 @@ spec:
             - name: CONNECT_ADMIN_SASL_MECHANISM
               value: "SCRAM-SHA-512"
             - name: CONNECT_ADMIN_SASL_JAAS_CONFIG
-              value: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$(CLUSTER_USER_NAME)\" password=\"$(CLUSTER_PASSWORD)\";"
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
             - name: CONNECT_ADMIN_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
               value: ""
             - name: CONNECT_ADMIN_SSL_TRUSTSTORE_LOCATION

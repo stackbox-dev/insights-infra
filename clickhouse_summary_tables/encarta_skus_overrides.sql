@@ -140,8 +140,8 @@ CREATE TABLE IF NOT EXISTS encarta_skus_overrides
     
     -- System Fields
     active Bool DEFAULT false,
-    classifications String DEFAULT '{}',  -- JSON, default empty object
-    product_classifications String DEFAULT '{}',  -- JSON, default empty object
+    classifications String DEFAULT '{}',  -- JSON stored as String
+    product_classifications String DEFAULT '{}',  -- JSON stored as String
     is_snapshot Bool DEFAULT false,
     created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),

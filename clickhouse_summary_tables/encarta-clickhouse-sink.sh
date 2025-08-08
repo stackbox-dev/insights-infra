@@ -66,29 +66,47 @@ if [ -z "$AIVEN_TRUSTSTORE" ]; then
   exit 1
 fi
 
-# The rest of the script uses these environment variables
-curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/config -H "Content-Type: application/json" \
+# IMPORTANT: ClickHouse Connector Bug Workaround
+# The ClickHouse connector has a bug where it only checks the first record's schema type 
+# when processing batches. If the first record is a tombstone (null value) or schema-less,
+# it incorrectly processes the entire batch as SCHEMA_LESS, causing timestamp fields to be
+# formatted with locale-specific strings (e.g., "Dec 12, 2024, 12:08:21 PM") instead of 
+# proper timestamp values. This leads to parsing errors in ClickHouse.
+#
+# Workaround: We filter out tombstone records using a transform to ensure all batched 
+# records have proper schemas. Without this, the connector works with max.poll.records=1
+# but fails with higher values when tombstones are present.
+#
+# Additionally, ensure Kafka Connect workers run with -Duser.timezone=UTC to prevent
+# locale-specific date formatting issues.
+
+curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/config \
+-H "Content-Type: application/json" \
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
       "tasks.max": "1",
-      "consumer.override.max.poll.records": "5000",
-      "consumer.override.max.partition.fetch.bytes": "5242880",
-      "database": "sbx_uat",
-      "errors.retry.timeout": "60",
-      "exactlyOnce": "false",
+      "topics": "sbx_uat.encarta.public.skus_master,sbx_uat.encarta.public.skus_overrides",
+      
+      "transforms": "dropNull",
+      "transforms.dropNull.type": "org.apache.kafka.connect.transforms.Filter",
+      "transforms.dropNull.predicate": "isNullRecord",
+      "predicates": "isNullRecord",
+      "predicates.isNullRecord.type": "org.apache.kafka.connect.transforms.predicates.RecordIsTombstone",
+      
       "hostname": "sbx-stag-clickhouse-stackbox.h.aivencloud.com",
       "port": "22155",
-      "jdbcConnectionProperties": "?ssl=true",
+      "ssl": "true",
       "username": "avnadmin",
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
-      "topics": "sbx_uat.encarta.public.skus_master,sbx_uat.encarta.public.skus_overrides",
-      "value.converter.schemas.enable": "false",
-      "clickhouse.debug": "true",
-      "clickhouse.log.level": "DEBUG",
+      "database": "sbx_uat",
+      "exactlyOnce": "false",
       "topic2TableMap": "sbx_uat.encarta.public.skus_master=encarta_skus_master,sbx_uat.encarta.public.skus_overrides=encarta_skus_overrides",
-
+      "clickhouseSettings": "date_time_input_format=best_effort",
+      
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
+      "value.converter.schemas.enable": "true",
+      "value.converter.use.logical.type.converters": "true",
       "key.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
       "value.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
       "key.converter.basic.auth.credentials.source": "USER_INFO",
@@ -96,33 +114,20 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/
       "key.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
       "value.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",
 
-      "errors.tolerance": "all",
+      "errors.tolerance": "none",
       "errors.log.enable": "true",
       "errors.log.include.messages": "true",
-      "ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
-      "ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
-      "ssl.endpoint.identification.algorithm": "",
+      "errors.deadletterqueue.topic.name": "dlq-encarta-clickhouse",
+      "errors.deadletterqueue.topic.replication.factor": "3",
 
-      "producer.security.protocol": "SASL_SSL",
-      "producer.sasl.mechanism": "SCRAM-SHA-512",
-      "producer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
-      "producer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
-      "producer.ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
-      "producer.ssl.endpoint.identification.algorithm": "",
-  
+      "consumer.override.max.poll.records": "1000",
+      "consumer.override.max.partition.fetch.bytes": "5242880",
       "consumer.security.protocol": "SASL_SSL",
       "consumer.sasl.mechanism": "SCRAM-SHA-512",
       "consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
       "consumer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
       "consumer.ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
-      "consumer.ssl.endpoint.identification.algorithm": "",
-
-      "admin.security.protocol": "SASL_SSL",
-      "admin.sasl.mechanism": "SCRAM-SHA-512",
-      "admin.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",
-      "admin.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
-      "admin.ssl.truststore.password": "'"$AIVEN_TRUSTSTORE"'",
-      "admin.ssl.endpoint.identification.algorithm": ""
+      "consumer.ssl.endpoint.identification.algorithm": ""
 }'
 
 # Stop port forwarding
