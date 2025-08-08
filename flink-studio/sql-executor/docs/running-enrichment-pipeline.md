@@ -89,6 +89,26 @@ You should see:
 - Committed offsets for all partitions
 - Low or zero lag (indicates processing is complete)
 
+**⚠️ Important Note about Consumer Lag:**
+Historical pipelines running in BATCH mode with `scan.bounded.mode = 'latest-offset'` may show false consumer lag even after successful completion. This happens because:
+- The pipeline processes all messages up to the latest offset and then terminates
+- In BATCH mode, Flink doesn't always commit the final offset when the job completes
+- The consumer group shows lag between the last committed offset and the actual end offset
+- This is a **false positive** - the data has been processed but the offset wasn't committed
+
+**Example:** If you see `currentOffset=83980, endOffset=127646, lag=43666` after the historical job shows as FINISHED, this is expected behavior. The lag will clear when:
+- The real-time pipeline starts and takes over the consumer group
+- Or you manually reset the consumer group offset to latest:
+
+```bash
+# Reset consumer group to latest offset (only after confirming historical job is FINISHED)
+kubectl exec -n flink-studio flink-sql-gateway-0 -- \
+  kafka-consumer-groups \
+  --bootstrap-server sbx-stag-kafka-stackbox.e.aivencloud.com:22167 \
+  --group sbx-uat-wms-pick-drop-enriched \
+  --reset-offsets --to-latest --execute --all-topics
+```
+
 ### Step 3: Run Real-time Pipeline
 
 Once historical is complete, start the real-time pipeline:

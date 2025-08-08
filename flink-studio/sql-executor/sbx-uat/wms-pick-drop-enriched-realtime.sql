@@ -1,4 +1,23 @@
-SET 'pipeline.name' = 'WMS Pick Drop Dimension Enrichment';
+-- Real-time WMS Pick-Drop Enrichment Pipeline
+-- 
+-- Purpose: Processes new pick-drop data continuously after historical pipeline completion
+-- 
+-- Key Configuration:
+-- 1. Uses 'kafka' connector (not upsert-kafka) for streaming semantics on source table
+-- 2. Starts from latest offset since historical pipeline has already processed past data
+-- 3. Uses 5-minute watermark delay to ensure dimension tables are fully loaded
+-- 4. Implements watermark alignment to synchronize progress across all sources
+-- 5. Maintains same consumer group 'sbx-uat-wms-pick-drop-enriched' for offset continuity
+-- 6. Simplified event_time logic - no snapshot handling needed for realtime data
+--
+-- Watermark Strategy:
+-- - 5-minute delay allows dimension tables time to catch up with late-arriving data
+-- - Watermark alignment ensures all sources progress together within 5-minute drift
+-- - Idle timeout of 60s handles temporarily inactive partitions
+--
+-- Usage: Run this AFTER the historical pipeline (wms-pick-drop-enriched-historical.sql) completes
+SET 'pipeline.name' = 'WMS Pick Drop Real-time Enrichment';
+SET 'execution.runtime-mode' = 'STREAMING';
 SET 'table.exec.sink.not-null-enforcer' = 'drop';
 SET 'parallelism.default' = '4';
 SET 'table.optimizer.join-reorder-enabled' = 'false';
@@ -15,7 +34,14 @@ SET 'state.backend.incremental' = 'true';
 SET 'state.backend.rocksdb.compression.type' = 'LZ4';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.optimizer.multiple-input-enabled' = 'true';
--- Source: Basic pick-drop data from Pipeline 1
+-- Handle idle sources and watermark alignment for proper temporal join behavior
+SET 'table.exec.source.idle-timeout' = '60s';
+-- Watermark alignment to ensure all sources progress together
+SET 'pipeline.watermark-alignment.group' = 'pick-drop-enrichment';
+SET 'pipeline.watermark-alignment.max-drift' = '5 min';
+SET 'pipeline.watermark-alignment.update-interval' = '30s';
+-- Source: Basic pick-drop data from Pipeline 1 (streaming mode with kafka connector)
+-- Uses kafka connector for streaming semantics and proper watermark handling
 CREATE TABLE pick_drop_basic (
     pick_item_id STRING,
     drop_item_id STRING,
@@ -167,10 +193,11 @@ CREATE TABLE pick_drop_basic (
     -- Fields from the upstream pipeline
     is_snapshot BOOLEAN,
     event_time TIMESTAMP(3),
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
-    PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
+    -- Use a 5-minute watermark delay to ensure dimension tables have sufficient time to load
+    -- This helps handle late-arriving dimension data and ensures proper enrichment
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' MINUTE
 ) WITH (
-    'connector' = 'upsert-kafka',
+    'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.internal.pick_drop_basic',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-enriched',
@@ -180,15 +207,12 @@ CREATE TABLE pick_drop_basic (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.auto.offset.reset' = 'earliest',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    -- Start from latest offset since historical pipeline has already processed past data
+    'scan.startup.mode' = 'latest-offset',
+    'format' = 'avro-confluent',
+    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Dimension Table 1: Tasks
 CREATE TABLE tasks (
@@ -212,30 +236,9 @@ CREATE TABLE tasks (
     `forceCompleted` BOOLEAN,
     `subKind` STRING,
     label STRING,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    event_time AS CASE
-        WHEN COALESCE(
-            `__source_snapshot` IN (
-                'true',
-                'first',
-                'first_in_data_collection',
-                'last_in_data_collection',
-                'last'
-            ),
-            FALSE
-        ) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE `updatedAt`
-    END,
+    `__source_snapshot` STRING,  -- Kept for schema compatibility but not used in realtime
+    is_snapshot AS FALSE,  -- Always FALSE for realtime streaming data
+    event_time AS `updatedAt`,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
@@ -270,30 +273,9 @@ CREATE TABLE `sessions` (
     state STRING,
     progress STRING,
     `autoComplete` BOOLEAN,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    event_time AS CASE
-        WHEN COALESCE(
-            `__source_snapshot` IN (
-                'true',
-                'first',
-                'first_in_data_collection',
-                'last_in_data_collection',
-                'last'
-            ),
-            FALSE
-        ) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE `updatedAt`
-    END,
+    `__source_snapshot` STRING,  -- Kept for schema compatibility but not used in realtime
+    is_snapshot AS FALSE,  -- Always FALSE for realtime streaming data
+    event_time AS `updatedAt`,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
@@ -332,30 +314,9 @@ CREATE TABLE trips (
     `vehicleNo` STRING,
     `vehicleType` STRING,
     `deliveryDate` DATE,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    event_time AS CASE
-        WHEN COALESCE(
-            `__source_snapshot` IN (
-                'true',
-                'first',
-                'first_in_data_collection',
-                'last_in_data_collection',
-                'last'
-            ),
-            FALSE
-        ) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE `createdAt`
-    END,
+    `__source_snapshot` STRING,  -- Kept for schema compatibility but not used in realtime
+    is_snapshot AS FALSE,  -- Always FALSE for realtime streaming data
+    event_time AS `createdAt`,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
@@ -426,30 +387,9 @@ CREATE TABLE workers (
     `quantIdentifiers` STRING,
     `mheKindIds` STRING,
     `eligibleZones` STRING,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    event_time AS CASE
-        WHEN COALESCE(
-            `__source_snapshot` IN (
-                'true',
-                'first',
-                'first_in_data_collection',
-                'last_in_data_collection',
-                'last'
-            ),
-            FALSE
-        ) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE `updatedAt`
-    END,
+    `__source_snapshot` STRING,  -- Kept for schema compatibility but not used in realtime
+    is_snapshot AS FALSE,  -- Always FALSE for realtime streaming data
+    event_time AS `updatedAt`,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
@@ -487,30 +427,9 @@ CREATE TABLE handling_units (
     `updatedAt` TIMESTAMP(3),
     `lockTaskId` STRING,
     `effectiveStorageId` STRING,
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    event_time AS CASE
-        WHEN COALESCE(
-            `__source_snapshot` IN (
-                'true',
-                'first',
-                'first_in_data_collection',
-                'last_in_data_collection',
-                'last'
-            ),
-            FALSE
-        ) THEN TIMESTAMP '1970-01-01 00:00:00'
-        ELSE `updatedAt`
-    END,
+    `__source_snapshot` STRING,  -- Kept for schema compatibility but not used in realtime
+    is_snapshot AS FALSE,  -- Always FALSE for realtime streaming data
+    event_time AS `updatedAt`,
     WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
