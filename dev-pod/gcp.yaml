@@ -1,0 +1,128 @@
+---
+# PersistentVolumeClaim for workspace data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dev-pod-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard # For GCP. Use "managed-csi" for Azure
+---
+# StatefulSet for persistent dev environment
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dev-pod
+spec:
+  serviceName: dev-pod-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dev-pod
+  template:
+    metadata:
+      labels:
+        app: dev-pod
+        environment: development
+    spec:
+      containers:
+        - name: dev-container
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/dev-pod:latest
+          imagePullPolicy: Always
+
+          # Resource limits (adjust as needed)
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "8Gi"
+              cpu: "4"
+
+          # Environment variables
+          env:
+            - name: NODE_ENV
+              value: "development"
+            - name: VSCODE_TUNNEL_NAME
+              value: "sbx-stag-dev-pod"
+
+          # Volume mounts
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: vscode-data
+              mountPath: /root/.vscode-cli
+            - name: npm-cache
+              mountPath: /root/.npm
+
+          # Keep stdin open for kubectl exec
+          stdin: true
+          tty: true
+
+          # Liveness probe to ensure container stays healthy
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - "ps aux | grep supervisord | grep -v grep"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+
+          # Readiness probe
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - "which code && which node && which psql && which kafka-topics.sh"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+      volumes:
+        # Persistent volume for workspace
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: dev-pod-pvc
+
+        # EmptyDir for VS Code data (persists across container restarts in same pod)
+        - name: vscode-data
+          emptyDir: {}
+
+        # EmptyDir for npm cache
+        - name: npm-cache
+          emptyDir: {}
+
+      # Node selector for GCP (optional)
+      # nodeSelector:
+      #   cloud.google.com/gke-nodepool: default-pool
+
+      # Node selector for Azure (optional)
+      # nodeSelector:
+      #   agentpool: nodepool1
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: dev-pod-service
+spec:
+  type: ClusterIP
+  clusterIP: None # Headless service for StatefulSet
+  selector:
+    app: dev-pod
+  ports:
+    - name: nodejs
+      port: 3000
+      targetPort: 3000
+    - name: debug
+      port: 9229
+      targetPort: 9229
+    - name: vscode
+      port: 8080
+      targetPort: 8080

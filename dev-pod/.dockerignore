@@ -1,0 +1,8 @@
+# Ignore everything by default
+*
+
+# Include only what we need
+!Dockerfile
+!scripts/
+!configs/
+!build-and-push.sh
