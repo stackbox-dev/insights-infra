@@ -10,11 +10,8 @@ DROP VIEW IF EXISTS wms_inventory_weekly_snapshot_auto;
 -- Call this with: INSERT INTO wms_inventory_weekly_snapshot SELECT * FROM wms_inventory_weekly_snapshot_auto;
 CREATE VIEW wms_inventory_weekly_snapshot_auto
 AS
-WITH current_week AS (
-    SELECT toStartOfWeek(now()) as snapshot_timestamp
-)
 SELECT 
-    current_week.snapshot_timestamp as snapshot_timestamp,
+    toStartOfWeek(now()) as snapshot_timestamp,
     'weekly' as snapshot_type,
     wh_id,
     hu_code,
@@ -227,8 +224,7 @@ SELECT
     now() as _snapshot_generated_at,
     now64(3) as _processed_at
 FROM wms_inventory_hourly_position
-CROSS JOIN current_week
-WHERE hour_window < current_week.snapshot_timestamp
+WHERE hour_window < toStartOfWeek(now())
 GROUP BY wh_id, hu_code, sku_code, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode
 HAVING cumulative_qty != 0;
 
@@ -247,12 +243,9 @@ HAVING cumulative_qty != 0;
 SELECT 
     'Latest Weekly Snapshot' as info,
     max(snapshot_timestamp) as latest_snapshot,
-    count() as total_snapshots,
-    sum(rows) as total_rows
-FROM system.parts
-WHERE database = currentDatabase()
-  AND table = 'wms_inventory_weekly_snapshot'
-  AND active;
+    count(DISTINCT snapshot_timestamp) as total_snapshots,
+    count(*) as total_rows
+FROM wms_inventory_weekly_snapshot;
 
 -- Verify snapshot generation worked:
 SELECT 
