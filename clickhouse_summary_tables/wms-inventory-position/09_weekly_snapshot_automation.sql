@@ -1,24 +1,21 @@
--- Script to generate inventory snapshots at any point in time
--- Usage: Set the variables below and run the script
+-- Automated Weekly Snapshot Generation
+-- Note: ClickHouse doesn't support REFRESH syntax in the way originally written
+-- Instead, use a regular materialized view that processes new data as it arrives
+-- For scheduled weekly snapshots, use an external scheduler (cron, Airflow, etc.)
 
--- ===== CONFIGURATION =====
--- Set these parameters before running:
-SET param_snapshot_timestamp = '2024-12-31 23:59:59';  -- Snapshot timestamp
-SET param_snapshot_type = 'weekly';                     -- Type: hourly/daily/weekly/monthly/custom
-SET param_wh_id = 1;                                    -- Warehouse ID (or 0 for all warehouses)
+-- Drop existing view if exists
+DROP VIEW IF EXISTS wms_inventory_weekly_snapshot_auto;
 
--- ===== STEP 1: Clear existing snapshot for this timestamp =====
-ALTER TABLE wms_inventory_snapshot
-DELETE WHERE 
-    snapshot_timestamp = {snapshot_timestamp:DateTime}
-    AND snapshot_type = {snapshot_type:String}
-    AND (wh_id = {wh_id:UInt64} OR {wh_id:UInt64} = 0);
-
--- ===== STEP 2: Generate the snapshot =====
-INSERT INTO wms_inventory_snapshot
-SELECT
-    {snapshot_timestamp:DateTime} as snapshot_timestamp,
-    {snapshot_type:String} as snapshot_type,
+-- Create a regular view that can be called weekly by an external scheduler
+-- Call this with: INSERT INTO wms_inventory_weekly_snapshot SELECT * FROM wms_inventory_weekly_snapshot_auto;
+CREATE VIEW wms_inventory_weekly_snapshot_auto
+AS
+WITH current_week AS (
+    SELECT toStartOfWeek(now()) as snapshot_timestamp
+)
+SELECT 
+    current_week.snapshot_timestamp as snapshot_timestamp,
+    'weekly' as snapshot_type,
     wh_id,
     hu_code,
     sku_code,
@@ -29,14 +26,13 @@ SELECT
     inclusion_status,
     locked_by_task_id,
     lock_mode,
-    -- Calculate cumulative quantity up to snapshot time
+    -- Calculate cumulative from beginning of time up to snapshot time
     sum(hourly_qty_change) as cumulative_qty,
     sum(event_count) as total_event_count,
-    -- Get latest values at snapshot time
     argMax(latest_hu_event_id, hour_window) as latest_hu_event_id,
     argMax(latest_quant_event_id, hour_window) as latest_quant_event_id,
     max(last_event_time) as last_event_time,
-    -- All other fields - take latest values
+    -- All other fields using argMax to get latest values
     argMax(hu_event_seq, hour_window) as hu_event_seq,
     argMax(hu_id, hour_window) as hu_id,
     argMax(hu_event_type, hour_window) as hu_event_type,
@@ -229,52 +225,43 @@ SELECT
     argMax(outer_hu_kind_height, hour_window) as outer_hu_kind_height,
     argMax(outer_hu_kind_weight, hour_window) as outer_hu_kind_weight,
     now() as _snapshot_generated_at,
-    argMax(_processed_at, hour_window) as _processed_at
+    now64(3) as _processed_at
 FROM wms_inventory_hourly_position
-PREWHERE (wh_id = {wh_id:UInt64} OR {wh_id:UInt64} = 0)
-WHERE hour_window <= {snapshot_timestamp:DateTime}
-GROUP BY
-    wh_id,
-    hu_code,
-    sku_code,
-    uom,
-    bucket,
-    batch,
-    price,
-    inclusion_status,
-    locked_by_task_id,
-    lock_mode
-HAVING cumulative_qty != 0  -- Only keep positions with non-zero quantity
-SETTINGS max_threads = 8, max_memory_usage = 10000000000;
+CROSS JOIN current_week
+WHERE hour_window < current_week.snapshot_timestamp
+GROUP BY wh_id, hu_code, sku_code, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode
+HAVING cumulative_qty != 0;
 
--- ===== STEP 3: Record snapshot metadata =====
-INSERT INTO wms_inventory_snapshot_metadata
-SELECT
-    {snapshot_type:String} as snapshot_type,
-    wh_id,
-    toDate({snapshot_timestamp:DateTime}) as snapshot_date,
-    {snapshot_timestamp:DateTime} as snapshot_timestamp,
-    count() as records_count,
-    now() as generation_started_at,
-    now() as generation_completed_at,
-    0 as generation_duration_seconds,
-    'completed' as status,
-    '' as error_message,
-    'manual' as created_by,
-    now() as created_at
-FROM wms_inventory_snapshot
-WHERE snapshot_timestamp = {snapshot_timestamp:DateTime}
-  AND snapshot_type = {snapshot_type:String}
-  AND (wh_id = {wh_id:UInt64} OR {wh_id:UInt64} = 0)
-GROUP BY wh_id;
+-- How to use this view for weekly snapshot generation:
 
--- ===== STEP 4: Verify the snapshot =====
+-- 1. Manual execution (run every Sunday):
+-- INSERT INTO wms_inventory_weekly_snapshot 
+-- SELECT * FROM wms_inventory_weekly_snapshot_auto;
+
+-- 2. Set up a cron job to run weekly:
+-- 0 0 * * 0 clickhouse-client --query="INSERT INTO wms_inventory_weekly_snapshot SELECT * FROM wms_inventory_weekly_snapshot_auto"
+
+-- 3. Or use an orchestration tool like Airflow to schedule the INSERT
+
+-- Check the latest snapshot in the table:
 SELECT 
-    'Snapshot generated successfully!' as status,
-    count() as total_records,
+    'Latest Weekly Snapshot' as info,
+    max(snapshot_timestamp) as latest_snapshot,
+    count() as total_snapshots,
+    sum(rows) as total_rows
+FROM system.parts
+WHERE database = currentDatabase()
+  AND table = 'wms_inventory_weekly_snapshot'
+  AND active;
+
+-- Verify snapshot generation worked:
+SELECT 
+    snapshot_timestamp,
+    count() as positions,
+    sum(cumulative_qty) as total_quantity,
     uniq(wh_id) as warehouses,
-    uniq(sku_code) as unique_skus,
-    sum(cumulative_qty) as total_quantity
-FROM wms_inventory_snapshot
-WHERE snapshot_timestamp = {snapshot_timestamp:DateTime}
-  AND snapshot_type = {snapshot_type:String};
+    uniq(sku_code) as unique_skus
+FROM wms_inventory_weekly_snapshot
+GROUP BY snapshot_timestamp
+ORDER BY snapshot_timestamp DESC
+LIMIT 10;

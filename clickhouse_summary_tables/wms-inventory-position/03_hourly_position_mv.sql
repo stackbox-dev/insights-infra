@@ -1,270 +1,13 @@
--- Hourly position snapshots for WMS Inventory
--- This table stores hourly aggregated inventory positions with cumulative tracking
--- Fed by materialized view from wms_inventory_events_enriched
+-- Materialized view for hourly position aggregation
+-- Automatically processes new events from wms_inventory_events_enriched
+-- Note: MVs cannot use FINAL, so we use manual deduplication with GROUP BY
 
--- Create the target table for hourly snapshots
-CREATE TABLE IF NOT EXISTS wms_inventory_hourly_position
-(
-    -- Time and warehouse
-    hour_window DateTime,
-    wh_id UInt64,
-    
-    -- Inventory position keys (defines unique position)
-    hu_code String,
-    sku_code String,
-    uom String,
-    bucket String,
-    batch String,
-    price String,
-    inclusion_status String,
-    locked_by_task_id String,
-    lock_mode String,
-    
-    -- Aggregated metrics for this hour
-    hourly_qty_change SimpleAggregateFunction(sum, Int64),
-    event_count SimpleAggregateFunction(sum, UInt64),
-    
-    -- Latest event identifiers
-    latest_hu_event_id SimpleAggregateFunction(anyLast, String),
-    latest_quant_event_id SimpleAggregateFunction(anyLast, String),
-    
-    -- Latest timestamps
-    first_event_time SimpleAggregateFunction(min, DateTime64(3)),
-    last_event_time SimpleAggregateFunction(max, DateTime64(3)),
-    
-    -- Latest handling unit event fields
-    hu_event_seq SimpleAggregateFunction(anyLast, UInt64),
-    hu_id SimpleAggregateFunction(anyLast, String),
-    hu_event_type SimpleAggregateFunction(anyLast, String),
-    hu_event_payload SimpleAggregateFunction(anyLast, String),
-    hu_event_attrs SimpleAggregateFunction(anyLast, String),
-    session_id SimpleAggregateFunction(anyLast, String),
-    task_id SimpleAggregateFunction(anyLast, String),
-    correlation_id SimpleAggregateFunction(anyLast, String),
-    storage_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_id SimpleAggregateFunction(anyLast, String),
-    effective_storage_id SimpleAggregateFunction(anyLast, String),
-    
-    -- Latest handling unit quant event fields
-    sku_id SimpleAggregateFunction(anyLast, String),
-    
-    -- Latest enriched handling unit fields
-    hu_kind_id SimpleAggregateFunction(anyLast, String),
-    hu_state SimpleAggregateFunction(anyLast, String),
-    hu_attrs SimpleAggregateFunction(anyLast, String),
-    hu_created_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    hu_updated_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    hu_lock_task_id SimpleAggregateFunction(anyLast, String),
-    hu_effective_storage_id SimpleAggregateFunction(anyLast, String),
-    
-    -- Latest enriched handling unit kind fields
-    hu_kind_code SimpleAggregateFunction(anyLast, String),
-    hu_kind_name SimpleAggregateFunction(anyLast, String),
-    hu_kind_attrs SimpleAggregateFunction(anyLast, String),
-    hu_kind_active SimpleAggregateFunction(anyLast, Boolean),
-    hu_kind_max_volume SimpleAggregateFunction(anyLast, Float64),
-    hu_kind_max_weight SimpleAggregateFunction(anyLast, Float64),
-    hu_kind_usage_type SimpleAggregateFunction(anyLast, String),
-    hu_kind_abbr SimpleAggregateFunction(anyLast, String),
-    hu_kind_length SimpleAggregateFunction(anyLast, Float64),
-    hu_kind_breadth SimpleAggregateFunction(anyLast, Float64),
-    hu_kind_height SimpleAggregateFunction(anyLast, Float64),
-    hu_kind_weight SimpleAggregateFunction(anyLast, Float64),
-    
-    -- Latest enriched storage bin fields
-    storage_bin_code SimpleAggregateFunction(anyLast, String),
-    storage_bin_description SimpleAggregateFunction(anyLast, String),
-    storage_bin_status SimpleAggregateFunction(anyLast, String),
-    storage_bin_hu_id SimpleAggregateFunction(anyLast, String),
-    storage_multi_sku SimpleAggregateFunction(anyLast, Boolean),
-    storage_multi_batch SimpleAggregateFunction(anyLast, Boolean),
-    storage_picking_position SimpleAggregateFunction(anyLast, Int32),
-    storage_putaway_position SimpleAggregateFunction(anyLast, Int32),
-    storage_rank SimpleAggregateFunction(anyLast, Int32),
-    storage_aisle SimpleAggregateFunction(anyLast, String),
-    storage_bay SimpleAggregateFunction(anyLast, String),
-    storage_level SimpleAggregateFunction(anyLast, String),
-    storage_position SimpleAggregateFunction(anyLast, String),
-    storage_depth SimpleAggregateFunction(anyLast, String),
-    storage_max_sku_count SimpleAggregateFunction(anyLast, Int32),
-    storage_max_sku_batch_count SimpleAggregateFunction(anyLast, Int32),
-    storage_bin_type_id SimpleAggregateFunction(anyLast, String),
-    storage_bin_type_code SimpleAggregateFunction(anyLast, String),
-    storage_bin_type_description SimpleAggregateFunction(anyLast, String),
-    storage_max_volume_in_cc SimpleAggregateFunction(anyLast, Float64),
-    storage_max_weight_in_kg SimpleAggregateFunction(anyLast, Float64),
-    storage_pallet_capacity SimpleAggregateFunction(anyLast, Int32),
-    storage_hu_type SimpleAggregateFunction(anyLast, String),
-    storage_auxiliary_bin SimpleAggregateFunction(anyLast, Boolean),
-    storage_hu_multi_sku SimpleAggregateFunction(anyLast, Boolean),
-    storage_hu_multi_batch SimpleAggregateFunction(anyLast, Boolean),
-    storage_use_derived_pallet_best_fit SimpleAggregateFunction(anyLast, Boolean),
-    storage_only_full_pallet SimpleAggregateFunction(anyLast, Boolean),
-    storage_bin_type_active SimpleAggregateFunction(anyLast, Boolean),
-    storage_zone_id SimpleAggregateFunction(anyLast, String),
-    storage_zone_code SimpleAggregateFunction(anyLast, String),
-    storage_zone_description SimpleAggregateFunction(anyLast, String),
-    storage_zone_face SimpleAggregateFunction(anyLast, String),
-    storage_peripheral SimpleAggregateFunction(anyLast, Boolean),
-    storage_surveillance_config SimpleAggregateFunction(anyLast, String),
-    storage_zone_active SimpleAggregateFunction(anyLast, Boolean),
-    storage_area_id SimpleAggregateFunction(anyLast, String),
-    storage_area_code SimpleAggregateFunction(anyLast, String),
-    storage_area_description SimpleAggregateFunction(anyLast, String),
-    storage_area_type SimpleAggregateFunction(anyLast, String),
-    storage_rolling_days SimpleAggregateFunction(anyLast, Int32),
-    storage_area_active SimpleAggregateFunction(anyLast, Boolean),
-    storage_x1 SimpleAggregateFunction(anyLast, Float64),
-    storage_x2 SimpleAggregateFunction(anyLast, Float64),
-    storage_y1 SimpleAggregateFunction(anyLast, Float64),
-    storage_y2 SimpleAggregateFunction(anyLast, Float64),
-    storage_position_active SimpleAggregateFunction(anyLast, Boolean),
-    storage_attrs SimpleAggregateFunction(anyLast, String),
-    storage_bin_mapping SimpleAggregateFunction(anyLast, String),
-    storage_created_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    storage_updated_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    
-    -- Latest enriched SKU master fields
-    sku_name SimpleAggregateFunction(anyLast, String),
-    sku_short_description SimpleAggregateFunction(anyLast, String),
-    sku_description SimpleAggregateFunction(anyLast, String),
-    sku_category SimpleAggregateFunction(anyLast, String),
-    sku_product SimpleAggregateFunction(anyLast, String),
-    sku_product_id SimpleAggregateFunction(anyLast, String),
-    sku_category_group SimpleAggregateFunction(anyLast, String),
-    sku_sub_brand SimpleAggregateFunction(anyLast, String),
-    sku_brand SimpleAggregateFunction(anyLast, String),
-    sku_fulfillment_type SimpleAggregateFunction(anyLast, String),
-    sku_inventory_type SimpleAggregateFunction(anyLast, String),
-    sku_shelf_life SimpleAggregateFunction(anyLast, Int32),
-    sku_handling_unit_type SimpleAggregateFunction(anyLast, String),
-    sku_cases_per_layer SimpleAggregateFunction(anyLast, Int32),
-    sku_layers SimpleAggregateFunction(anyLast, Int32),
-    sku_active_from SimpleAggregateFunction(anyLast, DateTime64(3)),
-    sku_active_till SimpleAggregateFunction(anyLast, DateTime64(3)),
-    sku_l0_units SimpleAggregateFunction(anyLast, Int32),
-    sku_l0_name SimpleAggregateFunction(anyLast, String),
-    sku_l0_weight SimpleAggregateFunction(anyLast, Float64),
-    sku_l0_volume SimpleAggregateFunction(anyLast, Float64),
-    sku_l0_length SimpleAggregateFunction(anyLast, Float64),
-    sku_l0_width SimpleAggregateFunction(anyLast, Float64),
-    sku_l0_height SimpleAggregateFunction(anyLast, Float64),
-    sku_l1_units SimpleAggregateFunction(anyLast, Int32),
-    sku_l1_name SimpleAggregateFunction(anyLast, String),
-    sku_l1_weight SimpleAggregateFunction(anyLast, Float64),
-    sku_l1_volume SimpleAggregateFunction(anyLast, Float64),
-    sku_l1_length SimpleAggregateFunction(anyLast, Float64),
-    sku_l1_width SimpleAggregateFunction(anyLast, Float64),
-    sku_l1_height SimpleAggregateFunction(anyLast, Float64),
-    sku_active SimpleAggregateFunction(anyLast, Boolean),
-    sku_created_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    sku_updated_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    
-    -- Latest enriched effective storage fields
-    effective_storage_bin_code SimpleAggregateFunction(anyLast, String),
-    effective_storage_bin_description SimpleAggregateFunction(anyLast, String),
-    effective_storage_bin_status SimpleAggregateFunction(anyLast, String),
-    effective_storage_bin_hu_id SimpleAggregateFunction(anyLast, String),
-    effective_storage_multi_sku SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_multi_batch SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_picking_position SimpleAggregateFunction(anyLast, Int32),
-    effective_storage_putaway_position SimpleAggregateFunction(anyLast, Int32),
-    effective_storage_rank SimpleAggregateFunction(anyLast, Int32),
-    effective_storage_aisle SimpleAggregateFunction(anyLast, String),
-    effective_storage_bay SimpleAggregateFunction(anyLast, String),
-    effective_storage_level SimpleAggregateFunction(anyLast, String),
-    effective_storage_position SimpleAggregateFunction(anyLast, String),
-    effective_storage_depth SimpleAggregateFunction(anyLast, String),
-    effective_storage_max_sku_count SimpleAggregateFunction(anyLast, Int32),
-    effective_storage_max_sku_batch_count SimpleAggregateFunction(anyLast, Int32),
-    effective_storage_bin_type_id SimpleAggregateFunction(anyLast, String),
-    effective_storage_bin_type_code SimpleAggregateFunction(anyLast, String),
-    effective_storage_bin_type_description SimpleAggregateFunction(anyLast, String),
-    effective_storage_max_volume_in_cc SimpleAggregateFunction(anyLast, Float64),
-    effective_storage_max_weight_in_kg SimpleAggregateFunction(anyLast, Float64),
-    effective_storage_pallet_capacity SimpleAggregateFunction(anyLast, Int32),
-    effective_storage_hu_type SimpleAggregateFunction(anyLast, String),
-    effective_storage_auxiliary_bin SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_hu_multi_sku SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_hu_multi_batch SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_use_derived_pallet_best_fit SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_only_full_pallet SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_bin_type_active SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_zone_id SimpleAggregateFunction(anyLast, String),
-    effective_storage_zone_code SimpleAggregateFunction(anyLast, String),
-    effective_storage_zone_description SimpleAggregateFunction(anyLast, String),
-    effective_storage_zone_face SimpleAggregateFunction(anyLast, String),
-    effective_storage_peripheral SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_surveillance_config SimpleAggregateFunction(anyLast, String),
-    effective_storage_zone_active SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_area_id SimpleAggregateFunction(anyLast, String),
-    effective_storage_area_code SimpleAggregateFunction(anyLast, String),
-    effective_storage_area_description SimpleAggregateFunction(anyLast, String),
-    effective_storage_area_type SimpleAggregateFunction(anyLast, String),
-    effective_storage_rolling_days SimpleAggregateFunction(anyLast, Int32),
-    effective_storage_area_active SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_x1 SimpleAggregateFunction(anyLast, Float64),
-    effective_storage_x2 SimpleAggregateFunction(anyLast, Float64),
-    effective_storage_y1 SimpleAggregateFunction(anyLast, Float64),
-    effective_storage_y2 SimpleAggregateFunction(anyLast, Float64),
-    effective_storage_position_active SimpleAggregateFunction(anyLast, Boolean),
-    effective_storage_attrs SimpleAggregateFunction(anyLast, String),
-    effective_storage_bin_mapping SimpleAggregateFunction(anyLast, String),
-    effective_storage_created_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    effective_storage_updated_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    
-    -- Latest enriched outer HU fields
-    outer_hu_code SimpleAggregateFunction(anyLast, String),
-    outer_hu_kind_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_session_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_task_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_storage_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_outer_hu_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_state SimpleAggregateFunction(anyLast, String),
-    outer_hu_attrs SimpleAggregateFunction(anyLast, String),
-    outer_hu_created_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    outer_hu_updated_at SimpleAggregateFunction(anyLast, DateTime64(3)),
-    outer_hu_lock_task_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_effective_storage_id SimpleAggregateFunction(anyLast, String),
-    outer_hu_kind_code SimpleAggregateFunction(anyLast, String),
-    outer_hu_kind_name SimpleAggregateFunction(anyLast, String),
-    outer_hu_kind_attrs SimpleAggregateFunction(anyLast, String),
-    outer_hu_kind_active SimpleAggregateFunction(anyLast, Boolean),
-    outer_hu_kind_max_volume SimpleAggregateFunction(anyLast, Float64),
-    outer_hu_kind_max_weight SimpleAggregateFunction(anyLast, Float64),
-    outer_hu_kind_usage_type SimpleAggregateFunction(anyLast, String),
-    outer_hu_kind_abbr SimpleAggregateFunction(anyLast, String),
-    outer_hu_kind_length SimpleAggregateFunction(anyLast, Float64),
-    outer_hu_kind_breadth SimpleAggregateFunction(anyLast, Float64),
-    outer_hu_kind_height SimpleAggregateFunction(anyLast, Float64),
-    outer_hu_kind_weight SimpleAggregateFunction(anyLast, Float64),
-    
-    -- Processing metadata
-    _processed_at DateTime64(3) DEFAULT now64(3)
-)
-ENGINE = AggregatingMergeTree()
-PARTITION BY toYYYYMM(hour_window)
-ORDER BY (
-    wh_id,
-    hour_window,
-    hu_code,
-    sku_code,
-    uom,
-    bucket,
-    batch,
-    price,
-    inclusion_status,
-    locked_by_task_id,
-    lock_mode
-)
-SETTINGS index_granularity = 8192;
-
--- Create materialized view that performs the aggregation
 CREATE MATERIALIZED VIEW IF NOT EXISTS wms_inventory_hourly_position_mv
 TO wms_inventory_hourly_position
 AS
 WITH deduplicated_events AS (
     -- Deduplicate by taking the latest version of each (hu_event_id, quant_event_id) pair
+    -- This handles duplicate events that may arrive from upstream systems
     SELECT
         hu_event_id,
         quant_event_id,
@@ -280,7 +23,7 @@ WITH deduplicated_events AS (
         argMax(lock_mode, _ingested_at) as lock_mode,
         argMax(qty_added, _ingested_at) as qty_added,
         argMax(hu_event_timestamp, _ingested_at) as hu_event_timestamp,
-        -- All other fields using argMax
+        -- All other fields using argMax to get latest version
         argMax(hu_event_seq, _ingested_at) as hu_event_seq,
         argMax(hu_id, _ingested_at) as hu_id,
         argMax(hu_event_type, _ingested_at) as hu_event_type,
@@ -493,7 +236,7 @@ SELECT
     argMax(quant_event_id, hu_event_timestamp) as latest_quant_event_id,
     min(hu_event_timestamp) as first_event_time,
     max(hu_event_timestamp) as last_event_time,
-    -- All other fields using anyLast aggregate
+    -- All other fields using anyLast to get the most recent value
     anyLast(hu_event_seq) as hu_event_seq,
     anyLast(hu_id) as hu_id,
     anyLast(hu_event_type) as hu_event_type,
@@ -687,7 +430,7 @@ SELECT
     anyLast(outer_hu_kind_weight) as outer_hu_kind_weight
 FROM deduplicated_events
 GROUP BY
-    hour_window,
+    toStartOfHour(hu_event_timestamp),
     wh_id,
     hu_code,
     sku_code,
@@ -697,10 +440,5 @@ GROUP BY
     price,
     inclusion_status,
     locked_by_task_id,
-    lock_mode;
-
--- Create indexes for common query patterns
-ALTER TABLE wms_inventory_hourly_position ADD INDEX idx_sku sku_code TYPE bloom_filter(0.01) GRANULARITY 4;
-ALTER TABLE wms_inventory_hourly_position ADD INDEX idx_hu hu_code TYPE bloom_filter(0.01) GRANULARITY 4;
-ALTER TABLE wms_inventory_hourly_position ADD INDEX idx_batch batch TYPE bloom_filter(0.01) GRANULARITY 4;
-ALTER TABLE wms_inventory_hourly_position ADD INDEX idx_storage_zone storage_zone_code TYPE bloom_filter(0.01) GRANULARITY 4;
+    lock_mode
+HAVING sum(qty_added) != 0;

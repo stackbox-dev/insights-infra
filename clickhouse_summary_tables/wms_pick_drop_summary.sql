@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_summary
     event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
 ) 
 ENGINE = ReplacingMergeTree(event_time)
-ORDER BY (wh_id, session_code, pick_item_id, drop_item_id)
+PARTITION BY toYYYYMM(pick_item_created_at)
+ORDER BY (wh_id, pick_item_created_at, session_code, pick_item_id, drop_item_id)
 SETTINGS index_granularity = 8192
-COMMENT 'WMS Pick Drop Summary with comprehensive enrichment from tasks, sessions, trips, workers, and SKU data';
+COMMENT 'WMS Pick Drop Summary with comprehensive enrichment from tasks, sessions, trips, workers, and SKU data - Monthly partitioned by pick_item_created_at';

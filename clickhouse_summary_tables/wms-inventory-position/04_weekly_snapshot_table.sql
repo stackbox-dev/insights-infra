@@ -1,15 +1,15 @@
--- Periodic cumulative inventory snapshot table
--- Stores cumulative quantities at specified time intervals (daily/weekly/monthly) for performance optimization
--- This table is manually populated and used as a base for point-in-time queries
+-- Weekly cumulative inventory snapshot table
+-- Stores cumulative quantities at weekly intervals for performance optimization
+-- Generated every Sunday at midnight for the 3-tier architecture
 
-CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
+CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
 (
     -- Snapshot metadata
-    snapshot_timestamp DateTime COMMENT 'Timestamp of the snapshot',
-    snapshot_type String COMMENT 'Type of snapshot (hourly/daily/weekly/monthly/custom)',
+    snapshot_timestamp DateTime COMMENT 'Timestamp of the snapshot (Sunday midnight)',
+    snapshot_type String DEFAULT 'weekly' COMMENT 'Type of snapshot (weekly)',
     wh_id UInt64 COMMENT 'Warehouse ID',
     
-    -- Inventory position keys (what defines a unique position)
+    -- Inventory position keys (defines unique position)
     hu_code String COMMENT 'Handling unit code',
     sku_code String COMMENT 'SKU code', 
     uom String COMMENT 'Unit of measure',
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
     cumulative_qty Int64 COMMENT 'Total cumulative quantity from beginning of time to snapshot',
     total_event_count UInt64 COMMENT 'Total number of events processed up to this snapshot',
     
-    -- Latest event identifiers
+    -- Latest event identifiers at snapshot time
     latest_hu_event_id String,
     latest_quant_event_id String,
     last_event_time DateTime64(3) COMMENT 'Timestamp of last event in this snapshot',
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
     storage_zone_code String,
     storage_zone_description String,
     storage_zone_face String,
-    storage_peripheral String,
+    storage_peripheral Boolean,
     storage_surveillance_config String,
     storage_zone_active Boolean,
     storage_area_id String,
@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
     effective_storage_zone_code String,
     effective_storage_zone_description String,
     effective_storage_zone_face String,
-    effective_storage_peripheral String,
+    effective_storage_peripheral Boolean,
     effective_storage_surveillance_config String,
     effective_storage_zone_active Boolean,
     effective_storage_area_id String,
@@ -237,21 +237,22 @@ CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
     _processed_at DateTime64(3) COMMENT 'Processing timestamp from source'
 )
 ENGINE = MergeTree()
-PARTITION BY (toYYYYMM(snapshot_timestamp), wh_id)
-ORDER BY (wh_id, snapshot_timestamp, snapshot_type, hu_code, sku_code, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode)
+PARTITION BY toYYYYMM(snapshot_timestamp)
+ORDER BY (wh_id, snapshot_timestamp, hu_code, sku_code, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode)
 SETTINGS index_granularity = 8192
-COMMENT 'Periodic cumulative inventory snapshots for performance optimization';
+COMMENT 'Weekly cumulative inventory snapshots for performance optimization in 3-tier architecture';
 
--- Create index for efficient lookups
-ALTER TABLE wms_inventory_snapshot
+-- Create indexes for efficient lookups
+ALTER TABLE wms_inventory_weekly_snapshot
     ADD INDEX idx_sku_code sku_code TYPE bloom_filter(0.01) GRANULARITY 4,
     ADD INDEX idx_hu_code hu_code TYPE bloom_filter(0.01) GRANULARITY 4,
-    ADD INDEX idx_batch batch TYPE bloom_filter(0.01) GRANULARITY 4;
+    ADD INDEX idx_batch batch TYPE bloom_filter(0.01) GRANULARITY 4,
+    ADD INDEX idx_snapshot_timestamp snapshot_timestamp TYPE minmax GRANULARITY 1;
 
--- Tracking table for snapshot generation progress
+-- Tracking table for snapshot generation metadata
 CREATE TABLE IF NOT EXISTS wms_inventory_snapshot_metadata
 (
-    snapshot_type String COMMENT 'Type of snapshot (hourly/daily/weekly/monthly/custom)',
+    snapshot_type String COMMENT 'Type of snapshot (weekly)',
     wh_id UInt64 COMMENT 'Warehouse ID',
     snapshot_date Date COMMENT 'Date of snapshot',
     snapshot_timestamp DateTime COMMENT 'Exact timestamp of snapshot',

@@ -1,16 +1,17 @@
 -- Backfill script for WMS Inventory Hourly Position
--- This script populates the hourly position table with existing historical data
+-- This script populates the hourly position table with all historical data
 -- Run this AFTER creating the tables and materialized view
 
--- Check existing data range in source table
+-- Step 1: Check existing data range in source table
 SELECT 
     'Source data range:' as info,
     min(hu_event_timestamp) as earliest_event,
     max(hu_event_timestamp) as latest_event,
-    count(*) as total_events
+    count(*) as total_events,
+    uniqExact(wh_id) as warehouses
 FROM wms_inventory_events_enriched;
 
--- Check what's already in hourly position table
+-- Step 2: Check what's already in hourly position table
 SELECT 
     'Existing hourly data:' as info,
     min(hour_window) as earliest_hour,
@@ -19,8 +20,8 @@ SELECT
     sum(event_count) as total_events
 FROM wms_inventory_hourly_position;
 
--- Backfill all historical data
--- This query deduplicates and aggregates all existing events into hourly positions
+-- Step 3: Backfill all historical data from beginning of time
+-- Using FINAL to automatically deduplicate based on ReplacingMergeTree's version column (_ingested_at)
 INSERT INTO wms_inventory_hourly_position
 SELECT
     toStartOfHour(hu_event_timestamp) as hour_window,
@@ -40,6 +41,7 @@ SELECT
     argMax(quant_event_id, hu_event_timestamp) as latest_quant_event_id,
     min(hu_event_timestamp) as first_event_time,
     max(hu_event_timestamp) as last_event_time,
+    -- Continue with all other fields using anyLast
     anyLast(hu_event_seq) as hu_event_seq,
     anyLast(hu_id) as hu_id,
     anyLast(hu_event_type) as hu_event_type,
@@ -232,14 +234,9 @@ SELECT
     anyLast(outer_hu_kind_height) as outer_hu_kind_height,
     anyLast(outer_hu_kind_weight) as outer_hu_kind_weight,
     now64(3) as _processed_at
-FROM (
-    -- Deduplicate events first using ReplacingMergeTree's deduplication
-    -- Since we're using ReplacingMergeTree, we can use FINAL to get deduplicated data
-    SELECT *
-    FROM wms_inventory_events_enriched FINAL
-)
+FROM wms_inventory_events_enriched FINAL
 GROUP BY
-    hour_window,
+    toStartOfHour(hu_event_timestamp),
     wh_id,
     hu_code,
     sku_code,
@@ -249,46 +246,18 @@ GROUP BY
     price,
     inclusion_status,
     locked_by_task_id,
-    lock_mode;
+    lock_mode
+HAVING sum(qty_added) != 0;
 
--- Verify backfill results
+-- Step 4: Verify backfill results
 SELECT 
-    'After backfill:' as info,
+    'Backfill complete:' as info,
     min(hour_window) as earliest_hour,
     max(hour_window) as latest_hour,
     count(*) as total_rows,
     sum(event_count) as total_events,
-    count(DISTINCT toStartOfDay(hour_window)) as days_covered
+    count(DISTINCT wh_id) as warehouses
 FROM wms_inventory_hourly_position;
 
--- Check sample of data
-SELECT 
-    hour_window,
-    wh_id,
-    hu_code,
-    sku_code,
-    hourly_qty_change,
-    event_count
-FROM wms_inventory_hourly_position
-ORDER BY hour_window DESC
-LIMIT 10;
-
--- Optional: For large datasets, process by month instead
--- Uncomment and modify date ranges as needed
-/*
--- Process January 2024
-INSERT INTO wms_inventory_hourly_position
-SELECT ... (same as above)
-FROM wms_inventory_events_enriched FINAL
-WHERE hu_event_timestamp >= '2024-01-01' 
-  AND hu_event_timestamp < '2024-02-01'
-GROUP BY ... (same as above);
-
--- Process February 2024
-INSERT INTO wms_inventory_hourly_position
-SELECT ... (same as above)
-FROM wms_inventory_events_enriched FINAL
-WHERE hu_event_timestamp >= '2024-02-01' 
-  AND hu_event_timestamp < '2024-03-01'
-GROUP BY ... (same as above);
-*/
+-- Step 5: Generate initial weekly snapshot if needed
+-- Run the weekly snapshot generation script after this
