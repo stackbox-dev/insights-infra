@@ -27,5 +27,6 @@ CREATE TABLE IF NOT EXISTS wms_storage_area_sloc_mapping
 ENGINE = ReplacingMergeTree(event_time)
 ORDER BY (wh_id, area_code, quality, sloc)
 TTL toDateTime(coalesce(deactivatedAt, toDateTime64('2099-12-31 23:59:59', 3))) + INTERVAL 1 MINUTE DELETE WHERE deactivatedAt IS NOT NULL
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         min_age_to_force_merge_seconds = 180
 COMMENT 'Storage area to SLOC mapping for ERP-WMS integration and inventory visibility management';

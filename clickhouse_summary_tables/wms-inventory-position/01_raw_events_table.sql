@@ -239,7 +239,8 @@ ORDER BY (
     hu_event_id,
     quant_event_id
 )
-SETTINGS index_granularity = 8192;
+SETTINGS index_granularity = 8192,
+         min_age_to_force_merge_seconds = 180;
 
 -- Create indexes for common query patterns
 ALTER TABLE wms_inventory_events_enriched ADD INDEX idx_hu_code hu_code TYPE bloom_filter(0.01) GRANULARITY 4;

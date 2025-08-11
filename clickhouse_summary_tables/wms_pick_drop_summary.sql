@@ -320,5 +320,6 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_enriched
 ENGINE = ReplacingMergeTree(event_time)
 PARTITION BY toYYYYMM(pick_item_created_at)
 ORDER BY (wh_id, pick_item_created_at, session_code, pick_item_id, drop_item_id)
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Pick Drop Summary with comprehensive enrichment from tasks, sessions, trips, workers, and SKU data - Monthly partitioned by pick_item_created_at';
