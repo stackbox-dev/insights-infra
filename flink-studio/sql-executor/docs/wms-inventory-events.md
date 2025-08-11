@@ -2,263 +2,322 @@
 
 ## Overview
 
-The WMS Inventory Events pipeline processes warehouse inventory movements by joining handling unit events with their associated quantity events, then enriching the data with dimensional information from multiple master data sources. The pipeline is split into three stages:
-
-1. **Basic Pipeline**: Joins handling unit events with quantity events
-2. **Historical Enrichment**: Batch processing of all historical data with full enrichment
-3. **Real-time Enrichment**: Continuous streaming of new events with full enrichment
+The WMS Inventory Events pipeline is a three-tier streaming data processing system that tracks warehouse inventory movements through handling unit events. Unlike the pick-drop pipeline which processes CDC data, this pipeline processes event-driven data from warehouse operations. The pipeline uses Apache Flink to join and enrich event streams for real-time inventory analytics.
 
 ## Architecture
 
+### Three-Tier Pipeline Structure
+
 ```
 ┌─────────────────────────┐     ┌─────────────────────────┐
-│  handling_unit_event    │     │ handling_unit_quant_evt │
+│  handling_unit_event    │     │handling_unit_quant_event│
+│  (Event stream with     │     │ (Quantity events without│
+│   timestamps)           │     │  timestamps)            │
 └───────────┬─────────────┘     └───────────┬─────────────┘
             │                                │
             └──────────┬─────────────────────┘
                        │
                        ▼
             ┌──────────────────────┐
-            │ inventory_events_basic│
+            │  Basic Pipeline       │
+            │inventory_events_basic │
+            │ (1-hour TTL joins)    │
             └──────────┬───────────┘
                        │
-        ┌──────────────┴──────────────┐
-        │                              │
-        ▼                              ▼
-┌───────────────────┐     ┌────────────────────┐
-│Historical Pipeline│     │Real-time Pipeline  │
-├───────────────────┤     ├────────────────────┤
-│ • Batch mode      │     │ • Streaming mode   │
-│ • All past data   │     │ • New events only  │
-│ • View-based joins│     │ • Temporal joins   │
-└───────────┬───────┘     └─────────┬──────────┘
-            │                        │
-            └───────────┬────────────┘
-                        ▼
-         ┌──────────────────────────┐
-         │inventory_events_enriched │
-         └──────────────────────────┘
+                       ▼
+            ┌──────────────────────┐
+            │inventory_events_basic │
+            │       topic           │
+            └──────┬──────┬────────┘
+                   │      │
+                   ▼      ▼
+          ┌──────────┐ ┌───────────┐
+          │Historical│ │ Real-time │
+          │Enrichment│ │Enrichment │
+          └──────────┘ └───────────┘
 ```
 
-## Pipeline Files
+## Pipeline Components
 
-### 1. Basic Pipeline
-**File**: `sbx-uat/wms-inventory-events-basic.sql`
+### 1. Basic Pipeline (`wms-inventory-events-basic.sql`)
 
-**Purpose**: Joins handling unit events with quantity events within a 5-minute window.
-
-**Key Features**:
-- Interval join with 5-minute window to correlate events
-- State TTL configuration to prevent unbounded state growth
-- Composite primary key (hu_event_id, quant_event_id)
-- Handles missing timestamps in quant_events
-
-**Source Tables**:
-- `sbx_uat.wms.public.handling_unit_event` - Warehouse handling unit movements
-- `sbx_uat.wms.public.handling_unit_quant_event` - Quantity changes associated with HU events
-
-**Output**: `sbx_uat.wms.internal.inventory_events_basic`
-
-### 2. Historical Enrichment Pipeline
-**File**: `sbx-uat/wms-inventory-enriched-historical.sql`
-
-**Purpose**: Processes all historical inventory events with full dimensional enrichment.
+**Purpose**: Joins handling unit events with their associated quantity events.
 
 **Key Features**:
-- BATCH execution mode for bounded processing
-- Creates views with ROW_NUMBER() to get latest dimension records
-- Regular LEFT JOINs (not temporal) for deterministic results
-- Direct join with storage_bin_master using bin_id
-- Processes from earliest to latest offset then terminates
+- Joins two event streams: `handling_unit_event` and `handling_unit_quant_event`
+- Uses **TTL-based regular joins** (1-hour TTL) instead of interval joins
+- Handles the fact that quant events lack timestamps
+- No CDC fields (`is_snapshot`, `event_time`) as these are event streams, not CDC
+- Uses native event timestamp from `handling_unit_event`
 
-**Enrichment Sources**:
-- `handling_units` - Handling unit master data
-- `handling_unit_kinds` - HU type definitions
-- `storage_bin_master` - Storage location master data
-- `skus_master` - Product/SKU master data
+**Technical Configuration**:
+```sql
+-- State TTL to prevent unbounded state growth
+SET 'table.exec.state.ttl' = '3600000'; -- 1 hour in milliseconds
 
-### 3. Real-time Enrichment Pipeline
-**File**: `sbx-uat/wms-inventory-enriched-realtime.sql`
+-- Regular join on foreign key relationship
+LEFT JOIN handling_unit_quant_events huqe 
+    ON hue.id = huqe.huEventId
+    AND hue.whId = huqe.whId
+```
 
-**Purpose**: Continuously processes new inventory events with full enrichment.
+**Important Note**: These are **event-driven tables**, not CDC tables, so:
+- No `__source_snapshot` field exists
+- No `is_snapshot` computation needed
+- No `event_time` computation (uses native `timestamp` field)
+- Watermarks are defined directly on the event timestamp
+
+**Output**: 
+- Topic: `sbx_uat.wms.internal.inventory_events_basic`
+- Format: Upsert-Kafka with Avro
+- Primary Key: `(hu_event_id, quant_event_id)`
+
+### 2. Historical Enrichment Pipeline (`wms-inventory-enriched-historical.sql`)
+
+**Purpose**: Enriches basic inventory events with dimension tables for batch/historical processing.
 
 **Key Features**:
-- STREAMING execution mode for unbounded processing
-- Temporal joins using event time for point-in-time accuracy
-- Two-step join for storage bins (bin → bin_master via bin_code)
-- Watermark alignment for synchronized source processing
-- Starts from latest offset (after historical completes)
+- Consumes from `inventory_events_basic` topic
+- Uses **temporal joins** for point-in-time correct enrichment
+- Enriches with:
+  - Handling units master data
+  - Handling unit kinds (types)
+  - Storage bins (current and effective locations)
+  - SKU master data
+- Optimized for processing large historical datasets
+- Higher latency tolerance for batch processing
 
-**Special Handling**:
-- Uses `storage_bin` intermediate table to resolve bin_code
-- All dimension tables use upsert-kafka with proper primary keys
-- 5-second watermark delay for dimension table synchronization
+**Enrichment Pattern**:
+```sql
+LEFT JOIN handling_units FOR SYSTEM_TIME AS OF ieb.hu_event_timestamp AS hu
+    ON ieb.hu_id = hu.id AND ieb.wh_id = hu.whId
+```
+
+### 3. Real-time Enrichment Pipeline (`wms-inventory-enriched-realtime.sql`)
+
+**Purpose**: Same enrichment as historical but optimized for real-time streaming.
+
+**Key Features**:
+- Consumes from `inventory_events_basic` topic
+- Identical enrichment logic as historical pipeline
+- Lower latency configuration for live data
+- Optimized checkpointing and mini-batch settings
+- Uses temporal joins for dimension lookups
 
 ## Data Model
 
-### Core Event Fields
+### Source Tables (Event Streams)
 
-#### From handling_unit_event:
-- `hu_event_id` - Unique event identifier
-- `wh_id` - Warehouse identifier
-- `hu_id` - Handling unit identifier
-- `hu_event_type` - Type of event (MOVE, CREATE, etc.)
-- `hu_event_timestamp` - Event occurrence time
-- `storage_id` - Current storage location
-- `outer_hu_id` - Parent handling unit
-- `effective_storage_id` - Effective storage after movement
+#### handling_unit_event
+- **Nature**: Event stream with timestamps
+- **Fields**: 14 columns including event metadata
+- **Key Fields**: `id`, `whId`, `huId`, `type`, `timestamp`
+- **Watermark**: On `timestamp` field (native event time)
+- **No CDC fields**: This is an event table, not CDC
 
-#### From handling_unit_quant_event:
-- `quant_event_id` - Unique quantity event identifier
-- `sku_id` - Product/SKU identifier
-- `uom` - Unit of measure
-- `batch` - Batch/lot number
-- `qty_added` - Quantity change
-- `inclusion_status` - Inventory status
+#### handling_unit_quant_event
+- **Nature**: Event stream without timestamps
+- **Fields**: 11 columns with quantity details
+- **Key Fields**: `id`, `huEventId`, `skuId`, `qtyAdded`
+- **No watermark**: Events lack timestamps
+- **Correlation**: Links to handling_unit_event via `huEventId`
 
-### Enriched Fields
+### Intermediate Table
 
-#### Handling Unit Enrichment:
-- `hu_code` - Human-readable HU code
-- `hu_state` - Current state (ACTIVE, CLOSED, etc.)
-- `hu_kind_*` - HU type information (15+ fields)
+#### inventory_events_basic
+- **Total Fields**: 23 columns
+- **Primary Key**: `(hu_event_id, quant_event_id)`
+- **Watermark**: On `hu_event_timestamp` from the HU event
+- **Purpose**: Correlated view of HU movements with quantities
 
-#### Storage Enrichment:
-- `storage_*` - Current storage location details (50+ fields)
-- `effective_storage_*` - Target storage location details (50+ fields)
-- Includes zone, area, bin type, capacity, and position information
+### Final Enriched Table
 
-#### Outer HU Enrichment:
-- `outer_hu_*` - Parent HU details (25+ fields)
-- Includes parent HU type and characteristics
+#### inventory_events_enriched
+- **Total Fields**: 200+ columns
+- **Categories**:
+  - Core event fields (23 from basic)
+  - Handling unit enrichment (15+ fields)
+  - HU kind enrichment (15+ fields)
+  - Storage bin enrichment (50+ fields for current location)
+  - Effective storage enrichment (50+ fields for target location)
+  - Outer HU enrichment (25+ fields for parent HU)
+  - SKU enrichment (35+ fields)
 
-#### SKU Enrichment:
-- `sku_*` - Product master data (35+ fields)
-- Includes category, brand, dimensions, and packaging information
+## Key Technical Decisions
 
-## Execution Workflow
+### 1. TTL for Event Correlation
 
-### Step 1: Deploy Basic Pipeline
-```bash
-python flink_sql_executor.py --sql-file sbx-uat/wms-inventory-events-basic.sql
-```
-This creates the foundational joined events stream.
+**Challenge**: Quant events arrive without timestamps but are logically related to HU events.
 
-### Step 2: Run Historical Enrichment
-```bash
-python flink_sql_executor.py --sql-file sbx-uat/wms-inventory-enriched-historical.sql
-```
-**Monitor completion**:
-```bash
-kubectl exec -n flink-studio flink-sql-gateway-0 -- \
-  kafka-consumer-groups \
-  --bootstrap-server sbx-stag-kafka-stackbox.e.aivencloud.com:22167 \
-  --group sbx-uat-wms-inventory-enriched \
-  --describe
-```
+**Solution**: Use TTL-based regular joins
+- 1-hour TTL allows sufficient time for related events to arrive
+- State is cleaned up based on access time
+- Works well with event streams that have natural ordering
 
-### Step 3: Start Real-time Enrichment
-```bash
-python flink_sql_executor.py --sql-file sbx-uat/wms-inventory-enriched-realtime.sql
-```
-Start only after historical pipeline completes to avoid duplicate processing.
+### 2. No CDC Processing
 
-## Key Design Decisions
+**Key Difference from Pick-Drop Pipeline**:
+- These are **event streams**, not CDC tables
+- No snapshot detection needed
+- No `is_snapshot` or computed `event_time` fields
+- Uses native event timestamps directly
 
-### 1. Interval Join for Event Correlation
-The basic pipeline uses a 5-minute interval join because:
-- Quant events may lack timestamps but are created with HU events
-- 5-minute window captures related events while limiting state
-- TTL configuration prevents unbounded state growth
+### 3. Temporal Joins for Enrichment
 
-### 2. Storage Bin Resolution
-- **Historical**: Direct join with storage_bin_master using bin_id
-- **Real-time**: Two-step join via storage_bin to get bin_code
-- Required because storage_bin_master primary key is (wh_id, bin_code)
+**Same as Pick-Drop**:
+- Point-in-time correct enrichment using event timestamp
+- Automatic versioned state management
+- Efficient for slowly changing dimensions
 
-### 3. Comprehensive Enrichment
-The pipeline includes ALL fields from dimension tables:
-- Provides complete context for downstream analytics
-- Eliminates need for additional lookups
-- Supports various use cases without schema changes
+### 4. Storage Bin Resolution
 
-### 4. View-based Latest Records (Historical)
-```sql
-CREATE VIEW handling_units_latest AS
-SELECT * FROM (
-    SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY `whId`, id ORDER BY event_time DESC) as rn
-    FROM handling_units
-) WHERE rn = 1;
-```
-Ensures deterministic results by selecting the latest version of each record.
+**Two-Step Process**:
+1. Event has `storage_id` (bin ID)
+2. Join to get `bin_code`
+3. Join to `storage_bin_master` using `(wh_id, bin_code)`
 
-## Performance Considerations
+This is necessary because storage_bin_master uses bin_code as part of its primary key.
+
+## Performance Optimization
 
 ### State Management
-- 5-minute TTL on join state prevents memory issues
-- Watermark alignment ensures coordinated progress
-- RocksDB with incremental checkpoints for large state
+- 1-hour TTL for basic pipeline joins
+- Temporal joins manage their own versioned state
+- RocksDB with LZ4 compression
 
-### Parallelism
-- Default parallelism: 4 (adjustable based on volume)
-- Sink parallelism matches default for balanced processing
-- Mini-batch optimization for throughput
-
-### Memory Configuration
+### Processing Configuration
 ```sql
-SET 'taskmanager.memory.managed.fraction' = '0.8';
+-- Mini-batch for throughput
 SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '1s';
 SET 'table.exec.mini-batch.size' = '5000';
+
+-- Checkpointing
+SET 'execution.checkpointing.interval' = '600000'; -- 10 minutes
+SET 'execution.checkpointing.timeout' = '1800000'; -- 30 minutes
+
+-- Parallelism
+SET 'parallelism.default' = '2';
 ```
 
-## Monitoring and Troubleshooting
+### Join Optimization
+- Hash join hints where applicable
+- Join reordering enabled
+- Multiple input optimization
 
-### Check Pipeline Status
+## Deployment
+
+### Environment Configuration
 ```bash
-# Get job status
-kubectl exec -n flink-studio flink-session-cluster-taskmanager-1-1 -- \
-  curl -s http://flink-session-cluster-rest:8081/jobs | jq
-
-# Check for enrichment gaps
-kubectl exec -n flink-studio flink-sql-gateway-0 -- \
-  kafka-console-consumer \
-  --bootstrap-server sbx-stag-kafka-stackbox.e.aivencloud.com:22167 \
-  --topic sbx_uat.wms.internal.inventory_events_enriched \
-  --from-beginning --max-messages 10
+export KAFKA_USERNAME="your-username"
+export KAFKA_PASSWORD="your-password"
+export TRUSTSTORE_PASSWORD="truststore-password"
 ```
+
+### Execution Commands
+```bash
+# Run basic pipeline
+python flink_sql_executor.py --sql-file sbx-uat/wms-inventory-events-basic.sql
+
+# Run historical enrichment
+python flink_sql_executor.py --sql-file sbx-uat/wms-inventory-enriched-historical.sql
+
+# Run real-time enrichment
+python flink_sql_executor.py --sql-file sbx-uat/wms-inventory-enriched-realtime.sql
+```
+
+### Monitoring
+- Check Flink UI for job status
+- Monitor checkpoint metrics
+- Verify output in Kafka topics
+- Track event correlation rates
+
+## Data Quality Considerations
+
+### Event Correlation
+- Not all HU events have associated quant events
+- LEFT JOIN preserves all HU events
+- COALESCE provides defaults for missing quant data
+
+### Null Handling
+- Extensive COALESCE for nullable enrichment fields
+- Default values prevent downstream issues
+- `table.exec.sink.not-null-enforcer = 'drop'` for resilience
+
+### Deduplication
+- Upsert-Kafka with composite primary key
+- Ensures exactly-once semantics
+- Handles event replay scenarios
+
+## Use Cases
+
+### Real-time Analytics
+1. **Inventory Movement Tracking**: Live view of stock movements
+2. **Location Utilization**: Monitor bin and zone usage
+3. **SKU Velocity**: Track product movement patterns
+4. **Exception Detection**: Identify unusual inventory events
+
+### Operational Monitoring
+1. Real-time inventory position
+2. Handling unit lifecycle tracking
+3. Storage optimization analysis
+4. Cross-docking efficiency
+
+## Comparison with Pick-Drop Pipeline
+
+| Aspect | Inventory Events | Pick-Drop |
+|--------|-----------------|-----------|
+| **Data Source** | Event streams | CDC (Debezium) |
+| **Ordering** | Natural event order | Random (by PK) |
+| **Timestamps** | Native event timestamps | Computed from business fields |
+| **Snapshot Detection** | Not applicable | Required for CDC |
+| **Primary Challenge** | Correlating events without timestamps | Handling random CDC ordering |
+| **Join Strategy** | TTL-based regular joins | TTL-based regular joins |
+| **Enrichment** | Temporal joins | Temporal joins |
+
+## Future Considerations
+
+### Potential Enhancements
+1. Add aggregation for inventory snapshots
+2. Implement real-time inventory position calculation
+3. Add anomaly detection for unusual movements
+4. Create specialized views for specific operations
+
+### Scalability
+- Increase parallelism for higher event rates
+- Adjust TTL based on event correlation patterns
+- Consider event buffering for burst handling
+- Implement backpressure monitoring
+
+## Troubleshooting Guide
 
 ### Common Issues
 
-#### 1. Missing Enrichment Data
-- **Symptom**: NULL values in enriched fields
-- **Cause**: Dimension data not available at event time
-- **Solution**: Check dimension table lag and watermark settings
+#### 1. Missing Quant Events
+- **Symptom**: Empty quant fields in output
+- **Cause**: Some HU events don't generate quant events
+- **Solution**: This is normal; ensure COALESCE defaults are appropriate
 
-#### 2. High Memory Usage
-- **Symptom**: TaskManager OOM errors
-- **Cause**: Large state accumulation in joins
-- **Solution**: Verify TTL settings, reduce mini-batch size
+#### 2. High State Size
+- **Symptom**: Growing checkpoint size
+- **Cause**: TTL too long or high event rate
+- **Solution**: Reduce TTL or increase parallelism
 
-#### 3. Slow Processing
-- **Symptom**: Growing consumer lag
-- **Cause**: Complex joins with large dimension tables
-- **Solution**: Increase parallelism, optimize join order
+#### 3. Enrichment Lag
+- **Symptom**: Old dimension data in enriched output
+- **Cause**: Dimension table update lag
+- **Solution**: Check dimension table refresh rates
 
-## Data Quality Checks
+### Validation Queries
 
-### Validate Basic Pipeline
 ```sql
 -- Check event correlation rate
 SELECT 
-    COUNT(*) as total_events,
-    COUNT(DISTINCT hu_event_id) as unique_hu_events,
-    COUNT(DISTINCT quant_event_id) as unique_quant_events
+    COUNT(DISTINCT hu_event_id) as hu_events,
+    COUNT(DISTINCT quant_event_id) as quant_events,
+    COUNT(*) as total_records
 FROM inventory_events_basic;
-```
 
-### Validate Enrichment
-```sql
 -- Check enrichment completeness
 SELECT 
     COUNT(*) as total,
@@ -267,26 +326,3 @@ SELECT
     SUM(CASE WHEN sku_code = '' THEN 1 ELSE 0 END) as missing_sku
 FROM inventory_events_enriched;
 ```
-
-## Future Enhancements
-
-1. **Additional Enrichments**
-   - Worker information from session/task joins
-   - Location hierarchy rollups
-   - Real-time inventory position calculation
-
-2. **Performance Optimizations**
-   - Broadcast joins for small dimension tables
-   - Materialized views for frequently accessed combinations
-   - Partition pruning for historical queries
-
-3. **Data Quality**
-   - Automated anomaly detection
-   - Missing data alerts
-   - Enrichment coverage metrics
-
-## Related Documentation
-
-- [WMS Pick-Drop Pipeline](./wms-pick-drop.md) - Similar enrichment pattern
-- [Running Enrichment Pipelines](./running-enrichment-pipeline.md) - Operational guide
-- [CLAUDE.md](../CLAUDE.md) - Coding standards and patterns

@@ -566,22 +566,57 @@ GROUP BY key_field;
 
 ## Examples in This Repository
 
-1. **WMS Pick-Drop Pipeline** (`wms-pick-drop-*.sql`)
-   - Complex event correlation
-   - Multiple source tables
-   - TTL-based regular joins
-   - Enriched output
+### 1. WMS Pick-Drop Pipelines
 
-2. **Encarta SKUs Pipeline** (`encarta-skus-*.sql`)
+The pick-drop system consists of three progressive pipelines:
+
+#### **Basic Pipeline** (`wms-pick-drop-basic.sql`)
+   - Joins three CDC source tables: `pd_pick_item`, `pd_drop_item`, and `pd_pick_drop_mapping`
+   - Uses TTL-based regular joins (12-hour TTL) to handle Debezium's random ordering
+   - Produces comprehensive pick-drop data to `pick_drop_basic` topic
+   - Includes all fields needed for enrichment pipelines
+   - Properly handles `is_snapshot` and `event_time` propagation
+
+#### **Historical Enrichment** (`wms-pick-drop-enriched-historical.sql`)
+   - Consumes from `pick_drop_basic` topic
+   - Enriches with dimension data (bins, SKUs, workers, sessions, tasks)
+   - Optimized for processing historical/snapshot data
+   - Uses temporal joins for point-in-time correct enrichment
+
+#### **Real-time Enrichment** (`wms-pick-drop-enriched-realtime.sql`)
+   - Consumes from `pick_drop_basic` topic
+   - Same enrichment as historical but optimized for real-time
+   - Lower latency configuration for live data processing
+   - Uses temporal joins for dimension lookups
+
+### 2. WMS Inventory Pipelines
+
+The inventory system consists of three progressive pipelines:
+
+#### **Events Basic Pipeline** (`wms-inventory-events-basic.sql`)
+   - Joins `handling_unit_event` with `handling_unit_quant_event` tables
+   - Uses TTL-based regular joins (1-hour TTL) for state management
+   - Handles events that lack timestamps in quant events
+   - Produces joined inventory events to `inventory_events_basic` topic
+   - Note: These are event-driven tables (not CDC), so no `is_snapshot` field
+
+#### **Historical Enrichment** (`wms-inventory-enriched-historical.sql`)
+   - Consumes from `inventory_events_basic` topic
+   - Enriches with dimension data (SKUs, bins, handling units, workers)
+   - Optimized for batch processing of historical data
+   - Uses temporal joins for enrichment
+
+#### **Real-time Enrichment** (`wms-inventory-enriched-realtime.sql`)
+   - Consumes from `inventory_events_basic` topic
+   - Same enrichment as historical but for real-time processing
+   - Lower latency configuration
+   - Uses temporal joins for live enrichment
+
+### 3. **Encarta SKUs Pipeline** (`encarta-skus-*.sql`)
    - Product catalog aggregation
    - Hierarchical joins (categories, brands)
    - Master data enrichment
    - UOM aggregation
-
-3. **Inventory Snapshot** (`wms-inventory-snapshot.sql`)
-   - Point-in-time snapshots
-   - State management
-   - CDC processing
 
 ## Execution Commands
 

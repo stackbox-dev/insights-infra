@@ -8,11 +8,13 @@ Uses the same configuration as flink_sql_executor.py
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 
 import requests
 import yaml
@@ -108,6 +110,39 @@ class FlinkMonitor:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching cluster overview: {e}")
             return None
+    
+    def get_expected_streaming_pipelines(self, sql_path: str = "sbx-uat") -> Set[str]:
+        """Get list of expected streaming (non-batch) pipelines from SQL files"""
+        expected_pipelines = set()
+        sql_dir = Path(sql_path)
+        
+        if not sql_dir.exists():
+            print(f"Warning: SQL directory {sql_dir} not found")
+            return expected_pipelines
+        
+        for sql_file in sql_dir.glob("*.sql"):
+            # Skip debug queries and PostgreSQL-specific files
+            if sql_file.name in ["debug-queries.sql", "workstation-pgsql.sql"]:
+                continue
+            
+            try:
+                with open(sql_file, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    
+                    # Check if it's a batch pipeline
+                    if re.search(r"SET\s+'execution\.runtime-mode'\s*=\s*'BATCH'", content, re.IGNORECASE):
+                        continue  # Skip batch pipelines
+                    
+                    # Extract pipeline name
+                    pipeline_match = re.search(r"SET\s+'pipeline\.name'\s*=\s*'([^']+)'", content)
+                    if pipeline_match:
+                        pipeline_name = pipeline_match.group(1)
+                        expected_pipelines.add(pipeline_name)
+                    
+            except Exception as e:
+                print(f"Warning: Could not read SQL file {sql_file}: {e}")
+        
+        return expected_pipelines
 
     def check_exceptions(self, threshold: int = 5) -> List[Tuple[Dict, List[Dict]]]:
         """Check all running jobs for exceptions exceeding threshold"""
@@ -183,8 +218,8 @@ class FlinkMonitor:
             
             print("-" * 80)
 
-    def print_health_report(self):
-        """Print overall cluster health report"""
+    def print_health_report(self, sql_path: str = "sbx-uat"):
+        """Print overall cluster health report including pipeline status check"""
         print("\n📊 Flink Cluster Health Report")
         print("=" * 80)
         
@@ -259,6 +294,40 @@ class FlinkMonitor:
                 
                 if len(running_jobs) > 10:
                     print(f"\n  ... and {len(running_jobs) - 10} more running jobs")
+        
+        # Check pipeline status - compare expected vs running
+        print(f"\n🔍 Pipeline Status Check:")
+        expected_pipelines = self.get_expected_streaming_pipelines(sql_path)
+        
+        if expected_pipelines:
+            # Get names of running jobs
+            running_job_names = set()
+            for job in jobs:
+                if job.get("state") in ["RUNNING", "RESTARTING"]:
+                    running_job_names.add(job.get("name", ""))
+            
+            # Find missing pipelines
+            missing_pipelines = expected_pipelines - running_job_names
+            
+            print(f"  Expected streaming pipelines: {len(expected_pipelines)}")
+            print(f"  Currently running: {len(running_job_names.intersection(expected_pipelines))}")
+            
+            if missing_pipelines:
+                print(f"\n  ⚠️  Missing Pipelines ({len(missing_pipelines)}):")
+                for pipeline in sorted(missing_pipelines):
+                    print(f"    ❌ {pipeline}")
+            else:
+                print(f"  ✅ All expected streaming pipelines are running!")
+            
+            # Check for unexpected running jobs
+            unexpected_jobs = running_job_names - expected_pipelines
+            if unexpected_jobs:
+                print(f"\n  ℹ️  Additional running jobs (not in SQL files or batch jobs):")
+                for job in sorted(unexpected_jobs):
+                    if job:  # Skip empty names
+                        print(f"    • {job}")
+        else:
+            print(f"  ⚠️  No SQL files found or no streaming pipelines defined")
 
     def print_job_details(self, job_pattern: Optional[str] = None):
         """Print detailed information about specific job(s)"""
@@ -385,7 +454,7 @@ def main():
     parser.add_argument(
         "--health",
         action="store_true",
-        help="Show overall cluster health report"
+        help="Show overall cluster health report including pipeline status check"
     )
     
     parser.add_argument(
@@ -411,6 +480,12 @@ def main():
         "--json",
         action="store_true",
         help="Output in JSON format"
+    )
+    
+    parser.add_argument(
+        "--sql-path",
+        default="sbx-uat",
+        help="Path to SQL files directory for pipeline checking (default: sbx-uat)"
     )
     
     args = parser.parse_args()
