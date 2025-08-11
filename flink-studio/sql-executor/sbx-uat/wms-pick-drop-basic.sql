@@ -3,6 +3,11 @@ SET 'table.exec.sink.not-null-enforcer' = 'drop';
 SET 'parallelism.default' = '2';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '2';
+
+-- State TTL configuration to prevent unbounded state growth
+-- State will be kept for 12 hours after last access
+SET 'table.exec.state.ttl' = '43200000'; -- 12 hours in milliseconds
+
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -441,11 +446,12 @@ CREATE TABLE pick_drop_basic (
     deactivated_at TIMESTAMP(3),
     is_snapshot BOOLEAN NOT NULL,
     event_time TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND
-    -- No PRIMARY KEY needed for kafka connector
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
+    -- Primary key for upsert-kafka
+    PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.internal.pick_drop_basic',  -- Original topic name
+    'connector' = 'upsert-kafka',
+    'topic' = 'sbx_uat.wms.internal.pick_drop_basic',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -454,9 +460,9 @@ CREATE TABLE pick_drop_basic (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
+    'properties.transaction.timeout.ms' = '900000',
     'sink.parallelism' = '2',
-    -- Define key fields for Kafka sink (pick_item_id and drop_item_id)
-    'key.fields' = 'pick_item_id;drop_item_id',
+    'sink.transactional-id-prefix' = 'pick-drop-basic-sink',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -467,7 +473,8 @@ CREATE TABLE pick_drop_basic (
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'value.fields-include' = 'ALL'
 );
--- Basic pick-drop processing with 4-hour time windows
+-- Basic pick-drop processing with regular equijoins (no time windows)
+-- State TTL (12 hours) prevents unbounded growth for both historical and real-time processing
 INSERT INTO pick_drop_basic
 SELECT
     /*+ USE_HASH_JOIN */
@@ -633,12 +640,15 @@ SELECT
         ),
         COALESCE(di.`event_time`, TIMESTAMP '1970-01-01 00:00:00')
     ) AS event_time
-FROM pick_items pi -- Join with pick-drop mapping (6-hour window)
-    LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
-    AND pi.`whId` = pdm.`whId`
-    AND pdm.`event_time` BETWEEN pi.`event_time` - INTERVAL '6' HOUR
-    AND pi.`event_time` + INTERVAL '6' HOUR -- Join with drop items (6-hour window)
-    LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
-    AND di.`event_time` BETWEEN pi.`event_time` - INTERVAL '6' HOUR
-    AND pi.`event_time` + INTERVAL '6' HOUR
+FROM pick_items pi 
+    -- Regular left join on foreign key relationship
+    -- State TTL configuration ensures state is cleaned up after 12 hours
+    LEFT JOIN pick_drop_mapping pdm 
+        ON pi.id = pdm.`pickItemId`
+        AND pi.`whId` = pdm.`whId`
+    -- Regular left join on drop items
+    -- State TTL configuration ensures state is cleaned up after 12 hours
+    LEFT JOIN drop_items di 
+        ON pdm.`dropItemId` = di.id
+        AND pdm.`whId` = di.`whId`
 WHERE pi.`event_time` > TIMESTAMP '1970-01-01 00:00:00';

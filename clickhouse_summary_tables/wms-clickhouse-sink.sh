@@ -85,7 +85,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
       "tasks.max": "2",
-      "topics": "sbx_uat.wms.public.storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_summary,sbx_uat.wms.internal.inventory_events_enriched",
+      "topics": "sbx_uat.wms.public.storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_enriched,sbx_uat.wms.internal.inventory_events_enriched",
       
       "transforms": "dropNull",
       "transforms.dropNull.type": "org.apache.kafka.connect.transforms.Filter",
@@ -100,8 +100,10 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
       "database": "sbx_uat",
       "exactlyOnce": "false",
-      "topic2TableMap": "sbx_uat.wms.public.storage_area_sloc_mapping=wms_storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master=wms_storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master=wms_storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_summary=wms_pick_drop_summary,sbx_uat.wms.internal.inventory_events_enriched=wms_inventory_events_enriched",
-      "clickhouseSettings": "date_time_input_format=best_effort",
+      "topic2TableMap": "sbx_uat.wms.public.storage_area_sloc_mapping=wms_storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master=wms_storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master=wms_storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_enriched=wms_pick_drop_enriched,sbx_uat.wms.internal.inventory_events_enriched=wms_inventory_events_enriched",
+      "clickhouseSettings": "date_time_input_format=best_effort,max_insert_block_size=100000",
+      "bufferFlushTime": "10000",
+      "bufferSize": "100000",
       
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
@@ -120,8 +122,8 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "errors.deadletterqueue.topic.name": "dlq-wms-clickhouse",
       "errors.deadletterqueue.topic.replication.factor": "3",
 
-      "consumer.override.max.poll.records": "1000",
-      "consumer.override.max.partition.fetch.bytes": "5242880",
+      "consumer.override.max.poll.records": "50000",
+      "consumer.override.max.partition.fetch.bytes": "20971520",
       "consumer.security.protocol": "SASL_SSL",
       "consumer.sasl.mechanism": "SCRAM-SHA-512",
       "consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",

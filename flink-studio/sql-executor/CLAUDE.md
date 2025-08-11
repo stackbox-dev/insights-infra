@@ -3,6 +3,14 @@
 ## Overview
 This guide helps you create new Flink SQL pipelines in the sql-executor module. Each pipeline consists of a SQL file that defines source tables, transformations, and sink tables for real-time data processing.
 
+## Critical Best Practices for Debezium/CDC Data
+
+1. **Use TTL instead of Interval Joins**: Debezium data has random ordering (based on PK) which breaks watermark progression. Use `SET 'table.exec.state.ttl' = '43200000';` with regular joins.
+
+2. **Snapshot Detection is Metadata Only**: The `is_snapshot` field should ONLY be forwarded to sink tables for downstream consumers. Never use it for filtering or processing logic.
+
+3. **Filter on event_time, not is_snapshot**: Use `WHERE event_time > TIMESTAMP '1970-01-01 00:00:00'` to filter tombstones, not snapshot flags.
+
 ## Directory Structure
 ```
 sql-executor/
@@ -175,12 +183,86 @@ WHERE is_active = true  -- Business logic only, no event_time filter
 GROUP BY key_field;
 ```
 
+## Handling Debezium Data with TTL Instead of Interval Joins
+
+### Why TTL Over Interval Joins for Debezium Data
+
+**Problem with Interval Joins:**
+- Debezium produces CDC events with random ordering based on the primary key in the topic
+- This random ordering disrupts watermark progression, causing severe issues:
+  - Watermarks may jump erratically between old and new timestamps
+  - State cleanup becomes unpredictable
+  - Join windows may close prematurely or stay open too long
+  - Historical data processing becomes unreliable
+
+**Solution: Use TTL (Time To Live) with Regular Joins:**
+```sql
+-- Set state TTL to prevent unbounded state growth
+-- State will be kept for 12 hours after last access
+SET 'table.exec.state.ttl' = '43200000'; -- 12 hours in milliseconds
+
+-- Use regular LEFT JOIN instead of interval join
+LEFT JOIN table2 t2 ON t1.id = t2.ref_id
+    -- No time constraints in the join condition
+```
+
+**Benefits of TTL Approach:**
+1. **Predictable State Management**: State is cleaned up based on access time, not watermarks
+2. **Handles Random Ordering**: Works correctly regardless of event ordering in the topic
+3. **Better for Historical Processing**: Can process historical snapshots without watermark issues
+4. **Simpler Logic**: No complex time window calculations needed
+
+### Implementation Pattern
+
+```sql
+-- At the beginning of your SQL file, configure TTL
+SET 'table.exec.state.ttl' = '43200000'; -- 12 hours in milliseconds
+
+-- In your join logic, use regular joins without time constraints
+INSERT INTO sink_table
+SELECT
+    /*+ USE_HASH_JOIN */  -- Use hash join hint for performance
+    t1.field1,
+    t2.field2,
+    -- Combine is_snapshot using AND logic
+    t1.is_snapshot AND COALESCE(t2.is_snapshot, FALSE) AS is_snapshot,
+    -- Use GREATEST for event_time
+    GREATEST(t1.event_time, COALESCE(t2.event_time, TIMESTAMP '1970-01-01 00:00:00')) AS event_time
+FROM source_table1 t1
+    LEFT JOIN source_table2 t2 
+        ON t1.id = t2.foreign_id
+        -- No time window constraints here
+WHERE t1.event_time > TIMESTAMP '1970-01-01 00:00:00';
+```
+
+### Join Strategy Summary
+
+**For CDC/Debezium Data:**
+- Use regular joins with TTL for state management
+- Avoid interval joins due to random ordering issues
+
+**For Enrichment/Lookup Data:**
+- Use temporal joins (`FOR SYSTEM_TIME AS OF`)
+- Provides point-in-time correct enrichment
+- More efficient than other join types for slowly changing dimensions
+
+**Avoid Interval Joins:**
+- Interval joins are problematic with Debezium's random ordering
+- They cause unpredictable watermark progression
+- State cleanup becomes unreliable
+- Use TTL-based regular joins or temporal joins instead
+
 ## Common Patterns
 
 ### 1. CDC (Change Data Capture) Tables
-CDC data processing with proper event time handling.
+CDC data processing with proper event time handling using TTL for state management.
 
-### 2. Snapshot Detection
+### 2. Snapshot Detection (Forward-Only Pattern)
+
+**Important**: Snapshot detection (`is_snapshot`) is now used ONLY for forwarding to sink tables. It should NOT be used for filtering, conditional logic, or any other processing decisions.
+
+**Purpose**: The `is_snapshot` field allows downstream consumers to know if data originated from a CDC snapshot, but should not affect processing logic within pipelines.
+
 For true source tables from Debezium:
 ```sql
 -- Compute is_snapshot from __source_snapshot field
@@ -196,16 +278,67 @@ For true source tables from Debezium:
 When combining multiple source tables:
 ```sql
 -- Use AND logic for multiple sources
+-- This is ONLY for forwarding, not for filtering
 s1.is_snapshot AND s2.is_snapshot AS is_snapshot
 ```
 
-### 3. Time-Windowed Joins
-For streaming joins with bounded state (use event_time):
+**What NOT to do:**
 ```sql
-LEFT JOIN table2 t2 ON t1.id = t2.ref_id
-    AND t2.event_time BETWEEN t1.event_time - INTERVAL '6' HOUR
-    AND t1.event_time + INTERVAL '6' HOUR
+-- ❌ WRONG: Don't filter based on is_snapshot
+WHERE NOT is_snapshot  -- Don't do this!
+
+-- ❌ WRONG: Don't use is_snapshot in conditional logic
+CASE WHEN is_snapshot THEN ... ELSE ... END  -- Don't do this!
+
+-- ❌ WRONG: Don't use is_snapshot to control joins
+ON t1.id = t2.id AND NOT t1.is_snapshot  -- Don't do this!
 ```
+
+**What TO do:**
+```sql
+-- ✅ CORRECT: Always forward is_snapshot to sink
+INSERT INTO sink_table
+SELECT 
+    field1, field2, ...,
+    is_snapshot,  -- Forward as-is for downstream consumers
+    event_time
+FROM source_table
+WHERE event_time > TIMESTAMP '1970-01-01 00:00:00';  -- Filter on event_time only
+```
+
+### 3. Temporal Joins for Enrichment
+For enriching streaming data with slowly changing dimension tables:
+```sql
+-- Define a versioned table (dimension/lookup table)
+CREATE TABLE products (
+    id STRING,
+    name STRING,
+    category STRING,
+    price DECIMAL(10, 2),
+    updated_at TIMESTAMP(3),
+    event_time AS updated_at,
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (...);
+
+-- Use FOR SYSTEM_TIME AS OF for temporal join
+SELECT 
+    o.order_id,
+    o.product_id,
+    p.name AS product_name,
+    p.category,
+    o.quantity,
+    o.quantity * p.price AS total_price
+FROM orders o
+LEFT JOIN products FOR SYSTEM_TIME AS OF o.event_time AS p
+    ON o.product_id = p.id;
+```
+
+**Benefits of Temporal Joins:**
+- Provides point-in-time correct enrichment
+- Automatically manages versioned state
+- More efficient than interval joins for lookup scenarios
+- Perfect for slowly changing dimensions (products, users, locations)
 
 ### 4. Null Handling
 ```sql
@@ -317,19 +450,22 @@ GREATEST(
 
 ## CDC Field Forwarding Pattern
 
-**Core Pattern:** READ `__source_snapshot` → COMPUTE `is_snapshot` → FORWARD only `is_snapshot`
+**Core Pattern:** READ `__source_snapshot` → COMPUTE `is_snapshot` → FORWARD only `is_snapshot` (without using it for logic)
+
+**Key Principle**: The `is_snapshot` field is metadata for downstream consumers only. It should NEVER affect your pipeline's processing logic.
 
 ### For simple pipelines (1:1 transformations):
 - Always propagate `is_snapshot` and `event_time`
 - Never forward raw `__source_snapshot`
+- Never filter or make decisions based on `is_snapshot`
 ```sql
 INSERT INTO sink_table
 SELECT 
     field1, field2, ...,
-    is_snapshot,
+    is_snapshot,  -- Forward as metadata only
     event_time
 FROM source_table
-WHERE event_time > TIMESTAMP '1970-01-01 00:00:00';
+WHERE event_time > TIMESTAMP '1970-01-01 00:00:00';  -- Filter on event_time, NOT is_snapshot
 ```
 
 ### For pipelines with multiple sources:
@@ -433,7 +569,7 @@ GROUP BY key_field;
 1. **WMS Pick-Drop Pipeline** (`wms-pick-drop-*.sql`)
    - Complex event correlation
    - Multiple source tables
-   - Time-windowed joins
+   - TTL-based regular joins
    - Enriched output
 
 2. **Encarta SKUs Pipeline** (`encarta-skus-*.sql`)
@@ -476,25 +612,25 @@ export TRUSTSTORE_PASSWORD="truststore-password"
 To connect to the Kafka schema registry, execute into a Flink SQL Gateway pod and use curl:
 
 ```bash
-# Set credentials as environment variables (ask user or fetch from secure storage)
-export KAFKA_USERNAME="${KAFKA_USERNAME:-avnadmin}"
-export KAFKA_PASSWORD="${KAFKA_PASSWORD}"  # Must be set in environment
-
 # Get the flink-sql-gateway pod name
-kubectl get pods -n flink-studio | grep flink-sql-gateway
+POD_NAME=$(kubectl get pods -n flink-studio | grep flink-sql-gateway | awk '{print $1}')
 
-# Connect to schema registry (replace POD_NAME with actual pod name)
-kubectl exec -n flink-studio POD_NAME -- curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects"
+# The credentials are stored in the pod's filesystem
+# Use this method to access the schema registry:
+kubectl exec -n flink-studio $POD_NAME -- bash -c 'KAFKA_USERNAME=$(cat /etc/kafka/secrets/username) && KAFKA_PASSWORD=$(cat /etc/kafka/secrets/password) && curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects"'
 
-# List all available subjects
-kubectl exec -n flink-studio POD_NAME -- curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects"
+# List all available subjects (topics)
+kubectl exec -n flink-studio $POD_NAME -- bash -c 'KAFKA_USERNAME=$(cat /etc/kafka/secrets/username) && KAFKA_PASSWORD=$(cat /etc/kafka/secrets/password) && curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects" | jq -r ".[]"'
 
-# Get specific schema version
-kubectl exec -n flink-studio POD_NAME -- curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects/<SUBJECT_NAME>/versions/latest"
+# Get specific schema version (replace <TOPIC_NAME> with actual topic)
+kubectl exec -n flink-studio $POD_NAME -- bash -c 'KAFKA_USERNAME=$(cat /etc/kafka/secrets/username) && KAFKA_PASSWORD=$(cat /etc/kafka/secrets/password) && curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects/<TOPIC_NAME>-value/versions/latest"'
+
+# Get schema fields in a readable format
+kubectl exec -n flink-studio $POD_NAME -- bash -c 'KAFKA_USERNAME=$(cat /etc/kafka/secrets/username) && KAFKA_PASSWORD=$(cat /etc/kafka/secrets/password) && curl -s "https://${KAFKA_USERNAME}:${KAFKA_PASSWORD}@sbx-stag-kafka-stackbox.e.aivencloud.com:22159/subjects/<TOPIC_NAME>-value/versions/latest" | jq ".schema | fromjson | .fields"'
 ```
 
 **Schema Registry URL:** `https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159`
-**Authentication:** Requires `KAFKA_USERNAME` and `KAFKA_PASSWORD` environment variables
+**Authentication:** Credentials are stored in `/etc/kafka/secrets/` within the flink-sql-gateway pod
 
 ## Additional Resources
 

@@ -1086,7 +1086,7 @@ CREATE TABLE pick_drop_summary (
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = 'sbx_uat.wms.public.pick_drop_summary',
+    'topic' = 'sbx_uat.wms.public.pick_drop_enriched',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',

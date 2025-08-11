@@ -2,7 +2,7 @@
 -- Optimized data types with non-nullable defaults
 -- Matches Flink sink table: sbx_uat.wms.public.pick_drop_summary
 
-CREATE TABLE IF NOT EXISTS wms_pick_drop_summary
+CREATE TABLE IF NOT EXISTS wms_pick_drop_enriched
 (
     -- Core Identifiers
     wh_id Int64 DEFAULT 0,
