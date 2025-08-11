@@ -1,4 +1,4 @@
--- Pipeline to stream sbx_uat.wms.public.handling_unit_event interval joined with sbx_uat.wms.public.handling_unit_quant_event (5 minutes)
+-- Pipeline to stream sbx_uat.wms.public.handling_unit_event joined with sbx_uat.wms.public.handling_unit_quant_event
 
 SET 'pipeline.name' = 'WMS Inventory Events Basic Processing';
 SET 'table.exec.sink.not-null-enforcer' = 'drop';
