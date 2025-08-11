@@ -1,0 +1,16 @@
+# Ignore all environment files except the sample
+.*.env
+!.sample.env
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Ignore log files
+*.log
+
+# OS specific files
+.DS_Store
+Thumbs.db
