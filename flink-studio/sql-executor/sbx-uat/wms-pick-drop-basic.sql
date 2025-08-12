@@ -3,11 +3,10 @@ SET 'table.exec.sink.not-null-enforcer' = 'drop';
 SET 'parallelism.default' = '2';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '2';
-
 -- State TTL configuration to prevent unbounded state growth
 -- State will be kept for 12 hours after last access
-SET 'table.exec.state.ttl' = '43200000'; -- 12 hours in milliseconds
-
+SET 'table.exec.state.ttl' = '43200000';
+-- 12 hours in milliseconds
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -124,9 +123,10 @@ CREATE TABLE pick_items (
         ),
         FALSE
     ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
+    'connector' = 'upsert-kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_item',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-basic',
@@ -136,11 +136,15 @@ CREATE TABLE pick_items (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'properties.auto.offset.reset' = 'earliest'
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Source Table 2: Drop Items
 CREATE TABLE drop_items (
@@ -232,9 +236,10 @@ CREATE TABLE drop_items (
         ),
         FALSE
     ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
+    'connector' = 'upsert-kafka',
     'topic' = 'sbx_uat.wms.public.pd_drop_item',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-basic',
@@ -244,11 +249,15 @@ CREATE TABLE drop_items (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'properties.auto.offset.reset' = 'earliest'
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Source Table 3: Pick Drop Mapping
 CREATE TABLE pick_drop_mapping (
@@ -277,9 +286,10 @@ CREATE TABLE pick_drop_mapping (
         ),
         FALSE
     ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
+    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
+    PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'kafka',
+    'connector' = 'upsert-kafka',
     'topic' = 'sbx_uat.wms.public.pd_pick_drop_mapping',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-basic',
@@ -289,12 +299,17 @@ CREATE TABLE pick_drop_mapping (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
-    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'properties.auto.offset.reset' = 'earliest'
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
+
 -- Intermediate sink table for basic pick-drop data
 CREATE TABLE pick_drop_basic (
     pick_item_id STRING,
@@ -470,8 +485,7 @@ CREATE TABLE pick_drop_basic (
     'value.format' = 'avro-confluent',
     'value.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.fields-include' = 'ALL'
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Basic pick-drop processing with regular equijoins (no time windows)
 -- State TTL (12 hours) prevents unbounded growth for both historical and real-time processing
@@ -640,15 +654,6 @@ SELECT
         ),
         COALESCE(di.`event_time`, TIMESTAMP '1970-01-01 00:00:00')
     ) AS event_time
-FROM pick_items pi 
-    -- Regular left join on foreign key relationship
-    -- State TTL configuration ensures state is cleaned up after 12 hours
-    LEFT JOIN pick_drop_mapping pdm 
-        ON pi.id = pdm.`pickItemId`
-        AND pi.`whId` = pdm.`whId`
-    -- Regular left join on drop items
-    -- State TTL configuration ensures state is cleaned up after 12 hours
-    LEFT JOIN drop_items di 
-        ON pdm.`dropItemId` = di.id
-        AND pdm.`whId` = di.`whId`
-WHERE pi.`event_time` > TIMESTAMP '1970-01-01 00:00:00';
+FROM pick_items pi -- upsert-kafka maintains only latest version automatically
+    LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId` -- upsert-kafka maintains only latest mapping
+    LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id;
