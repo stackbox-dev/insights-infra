@@ -101,7 +101,7 @@ all_schemas=$(execute_curl_in_pod "$CONNECT_POD" "GET" \
     "-H 'Accept: application/vnd.schemaregistry.v1+json'")
 
 # Extract the body (remove HTTP status code)
-schema_list=$(echo "$all_schemas" | head -n -1)
+schema_list=$(echo "$all_schemas" | sed '$d')
 
 # Parse JSON array to get individual schemas
 if [ -z "$schema_list" ] || [ "$schema_list" = "[]" ]; then

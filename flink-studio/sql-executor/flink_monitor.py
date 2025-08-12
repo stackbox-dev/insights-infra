@@ -511,13 +511,74 @@ def main():
             else:
                 monitor.print_exceptions_report(args.threshold)
         elif args.health:
-            monitor.print_health_report()
+            if args.json:
+                # Generate JSON health report
+                health_data = {}
+                
+                # Get cluster overview
+                cluster = monitor.get_cluster_overview()
+                if cluster:
+                    health_data["cluster"] = {
+                        "flink_version": cluster.get("flink-version", "Unknown"),
+                        "taskmanagers": cluster.get("taskmanagers", 0),
+                        "slots_total": cluster.get("slots-total", 0),
+                        "slots_available": cluster.get("slots-available", 0),
+                        "jobs_running": cluster.get("jobs-running", 0),
+                        "jobs_finished": cluster.get("jobs-finished", 0),
+                        "jobs_cancelled": cluster.get("jobs-cancelled", 0),
+                        "jobs_failed": cluster.get("jobs-failed", 0)
+                    }
+                
+                # Get jobs info
+                jobs = monitor.get_jobs_overview()
+                health_data["jobs"] = {
+                    "total": len(jobs) if jobs else 0,
+                    "by_state": {},
+                    "running": []
+                }
+                
+                if jobs:
+                    # Group by state
+                    for job in jobs:
+                        state = job.get("state", "UNKNOWN")
+                        health_data["jobs"]["by_state"][state] = health_data["jobs"]["by_state"].get(state, 0) + 1
+                    
+                    # Get running job details
+                    running_jobs = [j for j in jobs if j.get("state") == "RUNNING"]
+                    for job in running_jobs:
+                        exceptions = monitor.get_job_exceptions(job["jid"])
+                        health_data["jobs"]["running"].append({
+                            "name": job.get("name", ""),
+                            "id": job.get("jid", ""),
+                            "duration_ms": job.get("duration", 0),
+                            "exception_count": len(exceptions)
+                        })
+                
+                # Get pipeline status
+                expected_pipelines = monitor.get_expected_streaming_pipelines(args.sql_path)
+                running_job_names = set()
+                if jobs:
+                    for job in jobs:
+                        if job.get("state") in ["RUNNING", "RESTARTING"]:
+                            running_job_names.add(job.get("name", ""))
+                
+                missing_pipelines = expected_pipelines - running_job_names
+                health_data["pipeline_status"] = {
+                    "expected_streaming_pipelines": list(expected_pipelines),
+                    "running_pipelines": list(running_job_names.intersection(expected_pipelines)),
+                    "missing_pipelines": list(missing_pipelines),
+                    "all_expected_running": len(missing_pipelines) == 0
+                }
+                
+                print(json.dumps(health_data, indent=2))
+            else:
+                monitor.print_health_report(args.sql_path)
         elif args.job:
             monitor.print_job_details(args.job)
         else:
             # Default: show both exceptions and health
             monitor.print_exceptions_report(args.threshold)
-            monitor.print_health_report()
+            monitor.print_health_report(args.sql_path)
             
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)

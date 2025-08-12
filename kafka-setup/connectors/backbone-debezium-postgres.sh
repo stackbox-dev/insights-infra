@@ -117,7 +117,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
-      "tombstones.on.delete": true,
+      "tombstones.on.delete": false,
       "provide.transaction.metadata": false,
       "binary.handling.mode": "base64",
       "snapshot.mode": "${SNAPSHOT_MODE}",
@@ -128,6 +128,10 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
       "signal.consumer.group.id": "${BACKBONE_SIGNAL_CONSUMER_GROUP}",
       "producer.compression.type": "${PRODUCER_COMPRESSION_TYPE}",
+      "transforms": "filter",
+      "transforms.filter.type": "io.debezium.transforms.Filter",
+      "transforms.filter.language": "jsr223.groovy",
+      "transforms.filter.condition": "value.op != 'd'",
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "key.converter.schema.registry.url": "${SCHEMA_REGISTRY_URL}",
@@ -136,6 +140,12 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "value.converter.basic.auth.credentials.source": "USER_INFO",
       "key.converter.basic.auth.user.info": "${SCHEMA_REGISTRY_AUTH}",
       "value.converter.basic.auth.user.info": "${SCHEMA_REGISTRY_AUTH}",
+      "key.converter.auto.register.schemas": true,
+      "value.converter.auto.register.schemas": true,
+      "key.converter.use.latest.version": true,
+      "value.converter.use.latest.version": true,
+      "key.converter.schema.compatibility": "BACKWARD",
+      "value.converter.schema.compatibility": "BACKWARD",
       "topic.creation.enable": "true",
       "topic.creation.default.replication.factor": ${TOPIC_CREATION_DEFAULT_REPLICATION_FACTOR},
       "topic.creation.default.partitions": ${TOPIC_CREATION_DEFAULT_PARTITIONS},
@@ -175,7 +185,7 @@ response=$(curl -s -w "\n%{http_code}" -X PUT \
     -d "$CONNECTOR_CONFIG")
 
 status_code=$(echo "$response" | tail -n1)
-body=$(echo "$response" | head -n -1)
+body=$(echo "$response" | sed '$d')
 
 if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_success "✅ Connector deployed/updated successfully!"
