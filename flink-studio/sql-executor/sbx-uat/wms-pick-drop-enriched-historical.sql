@@ -1148,6 +1148,10 @@ CREATE TABLE pick_drop_summary (
     dropped_sku_active BOOLEAN,
     dropped_sku_classifications STRING,
     dropped_sku_product_classifications STRING,
+    -- System Fields
+    is_snapshot BOOLEAN,
+    event_time TIMESTAMP(3),
+    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -1648,7 +1652,10 @@ SELECT
         drop_so.product_classifications,
         drop_sm.product_classifications,
         ''
-    ) AS dropped_sku_product_classifications
+    ) AS dropped_sku_product_classifications,
+    -- System fields
+    pb.is_snapshot AS is_snapshot,
+    pb.event_time AS event_time
 FROM pick_drop_basic pb
     LEFT JOIN sessions_latest s ON pb.session_id = s.id
     LEFT JOIN tasks_latest t ON pb.task_id = t.id
