@@ -413,6 +413,7 @@ CREATE TABLE workstation_events_staging (
     event_type STRING NOT NULL,
     event_source_id STRING NOT NULL,
     event_timestamp TIMESTAMP(3) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL,
     wh_id BIGINT,
     sku_id STRING,
     hu_id STRING,
@@ -429,6 +430,7 @@ CREATE TABLE workstation_events_staging (
     status_or_bucket STRING,
     reason STRING,
     sub_reason STRING,
+    deactivated_at TIMESTAMP(3),
     PRIMARY KEY (event_source_id, event_type) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -459,7 +461,8 @@ INSERT INTO workstation_events_staging
 -- 1. Receiving Events
 SELECT 'RECEIVING' AS event_type,
     iri.id AS event_source_id,
-    iri.createdAt AS event_timestamp,
+    COALESCE(iri.receivedAt, iri.createdAt) AS event_timestamp,
+    iri.createdAt AS created_at,
     iri.whId AS wh_id,
     iri.skuId AS sku_id,
     iri.huId AS hu_id,
@@ -475,16 +478,17 @@ SELECT 'RECEIVING' AS event_type,
     iri.price AS price,
     iri.reason AS status_or_bucket,
     iri.reason AS reason,
-    iri.subReason AS sub_reason
+    iri.subReason AS sub_reason,
+    iri.deactivatedAt AS deactivated_at
 FROM inb_receive_item iri
-WHERE iri.receivedAt > TIMESTAMP '1970-01-01 00:00:00'
 
 UNION ALL
 
 -- 2. Loading Events
 SELECT 'LOADING' AS event_type,
     oli.id AS event_source_id,
-    oli.loadedAt AS event_timestamp,
+    COALESCE(oli.loadedAt, oli.createdAt) AS event_timestamp,
+    oli.createdAt AS created_at,
     oli.whId AS wh_id,
     oli.skuId AS sku_id,
     oli.huId AS hu_id,
@@ -500,16 +504,17 @@ SELECT 'LOADING' AS event_type,
     CAST(NULL AS STRING) AS price,
     oli.classificationType AS status_or_bucket,
     CAST(NULL AS STRING) AS reason,
-    CAST(NULL AS STRING) AS sub_reason
+    CAST(NULL AS STRING) AS sub_reason,
+    CAST(NULL AS TIMESTAMP(3)) AS deactivated_at
 FROM ob_load_item oli
-WHERE oli.loadedAt > TIMESTAMP '1970-01-01 00:00:00'
 
 UNION ALL
 
 -- 3. Palletization Events
 SELECT 'PALLETIZATION' AS event_type,
     ipi.id AS event_source_id,
-    ipi.mappedAt AS event_timestamp,
+    COALESCE(ipi.mappedAt, ipi.updatedAt, ipi.createdAt) AS event_timestamp,
+    ipi.createdAt AS created_at,
     ipi.whId AS wh_id,
     ipi.skuId AS sku_id,
     ipi.huId AS hu_id,
@@ -525,16 +530,17 @@ SELECT 'PALLETIZATION' AS event_type,
     ipi.price AS price,
     ipi.bucket AS status_or_bucket,
     ipi.reason AS reason,
-    ipi.subReason AS sub_reason
+    ipi.subReason AS sub_reason,
+    ipi.deactivatedAt AS deactivated_at
 FROM inb_palletization_item ipi
-WHERE ipi.mappedAt > TIMESTAMP '1970-01-01 00:00:00'
 
 UNION ALL
 
 -- 4. Serialization Events
 SELECT 'INBOUND_SERIALIZATION' AS event_type,
     isi.id AS event_source_id,
-    isi.serializedAt AS event_timestamp,
+    COALESCE(isi.serializedAt, isi.createdAt) AS event_timestamp,
+    isi.createdAt AS created_at,
     isi.whId AS wh_id,
     isi.skuId AS sku_id,
     isi.huId AS hu_id,
@@ -550,16 +556,17 @@ SELECT 'INBOUND_SERIALIZATION' AS event_type,
     CAST(NULL AS STRING) AS price,
     isi.bucket AS status_or_bucket,
     isi.reason AS reason,
-    isi.subReason AS sub_reason
+    isi.subReason AS sub_reason,
+    isi.deactivatedAt AS deactivated_at
 FROM inb_serialization_item isi
-WHERE isi.serializedAt > TIMESTAMP '1970-01-01 00:00:00'
 
 UNION ALL
 
 -- 5. QC Events
 SELECT 'INBOUND_QC' AS event_type,
     iqci2.id AS event_source_id,
-    iqci2.createdAt AS event_timestamp,
+    COALESCE(iqci2.updatedAt, iqci2.createdAt) AS event_timestamp,
+    iqci2.createdAt AS created_at,
     iqci2.whId AS wh_id,
     iqci2.skuId AS sku_id,
     iqci2.parentItemId AS hu_id,
@@ -575,16 +582,17 @@ SELECT 'INBOUND_QC' AS event_type,
     iqci2.price AS price,
     iqci2.bucket AS status_or_bucket,
     iqci2.reason AS reason,
-    iqci2.subReason AS sub_reason
+    iqci2.subReason AS sub_reason,
+    iqci2.deactivatedAt AS deactivated_at
 FROM inb_qc_item_v2 iqci2
-WHERE iqci2.createdAt > TIMESTAMP '1970-01-01 00:00:00'
 
 UNION ALL
 
 -- 6. Inventory Adjustment Events
 SELECT 'INVENTORY_ADJUSTMENT' AS event_type,
     ibi.id AS event_source_id,
-    ibi.scannedAt AS event_timestamp,
+    COALESCE(ibi.scannedAt, ibi.approvedAt, ibi.updatedAt, ibi.createdAt) AS event_timestamp,
+    ibi.createdAt AS created_at,
     ibi.whId AS wh_id,
     ibi.skuId AS sku_id,
     ibi.sourceHUId AS hu_id,
@@ -600,16 +608,17 @@ SELECT 'INVENTORY_ADJUSTMENT' AS event_type,
     CAST(NULL AS STRING) AS price,
     ibi.state AS status_or_bucket,
     ibi.issue AS reason,
-    CAST(NULL AS STRING) AS sub_reason
+    CAST(NULL AS STRING) AS sub_reason,
+    ibi.deactivatedAt AS deactivated_at
 FROM ira_bin_items ibi
-WHERE ibi.scannedAt > TIMESTAMP '1970-01-01 00:00:00'
 
 UNION ALL
 
 -- 7. Outbound QA Events
 SELECT 'OUTBOUND_QA' AS event_type,
     oq.id AS event_source_id,
-    oq.createdAt AS event_timestamp,
+    COALESCE(oq.updatedAt, oq.createdAt) AS event_timestamp,
+    oq.createdAt AS created_at,
     oq.whId AS wh_id,
     oq.skuId AS sku_id,
     CAST(NULL AS STRING) AS hu_id,
@@ -625,6 +634,6 @@ SELECT 'OUTBOUND_QA' AS event_type,
     CAST(NULL AS STRING) AS price,
     oq.skuCategory AS status_or_bucket,
     oq.skuClass AS reason,
-    oq.uom AS sub_reason
-FROM ob_qa_lineitem oq
-WHERE oq.createdAt > TIMESTAMP '1970-01-01 00:00:00';
+    oq.uom AS sub_reason,
+    CAST(NULL AS TIMESTAMP(3)) AS deactivated_at
+FROM ob_qa_lineitem oq;

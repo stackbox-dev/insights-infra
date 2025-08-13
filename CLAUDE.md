@@ -31,6 +31,9 @@
             deduplicate_merge_projection_mode = 'drop'
    ```
 6. **Schema Alignment with Flink** - Always ensure ClickHouse tables have all fields from corresponding Flink sink tables, including individual timestamp fields
+7. **Separated MV and Table Definitions** - Keep enriched table definition separate from its MV for cleaner architecture:
+   - Define the enriched table structure in its own file (e.g., `workstation-events-enriched.sql`)
+   - Define the MV with `TO <table>` clause in a separate file (e.g., `workstation-events-enriched-mv.sql`)
 
 ### Flink SQL Patterns
 1. **Use TTL not Interval Joins** for CDC data: `SET 'table.exec.state.ttl' = '43200000';`

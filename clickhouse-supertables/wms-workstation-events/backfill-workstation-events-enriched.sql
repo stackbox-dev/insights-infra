@@ -1,12 +1,20 @@
--- ClickHouse Materialized View for WMS Workstation Events Enrichment
--- Populates wms_workstation_events_enriched table with enriched data
--- Enriches with handling_units, storage_bin_master, and SKUs (master + overrides)
+-- Backfill script for WMS Workstation Events Enriched table
+-- Use this script to manually populate historical data if MV was created without POPULATE
+-- or to re-process specific date ranges
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS wms_workstation_events_enriched_mv
-TO wms_workstation_events_enriched
-AS
+-- Check current data status
+SELECT 'Staging table count:' AS metric, count(*) AS value FROM wms_workstation_events_staging
+UNION ALL
+SELECT 'Enriched table count:', count(*) FROM wms_workstation_events_enriched
+UNION ALL
+SELECT 'Latest staging timestamp:', max(event_timestamp) FROM wms_workstation_events_staging
+UNION ALL
+SELECT 'Latest enriched timestamp:', max(event_timestamp) FROM wms_workstation_events_enriched;
+
+-- Backfill all historical data (use with caution on large tables)
+INSERT INTO wms_workstation_events_enriched
 SELECT
-    -- Core fields from staging (must have explicit aliases for MV)
+    -- Core fields from staging
     we.event_type AS event_type,
     we.event_source_id AS event_source_id,
     we.event_timestamp AS event_timestamp,
@@ -29,7 +37,7 @@ SELECT
     we.sub_reason AS sub_reason,
     we.deactivated_at AS deactivated_at,
     
-    -- Handling Unit enrichment (based on hu_id)
+    -- Handling Unit enrichment
     hu.code AS hu_enriched_code,
     hu.kindId AS hu_kind_id,
     hu.sessionId AS hu_session_id,
@@ -43,7 +51,7 @@ SELECT
     hu.createdAt AS hu_created_at,
     hu.updatedAt AS hu_updated_at,
     
-    -- Storage Bin Master enrichment (based on bin_id)
+    -- Storage Bin Master enrichment
     sbm.bin_code AS bin_code,
     sbm.bin_created_at AS bin_created_at,
     sbm.bin_updated_at AS bin_updated_at,
@@ -73,12 +81,11 @@ SELECT
     sbm.max_weight_in_kg AS max_weight_in_kg,
     sbm.pallet_capacity AS pallet_capacity,
     
-    -- SKU enrichment with overrides logic (COALESCE: override > master > default)
+    -- SKU enrichment with overrides
     COALESCE(so.code, sm.code, '') AS sku_code,
     COALESCE(so.name, sm.name, '') AS sku_name,
     COALESCE(so.short_description, sm.short_description, '') AS sku_short_description,
     COALESCE(so.description, sm.description, '') AS sku_description,
-    -- Product hierarchy always from master (never overridden)
     sm.category AS sku_category,
     sm.category_group AS sku_category_group,
     sm.product AS sku_product,
@@ -152,11 +159,13 @@ SELECT
     -- SKU classifications
     sm.combined_classification AS sku_combined_classification
 FROM wms_workstation_events_staging we
--- Handling Unit enrichment
 LEFT JOIN wms_handling_units hu ON we.hu_id = hu.id
--- Storage Bin Master enrichment (using bin_id directly)
 LEFT JOIN wms_storage_bin_master sbm ON we.bin_id = sbm.bin_id
--- SKU Master data
 LEFT JOIN encarta_skus_master sm ON we.sku_id = sm.id
--- SKU Overrides for specific warehouse (wh_id as node_id)
-LEFT JOIN encarta_skus_overrides so ON we.sku_id = so.sku_id AND we.wh_id = so.node_id;
+LEFT JOIN encarta_skus_overrides so ON we.sku_id = so.sku_id AND we.wh_id = so.node_id
+-- Uncomment and modify date range as needed:
+-- WHERE we.event_timestamp >= '2024-01-01' AND we.event_timestamp < '2025-01-01'
+;
+
+-- Verify backfill completion
+SELECT 'After backfill - Enriched count:' AS metric, count(*) AS value FROM wms_workstation_events_enriched;
