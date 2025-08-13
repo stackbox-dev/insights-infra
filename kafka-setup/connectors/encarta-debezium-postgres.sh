@@ -107,7 +107,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.dbname": "${ENCARTA_DB_NAME}",
       "database.server.name": "${ENCARTA_DB_NAME}",
       "plugin.name": "pgoutput",
-      "table.include.list": "${ENCARTA_TABLE_INCLUDE_LIST}", 
+      "table.include.list": "public.skus,public.uoms,public.products,public.sub_categories,public.categories,public.classifications,public.node_overrides,public.node_override_classifications,public.eans,public.product_classifications,public.product_node_overrides,public.product_node_override_classifications,public.category_groups,public.default_values,public.sub_brands,public.brands", 
       "database.history.kafka.topic": "${SCHEMA_HISTORY_TOPIC}",
       "publication.name": "${ENCARTA_PUBLICATION_NAME}",
       "slot.name": "${ENCARTA_SLOT_NAME}",
@@ -128,10 +128,16 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
       "signal.consumer.group.id": "${ENCARTA_SIGNAL_CONSUMER_GROUP}",
       "producer.compression.type": "${PRODUCER_COMPRESSION_TYPE}",
-      "transforms": "filter",
+      "transforms": "filter,unwrap,ts2epoch",
       "transforms.filter.type": "io.debezium.transforms.Filter",
       "transforms.filter.language": "jsr223.groovy",
       "transforms.filter.condition": "value.op != 'd'",
+      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+      "transforms.unwrap.drop.tombstones": "true",
+      "transforms.unwrap.delete.handling.mode": "drop",
+      "transforms.unwrap.add.fields": "op,source.ts_ms,source.snapshot",
+      "transforms.unwrap.add.fields.prefix": "__",
+      "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch",
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "key.converter.schema.registry.url": "${SCHEMA_REGISTRY_URL}",
@@ -140,10 +146,10 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "value.converter.basic.auth.credentials.source": "USER_INFO",
       "key.converter.basic.auth.user.info": "${SCHEMA_REGISTRY_AUTH}",
       "value.converter.basic.auth.user.info": "${SCHEMA_REGISTRY_AUTH}",
-      "key.converter.auto.register.schemas": true,
-      "value.converter.auto.register.schemas": true,
-      "key.converter.use.latest.version": true,
-      "value.converter.use.latest.version": true,
+      "key.converter.auto.register.schemas": "true",
+      "value.converter.auto.register.schemas": "true",
+      "key.converter.use.latest.version": "true",
+      "value.converter.use.latest.version": "true",
       "key.converter.schema.compatibility": "BACKWARD",
       "value.converter.schema.compatibility": "BACKWARD",
       "topic.creation.enable": "true",
@@ -152,6 +158,9 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "topic.creation.default.cleanup.policy": "${TOPIC_CREATION_DEFAULT_CLEANUP_POLICY}",
       "topic.creation.default.retention.ms": ${TOPIC_CREATION_DEFAULT_RETENTION_MS},
       "topic.creation.default.compression.type": "${TOPIC_CREATION_DEFAULT_COMPRESSION_TYPE}",
+      "topic.creation.default.retention.bytes": "-1",
+      "topic.creation.default.include": ".*",
+      "skipped.operations": "none",
       "producer.security.protocol": "SASL_SSL",
       "producer.sasl.mechanism": "PLAIN",
       "producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
@@ -185,7 +194,7 @@ response=$(curl -s -w "\n%{http_code}" -X PUT \
     -d "$CONNECTOR_CONFIG")
 
 status_code=$(echo "$response" | tail -n1)
-body=$(echo "$response" | head -n -1)
+body=$(echo "$response" | sed '$d')
 
 if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_success "✅ Connector deployed/updated successfully!"

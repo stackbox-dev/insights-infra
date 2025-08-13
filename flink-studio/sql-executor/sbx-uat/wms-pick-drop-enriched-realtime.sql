@@ -19,10 +19,10 @@
 SET 'pipeline.name' = 'WMS Pick Drop Real-time Enrichment';
 SET 'execution.runtime-mode' = 'STREAMING';
 SET 'table.exec.sink.not-null-enforcer' = 'drop';
-SET 'parallelism.default' = '4';
+SET 'parallelism.default' = '2';
 SET 'table.optimizer.join-reorder-enabled' = 'false';
 SET 'table.exec.legacy-cast-behaviour' = 'enabled';
-SET 'table.exec.resource.default-parallelism' = '4';
+SET 'table.exec.resource.default-parallelism' = '2';
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -34,12 +34,11 @@ SET 'state.backend.incremental' = 'true';
 SET 'state.backend.rocksdb.compression.type' = 'LZ4';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.optimizer.multiple-input-enabled' = 'true';
--- Handle idle sources and watermark alignment for proper temporal join behavior
+-- Handle idle sources for proper temporal join behavior
 SET 'table.exec.source.idle-timeout' = '60s';
--- Watermark alignment to ensure all sources progress together
-SET 'pipeline.watermark-alignment.group' = 'pick-drop-enrichment';
-SET 'pipeline.watermark-alignment.max-drift' = '5 min';
-SET 'pipeline.watermark-alignment.update-interval' = '30s';
+-- Use TTL for state management only for specific joins (sessions, tasks, trips)
+-- Workers, handling_units, and SKU tables will use temporal joins
+SET 'table.exec.state.ttl' = '43200000';
 -- Source: Basic pick-drop data from Pipeline 1 (streaming mode with kafka connector)
 -- Uses kafka connector for streaming semantics and proper watermark handling
 CREATE TABLE pick_drop_basic (
@@ -196,7 +195,7 @@ CREATE TABLE pick_drop_basic (
     -- Use a 5-minute watermark delay to ensure dimension tables have sufficient time to load
     -- This helps handle late-arriving dimension data and ensures proper enrichment
     WATERMARK FOR event_time AS event_time - INTERVAL '5' MINUTE
-) WITH (
+) WITH ( 
     'connector' = 'kafka',
     'topic' = 'sbx_uat.wms.internal.pick_drop_basic',
     'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
@@ -1099,9 +1098,8 @@ CREATE TABLE pick_drop_summary (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '5s',
-    'sink.parallelism' = '4',
+    'sink.transactional-id-prefix' = 'pick-drop-enriched-realtime',
+    'sink.parallelism' = '2',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -1594,12 +1592,12 @@ SELECT
     pb.is_snapshot AS is_snapshot,
     pb.event_time AS event_time
 FROM pick_drop_basic pb
-    LEFT JOIN `sessions` FOR SYSTEM_TIME AS OF pb.event_time AS s ON pb.session_id = s.id
-    LEFT JOIN tasks FOR SYSTEM_TIME AS OF pb.event_time AS t ON pb.task_id = t.id
-    LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.event_time AS lm_trip ON pb.lm_trip_id = lm_trip.id
-    LEFT JOIN trip_relation_rekeyed FOR SYSTEM_TIME AS OF pb.event_time AS tr ON pb.session_id = tr.sessionId
+    LEFT JOIN `sessions` s ON pb.session_id = s.id
+    LEFT JOIN tasks t ON pb.task_id = t.id
+    LEFT JOIN trips lm_trip ON pb.lm_trip_id = lm_trip.id
+    LEFT JOIN trip_relation_rekeyed tr ON pb.session_id = tr.sessionId
     AND pb.lm_trip_id = tr.childTripId
-    LEFT JOIN trips FOR SYSTEM_TIME AS OF pb.event_time AS parent_trip ON tr.parentTripId = parent_trip.id
+    LEFT JOIN trips parent_trip ON tr.parentTripId = parent_trip.id
     LEFT JOIN workers FOR SYSTEM_TIME AS OF pb.event_time AS w ON pb.picked_by_worker_id = w.id
     LEFT JOIN handling_units FOR SYSTEM_TIME AS OF pb.event_time AS hu ON pb.dropped_inner_hu_id = hu.id
     LEFT JOIN sku_overrides FOR SYSTEM_TIME AS OF pb.event_time AS pick_so ON pb.picked_sku_id = pick_so.sku_id

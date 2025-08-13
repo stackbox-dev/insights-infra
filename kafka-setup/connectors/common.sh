@@ -195,7 +195,16 @@ start_port_forward() {
     local local_port=${2:-$CONNECT_LOCAL_PORT}
     local remote_port=${3:-$CONNECT_REMOTE_PORT}
     
-    print_info "Starting port forwarding from localhost:$local_port to $pod_name:$remote_port"
+    # Kill any existing port forwarding on the same local port
+    print_debug "Checking for existing port forwarding on port $local_port"
+    local existing_pids=$(lsof -ti:$local_port 2>/dev/null)
+    if [ -n "$existing_pids" ]; then
+        print_warning "Found existing process(es) on port $local_port, killing them: $existing_pids" >&2
+        echo "$existing_pids" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+    
+    print_info "Starting port forwarding from localhost:$local_port to $pod_name:$remote_port" >&2
     
     kubectl port-forward -n "$K8S_NAMESPACE" pod/"$pod_name" "$local_port":"$remote_port" > /dev/null 2>&1 &
     local port_forward_pid=$!

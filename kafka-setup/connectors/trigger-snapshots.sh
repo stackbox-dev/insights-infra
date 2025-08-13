@@ -450,7 +450,7 @@ else
         fi
         status=$(echo "$response" | tail -n1)
     else
-        body=$(echo "$response" | head -n -1)
+        body=$(echo "$response" | sed '$d')
         status=$(echo "$response" | tail -n1)
     fi
     

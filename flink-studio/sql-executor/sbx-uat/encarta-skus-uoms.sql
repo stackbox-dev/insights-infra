@@ -163,7 +163,7 @@ CREATE TABLE skus_uoms_agg (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.transaction.id.prefix' = 'encarta-skus-uoms-agg',
+    'sink.transactional-id-prefix' = 'encarta-skus-uoms-agg',
     'properties.allow.auto.create.topics' = 'true',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',

@@ -96,23 +96,6 @@ cleanup_function() {
 }
 setup_signal_handlers cleanup_function
 
-# Hardcoded snapshot overrides for special tables
-SNAPSHOT_OVERRIDES=$(cat <<'EOF'
-      "snapshot.select.statement.overrides": "public.inventory",
-      "snapshot.select.statement.overrides.public.inventory": "SELECT * FROM public.inventory ORDER BY fcm_id",
-      "snapshot.select.statement.overrides.public.task": "SELECT * FROM public.task ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.pd_pick_item": "SELECT * FROM public.pd_pick_item ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.pd_drop_item": "SELECT * FROM public.pd_drop_item ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.pd_pick_drop_mapping": "SELECT * FROM public.pd_pick_drop_mapping ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.ob_load_item": "SELECT * FROM public.ob_load_item ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.inb_receive_item": "SELECT * FROM public.inb_receive_item ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.inb_qc_item_v2": "SELECT * FROM public.inb_qc_item_v2 ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.inb_palletization_item": "SELECT * FROM public.inb_palletization_item ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.inb_serialization_item": "SELECT * FROM public.inb_serialization_item ORDER BY id DESC",
-      "snapshot.select.statement.overrides.public.ob_qa_lineitem": "SELECT * FROM public.ob_qa_lineitem ORDER BY id DESC",
-EOF
-)
-
 # Prepare connector configuration
 CONNECTOR_CONFIG=$(cat <<EOF
 {
@@ -124,7 +107,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.dbname": "${WMS_DB_NAME}",
       "database.server.name": "${WMS_DB_NAME}",
       "plugin.name": "pgoutput",
-      "table.include.list": "${WMS_TABLE_INCLUDE_LIST}", 
+      "table.include.list": "public.storage_dockdoor_position,public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.storage_bin_fixed_mapping,public.pd_pick_item,public.pd_pick_drop_mapping,public.pd_drop_item,public.task,public.session,public.worker,public.handling_unit,public.trip_relation,public.trip,public.inb_receive_item,public.ob_load_item,public.inb_palletization_item,public.inb_serialization_item,public.inb_qc_item_v2,public.ira_bin_items,public.ob_qa_lineitem,public.handling_unit_kind,public.handling_unit_quant_event,public.handling_unit_event", 
       "database.history.kafka.topic": "${SCHEMA_HISTORY_TOPIC}",
       "publication.name": "${WMS_PUBLICATION_NAME}",
       "slot.name": "${WMS_SLOT_NAME}",
@@ -145,10 +128,16 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
       "signal.consumer.group.id": "${WMS_SIGNAL_CONSUMER_GROUP}",
       "producer.compression.type": "${PRODUCER_COMPRESSION_TYPE}",
-      "transforms": "filter",
+      "transforms": "filter,unwrap,ts2epoch",
+      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+      "transforms.unwrap.drop.tombstones": "true",
+      "transforms.unwrap.delete.handling.mode": "drop",
+      "transforms.unwrap.add.fields": "op,source.ts_ms,source.snapshot",
+      "transforms.unwrap.add.fields.prefix": "__",
       "transforms.filter.type": "io.debezium.transforms.Filter",
       "transforms.filter.language": "jsr223.groovy",
       "transforms.filter.condition": "value.op != 'd'",
+      "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch",
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "key.converter.schema.registry.url": "${SCHEMA_REGISTRY_URL}",
@@ -157,19 +146,21 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "value.converter.basic.auth.credentials.source": "USER_INFO",
       "key.converter.basic.auth.user.info": "${SCHEMA_REGISTRY_AUTH}",
       "value.converter.basic.auth.user.info": "${SCHEMA_REGISTRY_AUTH}",
-      "key.converter.auto.register.schemas": true,
-      "value.converter.auto.register.schemas": true,
-      "key.converter.use.latest.version": true,
-      "value.converter.use.latest.version": true,
+      "key.converter.auto.register.schemas": "true",
+      "value.converter.auto.register.schemas": "true",
+      "key.converter.use.latest.version": "true",
+      "value.converter.use.latest.version": "true",
       "key.converter.schema.compatibility": "BACKWARD",
       "value.converter.schema.compatibility": "BACKWARD",
-      ${SNAPSHOT_OVERRIDES}
       "topic.creation.enable": "true",
       "topic.creation.default.replication.factor": ${TOPIC_CREATION_DEFAULT_REPLICATION_FACTOR},
       "topic.creation.default.partitions": ${TOPIC_CREATION_DEFAULT_PARTITIONS},
       "topic.creation.default.cleanup.policy": "${TOPIC_CREATION_DEFAULT_CLEANUP_POLICY}",
       "topic.creation.default.retention.ms": ${TOPIC_CREATION_DEFAULT_RETENTION_MS},
       "topic.creation.default.compression.type": "${TOPIC_CREATION_DEFAULT_COMPRESSION_TYPE}",
+      "topic.creation.default.retention.bytes": "-1",
+      "topic.creation.default.include": ".*",
+      "skipped.operations": "none",
       "producer.security.protocol": "SASL_SSL",
       "producer.sasl.mechanism": "PLAIN",
       "producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
@@ -203,7 +194,7 @@ response=$(curl -s -w "\n%{http_code}" -X PUT \
     -d "$CONNECTOR_CONFIG")
 
 status_code=$(echo "$response" | tail -n1)
-body=$(echo "$response" | head -n -1)
+body=$(echo "$response" | sed '$d')
 
 if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_success "✅ Connector deployed/updated successfully!"
@@ -239,4 +230,4 @@ echo "  # Delete connector"
 echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}"
 echo ""
 echo "  # Trigger snapshot"
-echo "  ./trigger-snapshots.sh --env $ENV_FILE -c wms -t \"public.inventory\""
+echo "  ./trigger-snapshots.sh --env $ENV_FILE -c wms -t \"public.task\""

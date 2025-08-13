@@ -216,7 +216,7 @@ CREATE TABLE storage_bin_dockdoor_master (
     'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
-    'properties.transaction.id.prefix' = 'storage_bin_dockdoor_master_sink',
+    'sink.transactional-id-prefix' = 'storage_bin_dockdoor_master_sink',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',

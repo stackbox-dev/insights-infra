@@ -828,6 +828,15 @@ dropped_sku_product_classifications STRING
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 --
+select 'pick';
+SELECT id,
+    updatedAt,
+    createdAt,
+    pickedBy,
+    carrierHUKind
+FROM pick_items pi
+WHERE pi.`id` = '01989e1f-b065-74ae-a66b-b1105c7b2153';
+--
 select 'basic';
 select pick_item_id,
     pick_item_updated_at,
@@ -836,6 +845,7 @@ select pick_item_id,
     mapping_created_at,
     drop_item_updated_at,
     picked_by_worker_id,
+    carrier_hu_kind,
     event_time,
     proc_time
 from pick_drop_basic
@@ -851,6 +861,7 @@ SELECT pi.id,
     pi.`updatedAt`,
     pi.`createdAt`,
     pi.`pickedBy`,
+    pi.`carrierHUKind`,
     pdm.id AS mapping_id,
     pdm.`createdAt` AS mapping_created_at,
     di.id AS drop_item_id,
@@ -858,12 +869,4 @@ SELECT pi.id,
 FROM pick_items pi
     LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
     LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
-WHERE pi.`id` = '01989e1f-b065-74ae-a66b-b1105c7b2153';
--- --
-select 'pick';
-SELECT id,
-    updatedAt,
-    createdAt,
-    pickedBy
-FROM pick_items pi
 WHERE pi.`id` = '01989e1f-b065-74ae-a66b-b1105c7b2153';
