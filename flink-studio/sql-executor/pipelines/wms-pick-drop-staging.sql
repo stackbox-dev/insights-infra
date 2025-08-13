@@ -401,6 +401,8 @@ CREATE TABLE pick_drop_staging (
     source_iloc STRING,
     -- Event time is the latest update between pick and drop
     event_time TIMESTAMP(3) NOT NULL,
+    -- Deactivated at - COALESCE of pick and drop deactivated timestamps
+    deactivated_at TIMESTAMP(3),
     -- Primary key for upsert-kafka
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
@@ -582,7 +584,9 @@ SELECT
     GREATEST(
         COALESCE(pi.`updatedAt`, pi.`createdAt`, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(di.`updatedAt`, di.`createdAt`, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS event_time
+    ) AS event_time,
+    -- Deactivated at - COALESCE of pick and drop deactivated timestamps
+    COALESCE(pi.`deactivatedAt`, di.`deactivatedAt`) AS deactivated_at
 FROM pick_items pi -- upsert-kafka maintains only latest version automatically
     LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId` -- upsert-kafka maintains only latest mapping
     LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id;
