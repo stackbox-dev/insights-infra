@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS wms_trips
     vehicleId String DEFAULT '',
     vehicleNo String DEFAULT '',
     vehicleType String DEFAULT '',
-    deliveryDate Date DEFAULT toDate('1970-01-01'),
+    deliveryDate Int32 DEFAULT 0,  -- Days since Unix epoch from Debezium
+    deliveryDateActual Date ALIAS toDate('1970-01-01') + deliveryDate,  -- Computed actual date
     
     -- Indexes for common query patterns
     INDEX idx_whId whId TYPE minmax GRANULARITY 1,
@@ -29,7 +30,8 @@ CREATE TABLE IF NOT EXISTS wms_trips
 )
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id)  -- id is globally unique
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop'
 COMMENT 'WMS Trips dimension table';
 
 -- Add projection for common query pattern (sessionId)

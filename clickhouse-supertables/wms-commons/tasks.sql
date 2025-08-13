@@ -36,17 +36,13 @@ CREATE TABLE IF NOT EXISTS wms_tasks
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id)  -- id is globally unique
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop'
 COMMENT 'WMS Tasks dimension table';
 
 -- Add projection for common query pattern (sessionId, seq)
 ALTER TABLE wms_tasks ADD PROJECTION IF NOT EXISTS by_session_seq (
     SELECT * ORDER BY (sessionId, seq)
-);
-
--- Add projection for active tasks by session
-ALTER TABLE wms_tasks ADD PROJECTION IF NOT EXISTS by_session_active (
-    SELECT * WHERE active = true ORDER BY (sessionId, seq)
 );
 
 -- Add projection for whId, kind pattern
@@ -56,5 +52,4 @@ ALTER TABLE wms_tasks ADD PROJECTION IF NOT EXISTS by_wh_kind (
 
 -- Materialize the projections
 ALTER TABLE wms_tasks MATERIALIZE PROJECTION by_session_seq;
-ALTER TABLE wms_tasks MATERIALIZE PROJECTION by_session_active;
 ALTER TABLE wms_tasks MATERIALIZE PROJECTION by_wh_kind;

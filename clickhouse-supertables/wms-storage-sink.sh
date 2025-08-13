@@ -27,18 +27,20 @@ fi
 echo "Using TOPIC_PREFIX: $TOPIC_PREFIX"
 
 # Define topic to table mappings as JSON
+# WMS Storage tables (mix of Debezium public and Flink processed topics)
 TOPIC_MAPPINGS='[
-  {"namespace": "flink", "topic": "skus_master", "table": "encarta_skus_master"},
-  {"namespace": "flink", "topic": "skus_overrides", "table": "encarta_skus_overrides"}
+  {"namespace": "public", "topic": "storage_area_sloc", "table": "wms_storage_area_sloc"},
+  {"namespace": "flink", "topic": "storage_bin_master", "table": "wms_storage_bin_master"},
+  {"namespace": "flink", "topic": "storage_bin_dockdoor_master", "table": "wms_storage_bin_dockdoor_master"}
 ]'
 
 # Generate topics list using jq
 TOPICS=$(echo "$TOPIC_MAPPINGS" | jq -r --arg prefix "$TOPIC_PREFIX" \
-  '[.[] | "\($prefix).encarta.\(.namespace).\(.topic)"] | join(",")')
+  '[.[] | "\($prefix).wms.\(.namespace).\(.topic)"] | join(",")')
 
 # Generate topic2TableMap using jq
 TOPIC_TABLE_MAP=$(echo "$TOPIC_MAPPINGS" | jq -r --arg prefix "$TOPIC_PREFIX" \
-  '[.[] | "\($prefix).encarta.\(.namespace).\(.topic)=\(.table)"] | join(",")')
+  '[.[] | "\($prefix).wms.\(.namespace).\(.topic)=\(.table)"] | join(",")')
 
 echo "Generated topics: $TOPICS"
 echo "Generated topic2TableMap: $TOPIC_TABLE_MAP"
@@ -124,7 +126,7 @@ fi
 # Additionally, ensure Kafka Connect workers run with -Duser.timezone=UTC to prevent
 # locale-specific date formatting issues.
 
-curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-encarta/config \
+curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-wms-storage/config \
 -H "Content-Type: application/json" \
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
@@ -145,7 +147,9 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
       "database": "'${TOPIC_PREFIX}'",
       "exactlyOnce": "false",
       "topic2TableMap": "'"$TOPIC_TABLE_MAP"'",
-      "clickhouseSettings": "date_time_input_format=best_effort",
+      "clickhouseSettings": "date_time_input_format=best_effort,max_insert_block_size=100000",
+      "bufferFlushTime": "10000",
+      "bufferSize": "100000",
       
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
@@ -161,11 +165,11 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
       "errors.tolerance": "none",
       "errors.log.enable": "true",
       "errors.log.include.messages": "true",
-      "errors.deadletterqueue.topic.name": "dlq-encarta-clickhouse",
+      "errors.deadletterqueue.topic.name": "dlq-wms-clickhouse-storage",
       "errors.deadletterqueue.topic.replication.factor": "3",
 
-      "consumer.override.max.poll.records": "1000",
-      "consumer.override.max.partition.fetch.bytes": "5242880",
+      "consumer.override.max.poll.records": "50000",
+      "consumer.override.max.partition.fetch.bytes": "20971520",
       "consumer.security.protocol": "SASL_SSL",
       "consumer.sasl.mechanism": "SCRAM-SHA-512",
       "consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"'"$CLUSTER_USER_NAME"'\" password=\"'"$CLUSTER_PASSWORD"'\";",

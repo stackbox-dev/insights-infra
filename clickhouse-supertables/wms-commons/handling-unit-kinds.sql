@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS wms_handling_unit_kinds
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id)  -- id is globally unique
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop'
 COMMENT 'WMS Handling Unit Kinds dimension table';
 
 -- Add projection for common query pattern (whId, code)
@@ -37,11 +38,11 @@ ALTER TABLE wms_handling_unit_kinds ADD PROJECTION IF NOT EXISTS by_wh_code (
     SELECT * ORDER BY (whId, code)
 );
 
--- Add projection for active kinds by usage type
-ALTER TABLE wms_handling_unit_kinds ADD PROJECTION IF NOT EXISTS by_usage_active (
-    SELECT * WHERE active = true ORDER BY (whId, usageType, id)
+-- Add projection for usage type queries
+ALTER TABLE wms_handling_unit_kinds ADD PROJECTION IF NOT EXISTS by_usage_type (
+    SELECT * ORDER BY (whId, usageType, id)
 );
 
 -- Materialize the projections
 ALTER TABLE wms_handling_unit_kinds MATERIALIZE PROJECTION by_wh_code;
-ALTER TABLE wms_handling_unit_kinds MATERIALIZE PROJECTION by_usage_active;
+ALTER TABLE wms_handling_unit_kinds MATERIALIZE PROJECTION by_usage_type;

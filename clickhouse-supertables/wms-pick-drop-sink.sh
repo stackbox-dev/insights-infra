@@ -1,4 +1,47 @@
 #!/bin/bash
+
+# Check if env file parameter is provided
+if [ -z "$1" ]; then
+    echo "Usage: $0 <env-file>"
+    echo "Example: $0 .sbx-uat.env"
+    exit 1
+fi
+
+ENV_FILE="$1"
+
+# Check if env file exists
+if [ ! -f "$ENV_FILE" ]; then
+    echo "Error: Environment file '$ENV_FILE' not found"
+    exit 1
+fi
+
+# Load environment variables
+source "$ENV_FILE"
+
+# Validate required environment variables
+if [ -z "$TOPIC_PREFIX" ]; then
+    echo "Error: TOPIC_PREFIX not defined in $ENV_FILE"
+    exit 1
+fi
+
+echo "Using TOPIC_PREFIX: $TOPIC_PREFIX"
+
+# Define topic to table mappings as JSON
+TOPIC_MAPPINGS='[
+  {"namespace": "public", "topic": "pick_drop_enriched", "table": "wms_pick_drop_enriched"}
+]'
+
+# Generate topics list using jq
+TOPICS=$(echo "$TOPIC_MAPPINGS" | jq -r --arg prefix "$TOPIC_PREFIX" \
+  '[.[] | "\($prefix).wms.\(.namespace).\(.topic)"] | join(",")')
+
+# Generate topic2TableMap using jq
+TOPIC_TABLE_MAP=$(echo "$TOPIC_MAPPINGS" | jq -r --arg prefix "$TOPIC_PREFIX" \
+  '[.[] | "\($prefix).wms.\(.namespace).\(.topic)=\(.table)"] | join(",")')
+
+echo "Generated topics: $TOPICS"
+echo "Generated topic2TableMap: $TOPIC_TABLE_MAP"
+
 gcloud container clusters get-credentials services-1-staging --region asia-south1 --project sbx-stag
 
 NAMESPACE="kafka"
@@ -80,12 +123,12 @@ fi
 # Additionally, ensure Kafka Connect workers run with -Duser.timezone=UTC to prevent
 # locale-specific date formatting issues.
 
-curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/config \
+curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-wms-pick-drop/config \
 -H "Content-Type: application/json" \
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
-      "tasks.max": "2",
-      "topics": "sbx_uat.wms.public.storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_enriched,sbx_uat.wms.internal.inventory_events_enriched",
+      "tasks.max": "1",
+      "topics": "'"$TOPICS"'",
       
       "transforms": "dropNull",
       "transforms.dropNull.type": "org.apache.kafka.connect.transforms.Filter",
@@ -98,9 +141,9 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "ssl": "true",
       "username": "avnadmin",
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
-      "database": "sbx_uat",
+      "database": "'${TOPIC_PREFIX}'",
       "exactlyOnce": "false",
-      "topic2TableMap": "sbx_uat.wms.public.storage_area_sloc_mapping=wms_storage_area_sloc_mapping,sbx_uat.wms.public.storage_bin_master=wms_storage_bin_master,sbx_uat.wms.public.storage_bin_dockdoor_master=wms_storage_bin_dockdoor_master,sbx_uat.wms.public.pick_drop_enriched=wms_pick_drop_enriched,sbx_uat.wms.internal.inventory_events_enriched=wms_inventory_events_enriched",
+      "topic2TableMap": "'"$TOPIC_TABLE_MAP"'",
       "clickhouseSettings": "date_time_input_format=best_effort,max_insert_block_size=100000",
       "bufferFlushTime": "10000",
       "bufferSize": "100000",
@@ -119,7 +162,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-wms/conf
       "errors.tolerance": "none",
       "errors.log.enable": "true",
       "errors.log.include.messages": "true",
-      "errors.deadletterqueue.topic.name": "dlq-wms-clickhouse",
+      "errors.deadletterqueue.topic.name": "dlq-wms-clickhouse-pick-drop",
       "errors.deadletterqueue.topic.replication.factor": "3",
 
       "consumer.override.max.poll.records": "50000",

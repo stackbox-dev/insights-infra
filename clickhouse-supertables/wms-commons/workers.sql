@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS wms_workers
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id)  -- id is globally unique
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop'
 COMMENT 'WMS Workers dimension table';
 
 -- Projection optimized for JOIN on id (primary enrichment pattern)
@@ -44,14 +45,13 @@ ALTER TABLE wms_workers ADD PROJECTION proj_by_wh_code (
     ORDER BY (whId, code)
 );
 
--- Projection for active workers analytics
-ALTER TABLE wms_workers ADD PROJECTION proj_active_workers (
+-- Projection for warehouse-based worker lookups
+ALTER TABLE wms_workers ADD PROJECTION proj_by_wh_id (
     SELECT 
         whId,
         id,
         code,
         name,
         active
-    WHERE active = true
     ORDER BY (whId, id)
 );
