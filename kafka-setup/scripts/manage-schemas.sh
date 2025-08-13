@@ -11,22 +11,35 @@ source "${SCRIPT_DIR}/common.sh"
 # Function to display usage
 usage() {
     cat << EOF
-Usage: $0 --env <environment-file> [OPTIONS]
+Usage: $0 --env <environment-file> <command> [OPTIONS]
 
-Delete schemas from Kafka Schema Registry
+Manage schemas in Kafka Schema Registry
 
 REQUIRED:
     --env <file>           Environment configuration file (e.g., .sbx-uat.env)
 
+COMMANDS:
+    list                   List all schemas in the registry
+    delete                 Delete schemas from the registry
+
 OPTIONS:
     --filter, -f PATTERN   Filter schemas by pattern (supports regex)
-    --dry-run              Show what would be deleted without actually deleting
-    --force                Skip confirmation prompt (use with caution!)
+    --dry-run              (delete only) Show what would be deleted without actually deleting
+    --force                (delete only) Skip confirmation prompt (use with caution!)
     -h, --help             Show this help message
 
 EXAMPLES:
-    $0 --env .sbx-uat.env --filter "test-.*" --dry-run
-    $0 --env .sbx-uat.env --filter "temp-.*" --force
+    # List all schemas
+    $0 --env .sbx-uat.env list
+    
+    # List schemas matching a pattern
+    $0 --env .sbx-uat.env list --filter "wms.*"
+    
+    # Delete schemas (dry-run)
+    $0 --env .sbx-uat.env delete --filter "test-.*" --dry-run
+    
+    # Delete schemas (force)
+    $0 --env .sbx-uat.env delete --filter "temp-.*" --force
 
 SAFETY: Signal topic schemas (debezium-signals-*) are always protected from deletion
 
@@ -35,6 +48,7 @@ EOF
 
 # Parse command line arguments
 ENV_FILE=""
+COMMAND=""
 FILTER_PATTERN=""
 DRY_RUN=false
 FORCE=false
@@ -44,6 +58,10 @@ while [[ $# -gt 0 ]]; do
     --env)
       ENV_FILE="$2"
       shift 2
+      ;;
+    list|delete)
+      COMMAND="$1"
+      shift
       ;;
     --filter|-f)
       FILTER_PATTERN="$2"
@@ -68,6 +86,19 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Validate required arguments
+if [ -z "$ENV_FILE" ]; then
+    print_error "Environment file is required"
+    usage
+    exit 1
+fi
+
+if [ -z "$COMMAND" ]; then
+    print_error "Command is required (list or delete)"
+    usage
+    exit 1
+fi
 
 # Load environment and check Kubernetes context
 if ! load_env_file "$ENV_FILE"; then
@@ -120,8 +151,10 @@ fi
 # Apply filters
 filtered_schemas="$schema_names"
 
-# Always protect signal schemas
-filtered_schemas=$(echo "$filtered_schemas" | grep -v '^debezium-signals-' 2>/dev/null || echo "$filtered_schemas")
+# Always protect signal schemas (only for delete command)
+if [ "$COMMAND" = "delete" ]; then
+  filtered_schemas=$(echo "$filtered_schemas" | grep -v '^debezium-signals-' 2>/dev/null || echo "$filtered_schemas")
+fi
 
 # Apply custom filter if provided
 if [ -n "$FILTER_PATTERN" ]; then
@@ -142,12 +175,34 @@ if [ -z "$schema_names" ] || [ "$schema_names" == "" ]; then
   if [ -n "$FILTER_PATTERN" ]; then
     echo "Filter applied: $FILTER_PATTERN"
   fi
-  echo "Signal schemas (debezium-signals-*) are protected"
+  if [ "$COMMAND" = "delete" ]; then
+    echo "Signal schemas (debezium-signals-*) are protected"
+  fi
   exit 0
 fi
 
-# Step 2: Display the schemas
+# Count schemas
 schema_count=$(echo "$schema_names" | wc -l | xargs)
+
+# Handle list command
+if [ "$COMMAND" = "list" ]; then
+    print_info "Schemas in registry ($schema_count):"
+    if [ -n "$FILTER_PATTERN" ]; then
+      print_color $YELLOW "   Filter applied: $FILTER_PATTERN"
+    fi
+    echo ""
+    
+    # Display the list
+    echo "$schema_names" | while read schema; do
+        echo "  - $schema"
+    done
+    
+    echo ""
+    print_success "Total: $schema_count schemas"
+    exit 0
+fi
+
+# Step 2: Display the schemas (for delete command)
 print_info "Schemas to be deleted ($schema_count):"
 if [ -n "$FILTER_PATTERN" ]; then
   print_color $YELLOW "   Filter applied: $FILTER_PATTERN"
@@ -192,19 +247,32 @@ if [ "$DRY_RUN" = false ]; then
     for schema in $schema_names; do
         echo -n "Deleting schema: $schema ... "
         
-        # Delete the schema permanently using ?permanent=true
-        delete_response=$(execute_curl_in_pod "$CONNECT_POD" "DELETE" \
-            "${SCHEMA_REGISTRY_URL}/subjects/${schema}?permanent=true" \
+        # First, soft delete the schema
+        soft_delete_response=$(execute_curl_in_pod "$CONNECT_POD" "DELETE" \
+            "${SCHEMA_REGISTRY_URL}/subjects/${schema}" \
             "" \
             "-H 'Accept: application/vnd.schemaregistry.v1+json'")
         
-        delete_status=$(echo "$delete_response" | tail -n1)
+        soft_delete_status=$(echo "$soft_delete_response" | tail -n1)
         
-        if [ "$delete_status" = "200" ] || [ "$delete_status" = "204" ]; then
-            print_success "✅ Deleted"
-            ((success_count++))
+        # Then permanently delete the schema
+        if [ "$soft_delete_status" = "200" ] || [ "$soft_delete_status" = "204" ] || [ "$soft_delete_status" = "404" ]; then
+            perm_delete_response=$(execute_curl_in_pod "$CONNECT_POD" "DELETE" \
+                "${SCHEMA_REGISTRY_URL}/subjects/${schema}?permanent=true" \
+                "" \
+                "-H 'Accept: application/vnd.schemaregistry.v1+json'")
+            
+            perm_delete_status=$(echo "$perm_delete_response" | tail -n1)
+            
+            if [ "$perm_delete_status" = "200" ] || [ "$perm_delete_status" = "204" ]; then
+                print_success "✅ Deleted"
+                ((success_count++))
+            else
+                print_error "❌ Failed (HTTP $perm_delete_status)"
+                ((fail_count++))
+            fi
         else
-            print_error "❌ Failed (HTTP $delete_status)"
+            print_error "❌ Failed soft delete (HTTP $soft_delete_status)"
             ((fail_count++))
         fi
     done

@@ -13,7 +13,7 @@ usage() {
     cat << EOF
 Usage: $0 --env <environment-file> [OPTIONS]
 
-Deploy/Update WMS Debezium PostgreSQL connector
+Deploy/Update Backbone Debezium PostgreSQL connector
 
 REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
@@ -68,9 +68,9 @@ if ! fetch_kubernetes_credentials; then
     exit 1
 fi
 
-# Get WMS database password
-print_info "Fetching WMS database credentials..."
-WMS_DB_PASSWORD=$(fetch_db_password "$WMS_DB_PASSWORD_SECRET")
+# Get Backbone database password
+print_info "Fetching Backbone database credentials..."
+BACKBONE_DB_PASSWORD=$(fetch_db_password "$BACKBONE_DB_PASSWORD_SECRET")
 if [ $? -ne 0 ]; then
     exit 1
 fi
@@ -100,34 +100,42 @@ setup_signal_handlers cleanup_function
 CONNECTOR_CONFIG=$(cat <<EOF
 {
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-      "database.hostname": "${WMS_DB_HOSTNAME}",
-      "database.port": "${WMS_DB_PORT}",
-      "database.user": "${WMS_DB_USER}",
-      "database.password": "${WMS_DB_PASSWORD}",
-      "database.dbname": "${WMS_DB_NAME}",
-      "database.server.name": "${WMS_DB_NAME}",
+      "database.hostname": "${BACKBONE_DB_HOSTNAME}",
+      "database.port": "${BACKBONE_DB_PORT}",
+      "database.user": "${BACKBONE_DB_USER}",
+      "database.password": "${BACKBONE_DB_PASSWORD}",
+      "database.dbname": "${BACKBONE_DB_NAME}",
+      "database.server.name": "${BACKBONE_DB_NAME}",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.storage_dockdoor_position,public.storage_bin_dockdoor,public.storage_dockdoor,public.storage_bin,public.storage_bin_type,public.storage_zone,public.storage_area_sloc,public.storage_area,public.storage_position,public.storage_bin_fixed_mapping,public.pd_pick_item,public.pd_pick_drop_mapping,public.pd_drop_item,public.task,public.session,public.worker,public.handling_unit,public.trip_relation,public.trip,public.inb_receive_item,public.ob_load_item,public.inb_palletization_item,public.inb_serialization_item,public.inb_qc_item_v2,public.ira_bin_items,public.ob_qa_lineitem,public.handling_unit_kind,public.handling_unit_quant_event,public.handling_unit_event", 
-      "database.history.kafka.topic": "${SCHEMA_HISTORY_TOPIC}",
-      "publication.name": "${WMS_PUBLICATION_NAME}",
-      "slot.name": "${WMS_SLOT_NAME}",
+      "table.include.list": "public.node,public.node_closure", 
+      "database.history.kafka.topic": "debezium_schemas.backbone",
+      "publication.name": "${BACKBONE_PUBLICATION_NAME}",
+      "slot.name": "${BACKBONE_SLOT_NAME}",
 
       "database.history.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "topic.prefix": "${WMS_TOPIC_PREFIX}",
+      "topic.prefix": "${BACKBONE_TOPIC_PREFIX}",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
       "tombstones.on.delete": false,
       "provide.transaction.metadata": false,
       "binary.handling.mode": "base64",
-      "snapshot.mode": "${SNAPSHOT_MODE}",
-      "incremental.snapshot.enabled": "${INCREMENTAL_SNAPSHOT_ENABLED}",
-      "snapshot.locking.mode": "${SNAPSHOT_LOCKING_MODE}",
-      "signal.kafka.topic": "${WMS_SIGNAL_TOPIC}",
+      "snapshot.mode": "initial",
+      "incremental.snapshot.enabled": "true",
+      "incremental.snapshot.chunk.size": "10000",
+      "snapshot.locking.mode": "shared",
+      "signal.kafka.topic": "${BACKBONE_SIGNAL_TOPIC}",
       "signal.enabled.channels": "source,kafka",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.consumer.group.id": "${WMS_SIGNAL_CONSUMER_GROUP}",
-      "producer.compression.type": "${PRODUCER_COMPRESSION_TYPE}",
+      "signal.consumer.group.id": "${BACKBONE_SIGNAL_CONSUMER_GROUP}",
+      
+      "decimal.handling.mode": "precise",
+      "time.precision.mode": "adaptive_time_microseconds",
+      
+      "errors.max.retries": "3",
+      "errors.retry.delay.initial.ms": "1000",
+      "errors.retry.delay.max.ms": "10000",
+      "producer.compression.type": "lz4",
       "transforms": "filter,unwrap,ts2epoch",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "transforms.unwrap.drop.tombstones": "true",
@@ -153,19 +161,19 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "key.converter.schema.compatibility": "BACKWARD",
       "value.converter.schema.compatibility": "BACKWARD",
       "topic.creation.enable": "true",
-      "topic.creation.default.replication.factor": ${TOPIC_CREATION_DEFAULT_REPLICATION_FACTOR},
-      "topic.creation.default.partitions": ${TOPIC_CREATION_DEFAULT_PARTITIONS},
-      "topic.creation.default.cleanup.policy": "${TOPIC_CREATION_DEFAULT_CLEANUP_POLICY}",
-      "topic.creation.default.retention.ms": ${TOPIC_CREATION_DEFAULT_RETENTION_MS},
-      "topic.creation.default.compression.type": "${TOPIC_CREATION_DEFAULT_COMPRESSION_TYPE}",
+      "topic.creation.default.replication.factor": 3,
+      "topic.creation.default.partitions": 1,
+      "topic.creation.default.cleanup.policy": "compact",
+      "topic.creation.default.retention.ms": -1,
+      "topic.creation.default.compression.type": "lz4",
       "topic.creation.default.retention.bytes": "-1",
       "topic.creation.default.include": ".*",
-      "skipped.operations": "none",
+      "skipped.operations": "t",
       "producer.security.protocol": "SASL_SSL",
       "producer.sasl.mechanism": "PLAIN",
       "producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
-      "producer.max.request.size": "${PRODUCER_MAX_REQUEST_SIZE}",
-      "producer.buffer.memory": "${PRODUCER_BUFFER_MEMORY}",
+      "producer.max.request.size": "1048576",
+      "producer.buffer.memory": "33554432",
       "database.history.producer.security.protocol": "SASL_SSL",
       "database.history.producer.sasl.mechanism": "PLAIN",
       "database.history.producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
@@ -186,10 +194,10 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 # Deploy/Update the connector
-print_info "Deploying/Updating WMS Debezium connector: ${WMS_CONNECTOR_NAME}"
+print_info "Deploying/Updating Backbone Debezium connector: ${BACKBONE_CONNECTOR_NAME}"
 
 response=$(curl -s -w "\n%{http_code}" -X PUT \
-    "${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/config" \
+    "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/config" \
     -H "Content-Type: application/json" \
     -d "$CONNECTOR_CONFIG")
 
@@ -203,7 +211,7 @@ if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_info "Checking connector status..."
     sleep 2
     
-    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/status")
+    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status")
     connector_state=$(echo "$status_response" | jq -r '.connector.state' 2>/dev/null)
     
     if [ "$connector_state" = "RUNNING" ]; then
@@ -221,13 +229,13 @@ fi
 
 print_info "\nUseful commands:"
 echo "  # Check connector status"
-echo "  curl -s ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/status | jq ."
+echo "  curl -s ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status | jq ."
 echo ""
 echo "  # Restart connector"
-echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/restart"
+echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/restart"
 echo ""
 echo "  # Delete connector"
-echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}"
+echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}"
 echo ""
 echo "  # Trigger snapshot"
-echo "  ./trigger-snapshots.sh --env $ENV_FILE -c wms -t \"public.task\""
+echo "  ./trigger-snapshots.sh --env $ENV_FILE -c backbone -t \"public.node\""

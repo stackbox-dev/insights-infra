@@ -1,214 +1,289 @@
-# Kafka Setup
+# Kafka Setup and Management
 
-This repository contains scripts and manifests for setting up and managing Kafka clusters, connectors, and related infrastructure.
+This directory contains all Kafka-related configurations, connectors, and management scripts for Debezium CDC (Change Data Capture) and topic management in Kubernetes environments.
+
+## Prerequisites
+
+- `kubectl` configured with appropriate context
+- Access to Kubernetes namespace with Kafka Connect pods
+- Environment configuration files (`.env`) for each environment
+
+## Environment Configuration
+
+All scripts require an environment configuration file specified with `--env` parameter.
+
+Example environment files:
+- `.sbx-uat.env` - Sandbox UAT environment
+- `.prod.env` - Production environment
+
+Required environment variables:
+```bash
+K8S_NAMESPACE           # Kubernetes namespace
+K8S_CONNECT_LABEL       # Label selector for Connect pods
+KAFKA_BOOTSTRAP_SERVERS # Kafka bootstrap servers
+KAFKA_REST_URL          # Kafka REST API URL
+SCHEMA_REGISTRY_URL     # Schema Registry URL
+K8S_AIVEN_SECRET        # Kubernetes secret with Aiven credentials
+CONNECT_LOCAL_PORT      # Local port for port forwarding
+CONNECT_REMOTE_PORT     # Remote Connect port
+CONNECT_API_URL         # Connect REST API URL
+```
+
+## Common Library
+
+`scripts/common.sh` - Shared functions and utilities used by all scripts:
+- Environment file loading and validation
+- Kubernetes context checking
+- Credential fetching from secrets
+- Kafka command execution via pods
+- Port forwarding management
+- Output formatting and logging
 
 ## Directory Structure
 
 ```
 kafka-setup/
-├── connectors/           # Scripts for managing Kafka connectors
-│   ├── .sample.env      # Template environment configuration
-│   ├── .sbx-uat.env     # Example: sbx-uat environment config
-│   ├── common.sh        # Shared library functions
-│   └── *.sh             # Connector management scripts
-└── manifests/           # Kubernetes manifests
-    └── sbx-uat/         # Example: sbx-uat environment
-        ├── kafka-connect.yaml
-        └── kafka-setup.yaml
+├── manifests/              # Kubernetes manifest files
+│   └── sbx-uat/           # Environment-specific manifests
+│       ├── kafka-connect.yaml
+│       └── kafka-setup.yaml
+├── scripts/                # All management and deployment scripts
+│   ├── backbone-debezium-postgres.sh
+│   ├── encarta-debezium-postgres.sh
+│   ├── wms-debezium-postgres.sh
+│   ├── common.sh          # Shared utilities
+│   ├── create-signal-topics.sh
+│   ├── deploy-all-connectors.sh
+│   ├── deploy-manifests.sh
+│   ├── manage-schemas.sh
+│   ├── manage-topics.sh
+│   ├── trigger-snapshots.sh
+│   └── *.sql              # Publication SQL files
+└── README.md
 ```
 
-## Environment Configuration
+## Scripts
 
-All scripts use environment files (`.env`) to manage configuration across different environments. This allows the same scripts to work with staging, production, or any other environment.
+### Kubernetes Manifest Deployment
 
-### Setting Up a New Environment
-
-1. **Copy the sample environment file:**
-   ```bash
-   cd connectors
-   cp .sample.env .your-env.env
-   ```
-
-2. **Update the configuration values** in `.your-env.env` with your environment-specific settings:
-   - Kafka endpoints
-   - Kubernetes namespace and labels
-   - Database connections
-   - Connector names and prefixes
-
-3. **Create Kubernetes secrets** for your environment:
-
-   **Aiven/Kafka credentials:**
-   ```bash
-   kubectl create secret generic aiven-credentials \
-     --from-literal=username=<username> \
-     --from-literal=password=<password> \
-     --from-literal=userinfo="<username>:<password>" \
-     -n kafka
-   ```
-
-   **Database passwords (one per database):**
-   ```bash
-   kubectl create secret generic <db-password-secret-name> \
-     --from-literal=password=<db-password> \
-     -n kafka
-   ```
-
-## Usage
-
-All scripts require an `--env` parameter pointing to your environment configuration file.
-
-### Managing Connectors
-
-**Deploy/Update a connector:**
-```bash
-./wms_debezium_postgres.sh --env .your-env.env
-./encarta_debezium_postgres.sh --env .your-env.env
-./backbone_debezium_postgres.sh --env .your-env.env
-```
-
-**Connector Operations via Kafka Connect REST API:**
-
-After port-forwarding to the Connect pod (automatically done by scripts):
+#### `scripts/deploy-manifests.sh`
+Deploy Kubernetes manifests for Kafka setup.
 
 ```bash
-# Pause a connector
-curl -X PUT http://localhost:8083/connectors/<connector-name>/pause
+# Deploy manifests for an environment
+./scripts/deploy-manifests.sh --env sbx-uat
 
-# Resume a connector
-curl -X PUT http://localhost:8083/connectors/<connector-name>/resume
+# Dry run to validate manifests
+./scripts/deploy-manifests.sh --env sbx-uat --dry-run
 
-# Restart a connector
-curl -X POST http://localhost:8083/connectors/<connector-name>/restart
-
-# Stop a connector
-curl -X PUT http://localhost:8083/connectors/<connector-name>/stop
-
-# Delete connector offsets (resets from beginning - connector must be stopped first)
-curl -X DELETE http://localhost:8083/connectors/<connector-name>/offsets
-
-# Delete a connector
-curl -X DELETE http://localhost:8083/connectors/<connector-name>
-
-# Get connector status
-curl -X GET http://localhost:8083/connectors/<connector-name>/status
+# Deploy with namespace override
+./scripts/deploy-manifests.sh --env sbx-uat --namespace custom-kafka
 ```
 
-### Managing Topics
+Features:
+- Environment-based manifest deployment
+- Dry-run validation
+- Namespace override option
+- Deployment status summary
 
-**Create signal topics for incremental snapshots:**
-```bash
-./create-signal-topics.sh --env .your-env.env
-```
+### Connector Deployment
 
-**Trigger incremental snapshots:**
-```bash
-./trigger-snapshots.sh --env .your-env.env -c wms -t "public.inventory,public.task"
-```
-
-**Delete topics (with safety features):**
-```bash
-# Dry run to see what would be deleted
-./delete-topics.sh --env .your-env.env --filter "test-.*" --dry-run
-
-# Actually delete topics (requires confirmation)
-./delete-topics.sh --env .your-env.env --filter "test-.*"
-```
-
-**Update topic configurations:**
-```bash
-./update-topics.sh --env .your-env.env
-```
-
-### Managing Schemas
-
-**Delete schemas from Schema Registry:**
-```bash
-# Dry run
-./delete-schema.sh --env .your-env.env --filter "test-.*" --dry-run
-
-# Actually delete (requires confirmation)
-./delete-schema.sh --env .your-env.env --filter "test-.*"
-```
-
-## Example: SBX-UAT Environment
-
-The repository includes a complete configuration for the `sbx-uat` environment as an example:
-
-- **Configuration:** `connectors/.sbx-uat.env`
-- **Manifests:** `manifests/sbx-uat/`
-
-### SBX-UAT Endpoints
-
-- **Kafka Bootstrap:** `sbx-stag-kafka-stackbox.e.aivencloud.com:22167`
-- **Schema Registry:** `https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159`
-- **Kafka REST API:** `https://sbx-stag-kafka-stackbox.e.aivencloud.com:22158`
-
-### Using SBX-UAT Environment
+#### `scripts/deploy-all-connectors.sh`
+Deploy all Debezium connectors at once.
 
 ```bash
-# Create signal topics
-./create-signal-topics.sh --env .sbx-uat.env
+# Deploy all connectors
+./scripts/deploy-all-connectors.sh --env .sbx-uat.env
 
-# Deploy WMS connector
-./wms_debezium_postgres.sh --env .sbx-uat.env
+# Dry run mode
+./scripts/deploy-all-connectors.sh --env .sbx-uat.env --dry-run
 
-# Trigger snapshot for specific tables
-./trigger-snapshots.sh --env .sbx-uat.env -c wms -t "public.inventory"
+# Skip specific connectors
+./scripts/deploy-all-connectors.sh --env .sbx-uat.env --skip encarta
 
-# List topics (dry-run deletion)
-./delete-topics.sh --env .sbx-uat.env --dry-run
+# Skip multiple connectors
+./scripts/deploy-all-connectors.sh --env .sbx-uat.env --skip backbone --skip wms
 ```
+
+Features:
+- Deploy all connectors in sequence
+- Skip specific connectors as needed
+- Dry-run mode for validation
+- Summary report of deployment status
+
+### Topic Management
+
+#### `scripts/manage-topics.sh`
+Unified script for all topic operations (list, create, update, delete).
+
+```bash
+# List all topics
+./scripts/manage-topics.sh --env .sbx-uat.env list
+
+# List topics with details
+./scripts/manage-topics.sh --env .sbx-uat.env list --details
+
+# List topics matching pattern
+./scripts/manage-topics.sh --env .sbx-uat.env list --filter "^sbx_uat.wms.*"
+
+# Create a topic
+./scripts/manage-topics.sh --env .sbx-uat.env create --topic test-topic --partitions 3
+
+# Create topic with configs
+./scripts/manage-topics.sh --env .sbx-uat.env create --topic important-topic \
+  --config retention.ms=-1 --config compression.type=lz4
+
+# Update topic to infinite retention
+./scripts/manage-topics.sh --env .sbx-uat.env update --filter "^test-topic$" --cleanup-policy infinite
+
+# Update specific configs
+./scripts/manage-topics.sh --env .sbx-uat.env update --filter "^test-.*" --config compression.type=snappy
+
+# Delete topics matching pattern
+./scripts/manage-topics.sh --env .sbx-uat.env delete --filter "^test-.*"
+
+# Delete with dry-run
+./scripts/manage-topics.sh --env .sbx-uat.env delete --filter "^temp-.*" --dry-run
+```
+
+Features:
+- **list**: View topics with optional filtering and details
+- **create**: Create new topics with custom configurations
+- **update**: Modify topic configurations in bulk
+- **delete**: Remove topics with pattern matching and safety checks
+- **--dry-run**: Preview changes without applying them
+- **Protection**: Signal topics and internal Kafka topics are protected from deletion
+
+### Individual Debezium Connectors
+
+#### `scripts/wms-debezium-postgres.sh`
+Deploy WMS Postgres Debezium connector.
+
+```bash
+./scripts/wms-debezium-postgres.sh --env .sbx-uat.env
+```
+
+#### `scripts/encarta-debezium-postgres.sh`
+Deploy Encarta Postgres Debezium connector.
+
+```bash
+./scripts/encarta-debezium-postgres.sh --env .sbx-uat.env
+```
+
+#### `scripts/backbone-debezium-postgres.sh`
+Deploy Backbone Postgres Debezium connector.
+
+```bash
+./scripts/backbone-debezium-postgres.sh --env .sbx-uat.env
+```
+
+### Signal Topics
+
+#### `scripts/create-signal-topics.sh`
+Create Debezium signal topics for incremental snapshots.
+
+```bash
+./scripts/create-signal-topics.sh --env .sbx-uat.env
+```
+
+Creates signal topics for:
+- WMS connector
+- Encarta connector
+- Backbone connector
+
+### Incremental Snapshots
+
+#### `scripts/trigger-snapshots.sh`
+Trigger incremental snapshots for specific tables.
+
+```bash
+# Trigger snapshot for specific table
+./scripts/trigger-snapshots.sh --env .sbx-uat.env --connector wms --table public.inventory
+
+# Trigger snapshots for multiple tables
+./scripts/trigger-snapshots.sh --env .sbx-uat.env --connector wms \
+  --table public.inventory \
+  --table public.task \
+  --table public.order
+
+# Use from file
+./scripts/trigger-snapshots.sh --env .sbx-uat.env --connector wms --from-file tables.txt
+```
+
+Features:
+- Single or multiple table snapshots
+- Custom ORDER BY clauses for specific tables
+- Batch processing from file
+- Automatic signal topic validation
+
+### Schema Management
+
+#### `scripts/manage-schemas.sh`
+Manage schemas in Schema Registry (list and delete).
+
+```bash
+# List all schemas
+./scripts/manage-schemas.sh --env .sbx-uat.env list
+
+# List schemas matching pattern
+./scripts/manage-schemas.sh --env .sbx-uat.env list --filter "wms.*"
+
+# Delete schemas matching pattern
+./scripts/manage-schemas.sh --env .sbx-uat.env delete --filter "^test-.*"
+
+# Dry run mode
+./scripts/manage-schemas.sh --env .sbx-uat.env delete --filter "^temp-.*" --dry-run
+
+# Force deletion without confirmation
+./scripts/manage-schemas.sh --env .sbx-uat.env delete --filter "^old-.*" --force
+```
+
+Features:
+- **list**: View all schemas with optional filtering
+- **delete**: Remove schemas with pattern matching
+- **Protection**: Signal topic schemas are protected from deletion
+- **Safety**: Multiple confirmation prompts for deletions
+
+## SQL Files
+
+- `scripts/wms-publications.sql` - WMS database publication configuration
+- `scripts/encarta-publications.sql` - Encarta database publication configuration
+- `scripts/backbone-publications.sql` - Backbone database publication configuration
+
+These SQL files contain the publication definitions for logical replication used by Debezium connectors.
 
 ## Safety Features
 
-The deletion scripts (`delete-topics.sh`, `delete-schema.sh`) include multiple safety features:
+All scripts include:
+- Kubernetes context confirmation
+- Environment validation
+- Dry-run mode for preview
+- Protection for critical topics (signal topics, internal Kafka topics)
+- Confirmation prompts for destructive operations
+- Detailed logging with color-coded output
 
-- **Protected resources:** Signal topics and schemas (debezium-signals-*) cannot be deleted
-- **Double confirmation:** Requires typing "yes" and the count of items to delete
-- **Dry-run mode:** Preview what would be deleted without actually deleting
-- **Kubernetes context check:** Prompts to confirm you're in the right cluster
+## Best Practices
 
-## Prerequisites
-
-- `kubectl` configured with access to your Kubernetes cluster
-- `jq` for JSON processing
-- Appropriate Kubernetes secrets created (see Environment Configuration)
-
-## Truststore for Java-based Connectors
-
-If your Kafka cluster uses custom CA certificates:
-
-```bash
-# Convert CA to truststore
-docker run --rm -v "$PWD":/work openjdk:17-jdk \
-  keytool -import \
-    -alias kafka-ca \
-    -file /work/ca.pem \
-    -keystore /work/kafka.truststore.jks \
-    -storepass <secret-pass> \
-    -noprompt
-
-# Create Kubernetes secret
-kubectl create secret generic kafka-truststore-secret \
-  --from-file=kafka.truststore.jks=./kafka.truststore.jks \
-  --from-literal=truststore-password=<secret-pass> \
-  -n kafka
-```
+1. Always verify the Kubernetes context before running scripts
+2. Use `--dry-run` to preview changes before applying
+3. Keep environment files secure (they're gitignored)
+4. Test changes in non-production environments first
+5. Use pattern filters carefully to avoid unintended matches
+6. Review the list of affected resources before confirming deletions
 
 ## Troubleshooting
 
-1. **Script can't find environment file:**
-   - Ensure the file exists and starts with a dot (e.g., `.production.env`)
-   - Use the full path if running from a different directory
+Enable debug output:
+```bash
+DEBUG=true ./scripts/manage-topics.sh --env .sbx-uat.env list
+```
 
-2. **Kubernetes context issues:**
-   - The scripts will show the current context and ask for confirmation
-   - Use `kubectl config use-context <context>` to switch contexts
+Check pod logs:
+```bash
+kubectl logs -n <namespace> <pod-name>
+```
 
-3. **Missing credentials:**
-   - Check that Kubernetes secrets are created in the correct namespace
-   - Verify secret names match those in your `.env` file
-
-4. **Port forwarding issues:**
-   - Ensure no other process is using the port (default: 8083)
-   - Check that the Connect pod is running
+Verify connectivity:
+```bash
+kubectl exec -n <namespace> <pod-name> -- curl -s $KAFKA_REST_URL/topics
+```

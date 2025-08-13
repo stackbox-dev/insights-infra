@@ -1,5 +1,11 @@
 # Development Guidelines
 
+## CRITICAL SECURITY RULES
+- **NEVER commit credentials, passwords, or API keys to the repository**
+- **NEVER hardcode sensitive information in any file**
+- Always use environment variables or Kubernetes secrets for credentials
+- When documenting commands, use placeholder variables like `${KAFKA_USERNAME}` instead of actual values
+
 ## Architecture Overview
 - **Flink**: Produces staging event streams (no enrichment) to `.flink` namespace topics
 - **ClickHouse**: Performs all enrichment via materialized views with dimension tables
@@ -65,3 +71,18 @@ LEFT JOIN encarta_skus_combined(node_id = wh_id) sku ON picked_sku_id = sku.sku_
 - Run lint/typecheck after changes: `npm run lint`, `npm run typecheck`
 - Test complete pipeline flow before committing
 - Verify indexes and projections are partitioned correctly
+
+## Accessing Schema Registry
+To get Avro schemas from Kafka Schema Registry, exec into a Flink pod:
+```bash
+# Get pod name
+kubectl get pods -n flink-studio | grep taskmanager
+
+# Exec into pod and use environment variables already set from secrets
+kubectl exec -it -n flink-studio <pod-name> -- bash
+
+# Inside the pod, use the environment variables:
+curl -s -u "${KAFKA_USERNAME}:${KAFKA_PASSWORD}" \
+  "${SCHEMA_REGISTRY_URL}/subjects/sbx_uat.encarta.public.skus-value/versions/latest" \
+  | jq '.schema' | jq -r '.' | jq '.'
+```

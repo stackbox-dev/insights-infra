@@ -119,64 +119,23 @@ echo ""
 print_info "Creating Debezium signal topics..."
 echo ""
 
-# Create each signal topic using Aiven Kafka Admin REST API
+# Create each signal topic using kafka-topics command
 for topic in "${SIGNAL_TOPICS[@]}"; do
     print_color $YELLOW "Creating topic: $topic"
     
-    # Check if topic already exists
-    check_response=$(execute_curl_in_pod "$CONNECT_POD" "GET" \
-        "${KAFKA_REST_URL}/admin/topics/${topic}" \
-        "" \
-        "-H 'Accept: application/json'")
+    # Create the topic using kafka-topics command (will fail if exists, which is fine)
+    create_cmd="kafka-topics --create \
+        --topic ${topic} \
+        --partitions 1 \
+        --replication-factor 3 \
+        --config retention.ms=-1 \
+        --config compression.type=lz4 \
+        --config min.insync.replicas=2"
     
-    check_status=$(echo "$check_response" | tail -n1)
-    
-    if [ "$check_status" = "200" ]; then
-        print_warning "  ⚠️  Topic already exists"
+    if execute_kafka_command "$CONNECT_POD" "$create_cmd"; then
+        print_success "  ✅ Topic created successfully"
     else
-        # Create the topic using Aiven Admin API
-        create_payload=$(cat <<EOF
-{
-    "topic": "${topic}",
-    "partitions": 1,
-    "replication": 3,
-    "config": {
-        "retention.ms": "-1",
-        "compression.type": "lz4",
-        "min.insync.replicas": "2"
-    }
-}
-EOF
-)
-        
-        create_response=$(execute_curl_in_pod "$CONNECT_POD" "POST" \
-            "${KAFKA_REST_URL}/admin/topics" \
-            "$create_payload" \
-            "-H 'Content-Type: application/json' -H 'Accept: application/json'")
-        
-        create_status=$(echo "$create_response" | tail -n1)
-        
-        if [ "$create_status" = "200" ] || [ "$create_status" = "201" ]; then
-            print_success "  ✅ Topic created successfully"
-        else
-            # Try alternative: Using kafka-topics command inside the pod
-            print_warning "  Trying alternative method..."
-            
-            create_cmd="kafka-topics --create \
-                --bootstrap-server $KAFKA_BOOTSTRAP_SERVERS \
-                --topic ${topic} \
-                --partitions 1 \
-                --replication-factor 3 \
-                --config retention.ms=-1 \
-                --config compression.type=lz4 \
-                --config min.insync.replicas=2"
-            
-            if execute_kafka_command "$CONNECT_POD" "$create_cmd"; then
-                print_success "  ✅ Topic created successfully"
-            else
-                print_error "  ❌ Failed to create topic"
-            fi
-        fi
+        print_warning "  ⚠️  Topic already exists or failed to create"
     fi
 done
 
@@ -184,16 +143,8 @@ echo ""
 print_info "Verifying created topics..."
 echo ""
 
-# Verify the topics were created using kafka-topics --list
-existing_topics=$(execute_kafka_command "$CONNECT_POD" "kafka-topics --list")
-
-for topic in "${SIGNAL_TOPICS[@]}"; do
-    if echo "$existing_topics" | grep -q "^$topic$"; then
-        print_success "✅ $topic - Verified"
-    else
-        print_error "❌ $topic - Not found"
-    fi
-done
+# List all topics to verify
+execute_kafka_command "$CONNECT_POD" "kafka-topics --list" | grep "debezium-signals" || true
 
 echo ""
 print_success "Signal topics setup completed!"

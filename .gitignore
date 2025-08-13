@@ -1,4 +1,13 @@
+# Environment files
+**/*.env
+**/.*.env
 .env
+
+# Except sample env files
+!**/.sample.env
+!**/sample.env
+
+# Project specific
 local.txt
 queries.sql
 *.png
