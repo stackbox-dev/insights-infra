@@ -104,7 +104,6 @@ CREATE TABLE pick_items (
     attrs STRING,
     iloc STRING,
     `destIloc` STRING,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -198,7 +197,6 @@ CREATE TABLE drop_items (
     `mheId` STRING,
     iloc STRING,
     `sourceIloc` STRING,
-    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -230,7 +228,6 @@ CREATE TABLE pick_drop_mapping (
     `pickItemId` STRING,
     `dropItemId` STRING,
     `createdAt` TIMESTAMP(3),
-    WATERMARK FOR `createdAt` AS `createdAt` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -402,10 +399,8 @@ CREATE TABLE pick_drop_staging (
     drop_mhe_id STRING,
     drop_iloc STRING,
     source_iloc STRING,
-    deactivated_at TIMESTAMP(3),
     -- Event time is the latest update between pick and drop
     event_time TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     -- Primary key for upsert-kafka
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
@@ -583,8 +578,6 @@ SELECT
     di.`mheId` AS drop_mhe_id,
     di.iloc AS drop_iloc,
     di.`sourceIloc` AS source_iloc,
-    -- Forward deactivated_at using COALESCE (prefer drop deactivated_at, then pick deactivated_at)
-    COALESCE(di.`deactivatedAt`, pi.`deactivatedAt`) AS deactivated_at,
     -- Event time is the maximum of pick and drop updated_at
     GREATEST(
         COALESCE(pi.`updatedAt`, pi.`createdAt`, TIMESTAMP '1970-01-01 00:00:00'),

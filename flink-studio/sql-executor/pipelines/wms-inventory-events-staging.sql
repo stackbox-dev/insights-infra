@@ -29,12 +29,17 @@ CREATE TABLE handling_unit_events (
     `timestamp` TIMESTAMP(3) NOT NULL,
     payload STRING NOT NULL,
     attrs STRING NOT NULL,
-    `sessionId` STRING,  -- nullable
-    `taskId` STRING,  -- nullable
-    `correlationId` STRING,  -- nullable
-    `storageId` STRING,  -- nullable
-    `outerHuId` STRING,  -- nullable
-    `effectiveStorageId` STRING  -- nullable
+    `sessionId` STRING,
+    -- nullable
+    `taskId` STRING,
+    -- nullable
+    `correlationId` STRING,
+    -- nullable
+    `storageId` STRING,
+    -- nullable
+    `outerHuId` STRING,
+    -- nullable
+    `effectiveStorageId` STRING -- nullable
 ) WITH (
     'connector' = 'kafka',
     'topic' = '${KAFKA_ENV}.wms.public.handling_unit_event',
@@ -68,8 +73,8 @@ CREATE TABLE handling_unit_quant_events (
     `lockedByTaskId` STRING NOT NULL,
     `lockMode` STRING NOT NULL,
     `qtyAdded` INT NOT NULL,
-    iloc STRING NOT NULL,  -- has default empty string
-    `timestamp` TIMESTAMP(3) NOT NULL  -- also exists in quant events
+    iloc STRING NOT NULL,
+    `timestamp` TIMESTAMP(3) NOT NULL
 ) WITH (
     'connector' = 'kafka',
     'topic' = '${KAFKA_ENV}.wms.public.handling_unit_quant_event',
@@ -90,14 +95,14 @@ CREATE TABLE handling_unit_quant_events (
 -- Sink table for joined inventory events (no watermark since these are events, not CDC tables)
 CREATE TABLE inventory_events_staging (
     -- Handling unit event fields (these are always present from the main table)
-    hu_event_id STRING NOT NULL,
+    event_id STRING NOT NULL,
     wh_id BIGINT NOT NULL,
-    hu_event_seq BIGINT NOT NULL,
+    seq BIGINT NOT NULL,
     hu_id STRING NOT NULL,
-    hu_event_type STRING NOT NULL,
-    hu_event_timestamp TIMESTAMP(3) NOT NULL,
-    hu_event_payload STRING NOT NULL,
-    hu_event_attrs STRING NOT NULL,
+    event_type STRING NOT NULL,
+    timestamp TIMESTAMP(3) NOT NULL,
+    payload STRING NOT NULL,
+    attrs STRING NOT NULL,
     session_id STRING,
     task_id STRING,
     correlation_id STRING,
@@ -116,7 +121,7 @@ CREATE TABLE inventory_events_staging (
     lock_mode STRING,
     qty_added INT,
     quant_iloc STRING,
-    PRIMARY KEY (hu_event_id, quant_event_id) NOT ENFORCED
+    PRIMARY KEY (event_id, quant_event_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
     'topic' = '${KAFKA_ENV}.wms.flink.inventory_events_staging',
@@ -141,17 +146,15 @@ CREATE TABLE inventory_events_staging (
 -- Join handling unit events with quant events
 -- State TTL (1 hour) prevents unbounded growth for both historical and real-time processing
 INSERT INTO inventory_events_staging
-SELECT
-    /*+ USE_HASH_JOIN */
-    -- Handling unit event fields
-    hue.id AS hu_event_id,
+SELECT -- Handling unit event fields
+    hue.id AS event_id,
     hue.`whId` AS wh_id,
-    hue.seq AS hu_event_seq,
+    hue.seq AS seq,
     hue.`huId` AS hu_id,
-    hue.type AS hu_event_type,
-    hue.`timestamp` AS hu_event_timestamp,
-    hue.payload AS hu_event_payload,
-    hue.attrs AS hu_event_attrs,
+    hue.type AS event_type,
+    hue.`timestamp` AS timestamp,
+    hue.payload AS payload,
+    hue.attrs AS attrs,
     hue.`sessionId` AS session_id,
     hue.`taskId` AS task_id,
     hue.`correlationId` AS correlation_id,
@@ -170,6 +173,5 @@ SELECT
     huqe.`lockMode` AS lock_mode,
     huqe.`qtyAdded` AS qty_added,
     huqe.iloc AS quant_iloc
-FROM handling_unit_events hue -- Regular left join on foreign key relationship
-    -- State TTL configuration ensures state is cleaned up after 1 hour
+FROM handling_unit_events hue
     LEFT JOIN handling_unit_quant_events huqe ON hue.id = huqe.`huEventId`;

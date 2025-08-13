@@ -84,30 +84,11 @@ CREATE TABLE pick_items (
     attrs STRING,
     iloc STRING,
     `destIloc` STRING,
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        `updatedAt`,
-        `createdAt`,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
+    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.pd_pick_item',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'topic' = '${KAFKA_ENV}.wms.public.pd_pick_item',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-basic-debug',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -116,7 +97,7 @@ CREATE TABLE pick_items (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'properties.auto.offset.reset' = 'earliest',
@@ -195,30 +176,11 @@ CREATE TABLE drop_items (
     `mheId` STRING,
     iloc STRING,
     `sourceIloc` STRING,
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        `updatedAt`,
-        `createdAt`,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
+    WATERMARK FOR `updatedAt` AS `updatedAt` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.pd_drop_item',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'topic' = '${KAFKA_ENV}.wms.public.pd_drop_item',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-basic-debug',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -227,7 +189,7 @@ CREATE TABLE drop_items (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'properties.auto.offset.reset' = 'earliest',
@@ -244,29 +206,11 @@ CREATE TABLE pick_drop_mapping (
     `pickItemId` STRING,
     `dropItemId` STRING,
     `createdAt` TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed event time from business timestamp
-    `event_time` AS COALESCE(
-        `createdAt`,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND
+    WATERMARK FOR `createdAt` AS `createdAt` - INTERVAL '5' SECOND
 ) WITH (
     'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.pd_pick_drop_mapping',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'topic' = '${KAFKA_ENV}.wms.public.pd_pick_drop_mapping',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-basic-debug',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -275,7 +219,7 @@ CREATE TABLE pick_drop_mapping (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
     'properties.auto.offset.reset' = 'earliest',
@@ -431,14 +375,11 @@ CREATE TABLE pick_drop_basic (
     drop_mhe_id STRING,
     drop_iloc STRING,
     source_iloc STRING,
-    -- Fields from the upstream pipeline
-    is_snapshot BOOLEAN,
-    event_time TIMESTAMP(3),
     proc_time AS PROCTIME() -- Processing time for historical data
 ) WITH (
     'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.internal.pick_drop_basic',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'topic' = '${KAFKA_ENV}.wms.internal.pick_drop_basic',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     -- Shared group with real-time
     'properties.enable.auto.commit' = 'true',
     -- Commit offsets for real-time to continue
@@ -457,7 +398,7 @@ CREATE TABLE pick_drop_basic (
     'properties.auto.offset.reset' = 'earliest',
     -- Process up to current latest offset then stop
     'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
@@ -809,12 +750,12 @@ dropped_sku_classifications STRING,
 dropped_sku_product_classifications STRING
 ) WITH (
     'connector' = 'kafka',
-    'topic' = 'sbx_uat.wms.public.pick_drop_enriched',
+    'topic' = '${KAFKA_ENV}.wms.public.pick_drop_enriched',
     'properties.group.id' = 'sbx-uat-wms-pick-drop-enriched-debug',
     'scan.startup.mode' = 'earliest-offset',
     'scan.bounded.mode' = 'latest-offset',
     'properties.auto.offset.reset' = 'earliest',
-    'properties.bootstrap.servers' = 'sbx-stag-kafka-stackbox.e.aivencloud.com:22167',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
@@ -823,7 +764,7 @@ dropped_sku_product_classifications STRING
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     --
     'format' = 'avro-confluent',
-    'avro-confluent.url' = 'https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
     'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
@@ -846,7 +787,6 @@ select pick_item_id,
     drop_item_updated_at,
     picked_by_worker_id,
     carrier_hu_kind,
-    event_time,
     proc_time
 from pick_drop_basic
 where pick_item_id = '01989e1f-b065-74ae-a66b-b1105c7b2153';

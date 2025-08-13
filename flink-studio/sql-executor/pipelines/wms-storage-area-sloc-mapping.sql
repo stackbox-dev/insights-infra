@@ -1,4 +1,23 @@
 SET 'pipeline.name' = 'WMS Storage Area SLOC Mapping';
+SET 'table.exec.sink.not-null-enforcer' = 'drop';
+SET 'parallelism.default' = '1';
+SET 'table.optimizer.join-reorder-enabled' = 'true';
+SET 'table.exec.resource.default-parallelism' = '1';
+-- State TTL configuration to prevent unbounded state growth
+-- State will be kept for 12 hours after last access
+SET 'table.exec.state.ttl' = '43200000';
+-- 12 hours in milliseconds
+-- Performance optimizations
+SET 'taskmanager.memory.managed.fraction' = '0.8';
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '1s';
+SET 'table.exec.mini-batch.size' = '5000';
+SET 'execution.checkpointing.interval' = '600000';
+SET 'execution.checkpointing.timeout' = '1800000';
+SET 'state.backend.incremental' = 'true';
+SET 'state.backend.rocksdb.compression.type' = 'LZ4';
+SET 'pipeline.operator-chaining' = 'true';
+SET 'table.optimizer.multiple-input-enabled' = 'true';
 -- Create source table (DDL for Kafka topic)
 -- storage_area_sloc source table
 CREATE TABLE storage_area_sloc (

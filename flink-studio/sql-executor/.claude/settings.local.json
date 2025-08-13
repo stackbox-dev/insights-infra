@@ -4,7 +4,8 @@
       "Bash(curl:*)",
       "Bash(sed:*)",
       "Bash(echo:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(./run_sql_executor.sh:*)"
     ],
     "deny": []
   }
