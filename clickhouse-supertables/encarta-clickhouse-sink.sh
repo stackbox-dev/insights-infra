@@ -85,7 +85,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
       "tasks.max": "1",
-      "topics": "sbx_uat.encarta.public.skus_master,sbx_uat.encarta.public.skus_overrides",
+      "topics": "sbx_uat.encarta.flink.skus_master,sbx_uat.encarta.flink.skus_overrides",
       
       "transforms": "dropNull",
       "transforms.dropNull.type": "org.apache.kafka.connect.transforms.Filter",
@@ -100,7 +100,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-sbx-uat-encarta/
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
       "database": "sbx_uat",
       "exactlyOnce": "false",
-      "topic2TableMap": "sbx_uat.encarta.public.skus_master=encarta_skus_master,sbx_uat.encarta.public.skus_overrides=encarta_skus_overrides",
+      "topic2TableMap": "sbx_uat.encarta.flink.skus_master=encarta_skus_master,sbx_uat.encarta.flink.skus_overrides=encarta_skus_overrides",
       "clickhouseSettings": "date_time_input_format=best_effort",
       
       "key.converter": "io.confluent.connect.avro.AvroConverter",

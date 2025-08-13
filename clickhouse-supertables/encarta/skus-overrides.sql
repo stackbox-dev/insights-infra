@@ -143,15 +143,40 @@ CREATE TABLE IF NOT EXISTS encarta_skus_overrides
     classifications String DEFAULT '{}',  -- JSON stored as String
     product_classifications String DEFAULT '{}',  -- JSON stored as String
     -- Materialized column that merges classifications (prioritized) with product_classifications
-    combined_classification String MATERIALIZED JSONExtractRaw(JSONMergePatch(
-        COALESCE(product_classifications, '{}'),
-        COALESCE(classifications, '{}')
-    )),
-    is_snapshot Bool DEFAULT false,
+    -- Handles both array format [{"type": "ABC", "value": "C"}] and object format {"ABC": "C"}
+    combined_classification String DEFAULT 
+        JSONMergePatch(
+            -- Base: product_classifications (converted if array)
+            CASE 
+                WHEN JSONType(product_classifications) = 'Array' THEN
+                    arrayFold(
+                        (acc, x) -> JSONMergePatch(acc, toJSONString(map(JSONExtractString(x, 'type'), JSONExtractString(x, 'value')))),
+                        JSONExtractArrayRaw(product_classifications),
+                        '{}'
+                    )
+                ELSE product_classifications
+            END,
+            -- Override: classifications (converted if array)
+            CASE 
+                WHEN JSONType(classifications) = 'Array' THEN
+                    arrayFold(
+                        (acc, x) -> JSONMergePatch(acc, toJSONString(map(JSONExtractString(x, 'type'), JSONExtractString(x, 'value')))),
+                        JSONExtractArrayRaw(classifications),
+                        '{}'
+                    )
+                ELSE classifications
+            END
+        ),
+    -- Individual source table timestamps
+    node_override_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    node_override_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    sku_master_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    sku_master_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    product_node_override_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    product_node_override_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    -- Aggregated timestamps (MIN for created, MAX for updated)
     created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
-,
     -- Indexes for faster lookups in WMS enrichment
     INDEX idx_sku_id sku_id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_node_id node_id TYPE minmax GRANULARITY 1,
@@ -162,9 +187,10 @@ CREATE TABLE IF NOT EXISTS encarta_skus_overrides
     INDEX idx_brand brand TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_active active TYPE minmax GRANULARITY 1
 ) 
-ENGINE = ReplacingMergeTree(event_time)
+ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (node_id, code)
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop'
 COMMENT 'Encarta SKUs node-specific overrides for warehouse-specific customizations';
 
 -- Projection for SKU + Node lookups (most common in enrichment)
@@ -194,7 +220,7 @@ ALTER TABLE encarta_skus_overrides ADD PROJECTION proj_by_sku_node (
         l0_weight,
         l0_volume,
         active,
-        event_time
+        updated_at
     ORDER BY (sku_id, node_id)
 );
 

@@ -19,10 +19,18 @@
 - **No `wms_` prefix** in file names (redundant when already in wms directories)
 
 ### ClickHouse Best Practices
-1. **No Nullable columns** - Use defaults for better performance
+1. **No Nullable columns** - Use defaults for better performance (e.g., `String DEFAULT ''`, `Int64 DEFAULT 0`)
 2. **Minimal indexes on staging tables** - Only add indexes for JOIN columns used in enrichment MVs
 3. **Single-column JOINs** - Use globally unique IDs (`handling_unit.id`, `storage_bin.id`)
 4. **Projections** - Only for frequently queried patterns, not staging tables
+5. **ReplacingMergeTree with Projections** - Must include `deduplicate_merge_projection_mode = 'drop'` in SETTINGS:
+   ```sql
+   ENGINE = ReplacingMergeTree(updated_at)
+   ORDER BY (principal_id, code)
+   SETTINGS index_granularity = 8192,
+            deduplicate_merge_projection_mode = 'drop'
+   ```
+6. **Schema Alignment with Flink** - Always ensure ClickHouse tables have all fields from corresponding Flink sink tables, including individual timestamp fields
 
 ### Flink SQL Patterns
 1. **Use TTL not Interval Joins** for CDC data: `SET 'table.exec.state.ttl' = '43200000';`

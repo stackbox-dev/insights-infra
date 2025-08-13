@@ -157,13 +157,7 @@ SELECT
     GREATEST(
         COALESCE(so.updated_at, toDateTime64('1970-01-01 00:00:00', 3)),
         COALESCE(sm.updated_at, toDateTime64('1970-01-01 00:00:00', 3))
-    ) AS updated_at,
-    
-    -- Latest event time
-    GREATEST(
-        COALESCE(so.event_time, toDateTime64('1970-01-01 00:00:00', 3)),
-        COALESCE(sm.event_time, toDateTime64('1970-01-01 00:00:00', 3))
-    ) AS event_time
+    ) AS updated_at
 FROM encarta_skus_master sm
 LEFT JOIN encarta_skus_overrides so ON sm.id = so.sku_id AND so.node_id = {node_id:Int64}
 WHERE sm.active = true OR so.active = true;
