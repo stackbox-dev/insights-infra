@@ -4,9 +4,9 @@ SET 'parallelism.default' = '1';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '1';
 -- State TTL configuration to prevent unbounded state growth
--- State will be kept for 12 hours after last access
-SET 'table.exec.state.ttl' = '43200000';
--- 12 hours in milliseconds
+-- State will be kept for 10 years after last access (master data)
+SET 'table.exec.state.ttl' = '315360000000';
+-- 10 years in milliseconds
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -46,25 +46,6 @@ CREATE TABLE uoms (
     text_tag2 STRING,
     image STRING,
     num_tag1 DOUBLE,
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    is_snapshot AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -168,13 +149,10 @@ CREATE TABLE skus_uoms_agg (
     l3_num_tag1 DOUBLE,
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
-    `is_snapshot` BOOLEAN NOT NULL,
-    `event_time` TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = '${KAFKA_ENV}.encarta.public.skus_uoms_agg',
+    'topic' = '${KAFKA_ENV}.encarta.flink.skus_uoms_agg',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -578,9 +556,7 @@ SELECT u.sku_id,
         END
     ) AS l3_num_tag1,
     MIN(u.created_at) AS created_at,
-    MAX(u.updated_at) AS updated_at,
-    MIN(CAST(u.`is_snapshot` AS INT)) = 1 AS `is_snapshot`,
-    MAX(u.`event_time`) AS `event_time`
+    MAX(u.updated_at) AS updated_at
 FROM uoms u
 WHERE u.active = true
 GROUP BY u.sku_id;

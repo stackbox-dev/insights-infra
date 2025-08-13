@@ -4,9 +4,9 @@ SET 'parallelism.default' = '1';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '1';
 -- State TTL configuration to prevent unbounded state growth
--- State will be kept for 12 hours after last access
-SET 'table.exec.state.ttl' = '43200000';
--- 12 hours in milliseconds
+-- State will be kept for 10 years after last access (master data)
+SET 'table.exec.state.ttl' = '315360000000';
+-- 10 years in milliseconds
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -21,9 +21,9 @@ SET 'table.optimizer.multiple-input-enabled' = 'true';
 -- Create source tables (DDL for Kafka topics)
 -- storage_bin source table
 CREATE TABLE storage_bin (
-    id STRING,
-    whId BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    code STRING NOT NULL,
     description STRING,
     binTypeId STRING,
     zoneId STRING,
@@ -67,10 +67,10 @@ CREATE TABLE storage_bin (
 );
 -- storage_bin_dockdoor source table
 CREATE TABLE storage_bin_dockdoor (
-    id STRING,
-    whId BIGINT,
-    binId STRING,
-    dockdoorId STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    binId STRING NOT NULL,
+    dockdoorId STRING NOT NULL,
     active BOOLEAN,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
@@ -100,9 +100,9 @@ CREATE TABLE storage_bin_dockdoor (
 );
 -- storage_dockdoor source table
 CREATE TABLE storage_dockdoor (
-    id STRING,
-    whId BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    code STRING NOT NULL,
     description STRING,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
@@ -189,12 +189,14 @@ CREATE TABLE storage_bin_dockdoor_master (
     dockdoor_position_active BOOLEAN,
     dockdoor_status STRING,
     -- Metadata
-    createdAt TIMESTAMP(3),
-    updatedAt TIMESTAMP(3),
+    bin_created_at TIMESTAMP(3),
+    bin_updated_at TIMESTAMP(3),
+    dockdoor_created_at TIMESTAMP(3),
+    dockdoor_updated_at TIMESTAMP(3),
     PRIMARY KEY (wh_id, bin_code, dockdoor_code) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = '${KAFKA_ENV}.wms.public.storage_bin_dockdoor_master',
+    'topic' = '${KAFKA_ENV}.wms.flink.storage_bin_dockdoor_master',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -237,16 +239,10 @@ SELECT
     sdp.active AS dockdoor_position_active,
     sd.status AS dockdoor_status,
     -- Metadata
-    GREATEST(
-        COALESCE(sb.createdAt, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(sbd.createdAt, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(sd.createdAt, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS createdAt,
-    GREATEST(
-        COALESCE(sb.updatedAt, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(sbd.updatedAt, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(sd.updatedAt, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updatedAt
+    sb.createdAt AS bin_created_at,
+    sb.updatedAt AS bin_updated_at,
+    sd.createdAt AS dockdoor_created_at,
+    sd.updatedAt AS dockdoor_updated_at
 FROM storage_bin sb
     INNER JOIN storage_bin_dockdoor sbd ON sb.id = sbd.binId
     INNER JOIN storage_dockdoor sd ON sbd.dockdoorId = sd.id

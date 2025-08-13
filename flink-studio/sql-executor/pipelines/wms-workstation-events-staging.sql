@@ -6,6 +6,8 @@ SET 'table.exec.sink.not-null-enforcer' = 'drop';
 SET 'parallelism.default' = '2';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '2';
+-- Minimal TTL since this is a simple UNION ALL without joins
+SET 'table.exec.state.ttl' = '60000'; -- 1 minute
 
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
@@ -20,17 +22,17 @@ SET 'state.backend.rocksdb.compression.type' = 'LZ4';
 -- 1. Source Table: Receiving Events (inb_receive_item)
 CREATE TABLE inb_receive_item (
     whId BIGINT NOT NULL,
-    sessionId STRING,
-    taskId STRING,
+    sessionId STRING NOT NULL,
+    taskId STRING NOT NULL,
     id STRING NOT NULL,
-    skuId STRING,
-    uom STRING,
-    batch STRING,
-    price STRING,
-    overallQty INT,
-    qty INT,
+    skuId STRING NOT NULL,
+    uom STRING NOT NULL,
+    batch STRING NOT NULL,
+    price STRING NOT NULL,
+    overallQty INT NOT NULL,
+    qty INT NOT NULL,
     parentItemId STRING,
-    createdAt TIMESTAMP(3),
+    createdAt TIMESTAMP(3) NOT NULL,
     asnVehicleId STRING,
     stagingBinId STRING,
     stagingBinHUId STRING,
@@ -53,7 +55,6 @@ CREATE TABLE inb_receive_item (
     totalHuWeight DOUBLE,
     receivedHuWeight DOUBLE,
     subReason STRING,
-    WATERMARK FOR receivedAt AS receivedAt - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -81,18 +82,18 @@ CREATE TABLE inb_receive_item (
 CREATE TABLE ob_load_item (
     whId BIGINT NOT NULL,
     id STRING NOT NULL,
-    sessionId STRING,
-    taskId STRING,
-    tripId STRING,
-    skuId STRING,
-    skuClass STRING,
-    uom STRING,
-    qty INT,
-    seq BIGINT,
+    sessionId STRING NOT NULL,
+    taskId STRING NOT NULL,
+    tripId STRING NOT NULL,
+    skuId STRING NOT NULL,
+    skuClass STRING NOT NULL,
+    uom STRING NOT NULL,
+    qty INT NOT NULL,
+    seq BIGINT NOT NULL,
     loadedQty INT,
     loadedAt TIMESTAMP(3),
     loadedBy STRING,
-    createdAt TIMESTAMP(3),
+    createdAt TIMESTAMP(3) NOT NULL,
     invoiceId STRING,
     skuCategory STRING,
     originalSkuId STRING,
@@ -114,7 +115,6 @@ CREATE TABLE ob_load_item (
     invoiceCode STRING,
     retailerId STRING,
     retailerCode STRING,
-    WATERMARK FOR loadedAt AS loadedAt - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -169,7 +169,6 @@ CREATE TABLE inb_palletization_item (
     uomInside STRING,
     subReason STRING,
     deactivatedAt TIMESTAMP(3),
-    WATERMARK FOR mappedAt AS mappedAt - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -223,7 +222,6 @@ CREATE TABLE inb_serialization_item (
     mode STRING,
     rejected BOOLEAN,
     deactivatedAt TIMESTAMP(3),
-    WATERMARK FOR serializedAt AS serializedAt - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -284,7 +282,6 @@ CREATE TABLE inb_qc_item_v2 (
     reason STRING,
     subReason STRING,
     batchOverridden STRING,
-    WATERMARK FOR createdAt AS createdAt - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -342,7 +339,6 @@ CREATE TABLE ira_bin_items (
     huSameBinBeforeIRA STRING,
     recordNo INT,
     hlrStatus STRING,
-    WATERMARK FOR scannedAt AS scannedAt - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -389,7 +385,6 @@ CREATE TABLE ob_qa_lineitem (
     batch STRING,
     retailerId STRING,
     retailerCode STRING,
-    WATERMARK FOR createdAt AS createdAt - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -434,7 +429,6 @@ CREATE TABLE workstation_events_staging (
     status_or_bucket STRING,
     reason STRING,
     sub_reason STRING,
-    WATERMARK FOR event_timestamp AS event_timestamp - INTERVAL '5' SECOND,
     PRIMARY KEY (event_source_id, event_type) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',

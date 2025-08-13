@@ -4,9 +4,9 @@ SET 'parallelism.default' = '1';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '1';
 -- State TTL configuration to prevent unbounded state growth
--- State will be kept for 12 hours after last access
-SET 'table.exec.state.ttl' = '43200000';
--- 12 hours in milliseconds
+-- State will be kept for 10 years after last access (master data)
+SET 'table.exec.state.ttl' = '315360000000';
+-- 10 years in milliseconds
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -21,13 +21,13 @@ SET 'table.optimizer.multiple-input-enabled' = 'true';
 -- Create source tables (DDL for Kafka topics)
 -- skus source table
 CREATE TABLE skus (
-    id STRING,
-    principal_id BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    principal_id BIGINT NOT NULL,
+    code STRING NOT NULL,
     name STRING,
     description STRING,
     short_description STRING,
-    product_id STRING,
+    product_id STRING NOT NULL,
     ingredients STRING,
     shelf_life INT,
     fulfillment_type STRING,
@@ -56,26 +56,6 @@ CREATE TABLE skus (
     classifications STRING,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -98,13 +78,13 @@ CREATE TABLE skus (
 );
 -- products source table
 CREATE TABLE products (
-    id STRING,
-    principal_id BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    principal_id BIGINT NOT NULL,
+    code STRING NOT NULL,
     name STRING,
     description STRING,
-    sub_category_id STRING,
-    sub_brand_id STRING,
+    sub_category_id STRING NOT NULL,
+    sub_brand_id STRING NOT NULL,
     dangerous BOOLEAN,
     spillable BOOLEAN,
     fragile BOOLEAN,
@@ -120,26 +100,6 @@ CREATE TABLE products (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -171,26 +131,6 @@ CREATE TABLE categories (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -222,26 +162,6 @@ CREATE TABLE sub_categories (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -272,26 +192,6 @@ CREATE TABLE category_groups (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -323,26 +223,6 @@ CREATE TABLE brands (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -374,26 +254,6 @@ CREATE TABLE sub_brands (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(
-        `__source_snapshot` IN (
-            'true',
-            'first',
-            'first_in_data_collection',
-            'last_in_data_collection',
-            'last'
-        ),
-        FALSE
-    ),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -495,13 +355,10 @@ CREATE TABLE skus_uoms_agg (
     l3_num_tag1 DOUBLE,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    `is_snapshot` BOOLEAN NOT NULL,
-    `event_time` TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = '${KAFKA_ENV}.encarta.public.skus_uoms_agg',
+    'topic' = '${KAFKA_ENV}.encarta.flink.skus_uoms_agg',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -526,22 +383,7 @@ SELECT subcat.id as sub_category_id,
     cg.code AS category_group,
     subcat.updated_at AS subcat_updated_at,
     cat.updated_at AS cat_updated_at,
-    cg.updated_at AS cg_updated_at,
-    -- Combine is_snapshot from all sources using AND logic
-    subcat.`is_snapshot`
-    AND cat.`is_snapshot`
-    AND cg.`is_snapshot` AS `is_snapshot`,
-    GREATEST(
-        COALESCE(
-            subcat.`event_time`,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(
-            cat.`event_time`,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(cg.`event_time`, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS event_time
+    cg.updated_at AS cg_updated_at
 FROM sub_categories subcat
     INNER JOIN categories cat ON subcat.category_id = cat.id
     INNER JOIN category_groups cg ON cat.category_group_id = cg.id;
@@ -551,14 +393,7 @@ SELECT sb.id as sub_brand_id,
     sb.code AS sub_brand,
     b.code AS brand,
     sb.updated_at AS sb_updated_at,
-    b.updated_at AS b_updated_at,
-    -- Combine is_snapshot from all sources using AND logic
-    sb.`is_snapshot`
-    AND b.`is_snapshot` AS `is_snapshot`,
-    GREATEST(
-        COALESCE(sb.`event_time`, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(b.`event_time`, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS event_time
+    b.updated_at AS b_updated_at
 FROM sub_brands sb
     INNER JOIN brands b ON sb.brand_id = b.id;
 -- Products enriched view - joins products with pre-computed hierarchies
@@ -588,10 +423,6 @@ SELECT p.id,
     ch.category_group,
     bh.sub_brand,
     bh.brand,
-    -- Combine is_snapshot from all sources using AND logic
-    p.`is_snapshot`
-    AND ch.`is_snapshot`
-    AND bh.`is_snapshot` AS `is_snapshot`,
     GREATEST(
         COALESCE(p.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(
@@ -611,12 +442,7 @@ SELECT p.id,
             TIMESTAMP '1970-01-01 00:00:00'
         ),
         COALESCE(bh.b_updated_at, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updated_at,
-    GREATEST(
-        COALESCE(p.`event_time`, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(ch.`event_time`, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(bh.`event_time`, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS event_time
+    ) AS updated_at
 FROM products p
     INNER JOIN category_hierarchy ch ON p.sub_category_id = ch.sub_category_id
     INNER JOIN brand_hierarchy bh ON p.sub_brand_id = bh.sub_brand_id;
@@ -626,11 +452,11 @@ CREATE TABLE skus_master (
     principal_id BIGINT NOT NULL,
     category STRING,
     product STRING,
-    product_id STRING,
+    product_id STRING NOT NULL,
     category_group STRING,
     sub_brand STRING,
     brand STRING,
-    code STRING,
+    code STRING NOT NULL,
     name STRING,
     short_description STRING,
     description STRING,
@@ -734,15 +560,20 @@ CREATE TABLE skus_master (
     active BOOLEAN NOT NULL,
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
-    `is_snapshot` BOOLEAN NOT NULL,
+    -- Individual source table timestamps
+    sku_created_at TIMESTAMP(3),
+    sku_updated_at TIMESTAMP(3),
+    product_created_at TIMESTAMP(3),
+    product_updated_at TIMESTAMP(3),
+    uom_agg_created_at TIMESTAMP(3),
+    uom_agg_updated_at TIMESTAMP(3),
+    -- Aggregated timestamps (MIN for created, MAX for updated)
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
-    `event_time` TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = '${KAFKA_ENV}.encarta.public.skus_master',
+    'topic' = '${KAFKA_ENV}.encarta.flink.skus_master',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -877,28 +708,24 @@ SELECT s.id,
     COALESCE(s.active, FALSE) AS active,
     COALESCE(s.classifications, '{}') AS classifications,
     COALESCE(pe.classifications, '{}') AS product_classifications,
-    -- Combine is_snapshot from all sources using AND logic
-    -- With INNER JOINs, all values are guaranteed to be present
-    s.`is_snapshot`
-    AND uom_agg.`is_snapshot`
-    AND pe.`is_snapshot` AS `is_snapshot`,
-    s.created_at,
+    -- Individual source table timestamps
+    s.created_at AS sku_created_at,
+    s.updated_at AS sku_updated_at,
+    pe.created_at AS product_created_at,
+    pe.updated_at AS product_updated_at,
+    uom_agg.created_at AS uom_agg_created_at,
+    uom_agg.updated_at AS uom_agg_updated_at,
+    -- Aggregated timestamps (MIN for created, MAX for updated)
+    LEAST(
+        COALESCE(s.created_at, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(pe.created_at, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(uom_agg.created_at, TIMESTAMP '2099-12-31 23:59:59')
+    ) AS created_at,
     GREATEST(
         COALESCE(s.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(
-            uom_agg.updated_at,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
+        COALESCE(uom_agg.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(pe.updated_at, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updated_at,
-    GREATEST(
-        COALESCE(s.`event_time`, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(
-            uom_agg.`event_time`,
-            TIMESTAMP '1970-01-01 00:00:00'
-        ),
-        COALESCE(pe.`event_time`, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS event_time
+    ) AS updated_at
 FROM skus s
     INNER JOIN skus_uoms_agg AS uom_agg ON s.id = uom_agg.sku_id
     INNER JOIN products_enriched AS pe ON s.product_id = pe.id;

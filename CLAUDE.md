@@ -26,10 +26,16 @@
 
 ### Flink SQL Patterns
 1. **Use TTL not Interval Joins** for CDC data: `SET 'table.exec.state.ttl' = '43200000';`
-2. **Use direct watermarks** on business timestamps (updatedAt, createdAt, etc.)
+2. **NO WATERMARKS by default** - Do not use watermarks for any pipelines (master or staging) unless explicitly instructed
 3. **Filter tombstones**: `WHERE updatedAt > TIMESTAMP '1970-01-01 00:00:00'`
 4. **Environment variables**: Use `${KAFKA_ENV}`, `${KAFKA_USERNAME}`, `${KAFKA_PASSWORD}`
 5. **For pick-drop**: Compute `event_time` as `GREATEST(pick.updatedAt, drop.updatedAt)`
+6. **Reserved Keywords in Flink SQL**: Must quote with backticks when used as field names:
+   - Common reserved words: `timestamp`, `type`, `rank`, `level`, `position`, `depth`, `usage`
+   - In CREATE TABLE: `` `timestamp` TIMESTAMP(3) NOT NULL``
+   - In SELECT statements: ``hue.`type` AS event_type`` or ``hue.`timestamp` AS `timestamp` ``
+   - This applies to both field definitions and aliases
+   - **Note**: This is specific to Flink SQL. ClickHouse SQL has different reserved words and quoting rules
 
 ## Directory Structure
 ```
@@ -73,16 +79,18 @@ LEFT JOIN encarta_skus_combined(node_id = wh_id) sku ON picked_sku_id = sku.sku_
 - Verify indexes and projections are partitioned correctly
 
 ## Accessing Schema Registry
-To get Avro schemas from Kafka Schema Registry, exec into a Flink pod:
+To get Avro schemas from Kafka Schema Registry, use the flink-session-cluster pod (not taskmanager or sql-gateway):
 ```bash
 # Get pod name
-kubectl get pods -n flink-studio | grep taskmanager
+kubectl get pods -n flink-studio | grep flink-session-cluster | grep -v taskmanager
 
-# Exec into pod and use environment variables already set from secrets
-kubectl exec -it -n flink-studio <pod-name> -- bash
-
-# Inside the pod, use the environment variables:
-curl -s -u "${KAFKA_USERNAME}:${KAFKA_PASSWORD}" \
-  "${SCHEMA_REGISTRY_URL}/subjects/sbx_uat.encarta.public.skus-value/versions/latest" \
-  | jq '.schema' | jq -r '.' | jq '.'
+# The credentials are mounted as files in the pod
+kubectl exec -n flink-studio <pod-name> -- bash -c '
+  KAFKA_USERNAME=$(cat /etc/kafka/secrets/username)
+  KAFKA_PASSWORD=$(cat /etc/kafka/secrets/password)
+  SCHEMA_REGISTRY_URL="https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159"
+  
+  curl -s -u "${KAFKA_USERNAME}:${KAFKA_PASSWORD}" \
+    "${SCHEMA_REGISTRY_URL}/subjects/sbx_uat.encarta.public.skus-value/versions/latest"
+' | jq -r '.schema' | jq '.'
 ```

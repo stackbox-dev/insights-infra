@@ -4,9 +4,9 @@ SET 'parallelism.default' = '1';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '1';
 -- State TTL configuration to prevent unbounded state growth
--- State will be kept for 12 hours after last access
-SET 'table.exec.state.ttl' = '43200000';
--- 12 hours in milliseconds
+-- State will be kept for 10 years after last access (master data)
+SET 'table.exec.state.ttl' = '315360000000';
+-- 10 years in milliseconds
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -39,23 +39,6 @@ CREATE TABLE node_overrides (
     layers INT,
     cases_per_layer INT,
     handling_unit_type STRING,
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(`__source_snapshot` IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -88,23 +71,6 @@ CREATE TABLE product_node_overrides (
     active BOOLEAN,
     created_at TIMESTAMP(3),
     updated_at TIMESTAMP(3),
-    -- CDC snapshot field (READ from true source tables, but never forward directly)
-    `__source_snapshot` STRING,
-    -- Computed is_snapshot field for CDC snapshot detection
-    `is_snapshot` AS COALESCE(`__source_snapshot` IN (
-        'true',
-        'first',
-        'first_in_data_collection',
-        'last_in_data_collection',
-        'last'
-    ), FALSE),
-    -- Computed event time from business timestamps
-    `event_time` AS COALESCE(
-        updated_at,
-        created_at,
-        TIMESTAMP '1970-01-01 00:00:00'
-    ),
-    WATERMARK FOR `event_time` AS `event_time` - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -239,15 +205,12 @@ CREATE TABLE skus_master (
     active BOOLEAN NOT NULL,
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
-    is_snapshot BOOLEAN NOT NULL,
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
-    event_time TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = '${KAFKA_ENV}.encarta.public.skus_master',
+    'topic' = '${KAFKA_ENV}.encarta.flink.skus_master',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -379,15 +342,20 @@ CREATE TABLE skus_overrides (
     active BOOLEAN NOT NULL,
     classifications STRING NOT NULL,
     product_classifications STRING NOT NULL,
-    is_snapshot BOOLEAN NOT NULL,
+    -- Individual source table timestamps
+    node_override_created_at TIMESTAMP(3),
+    node_override_updated_at TIMESTAMP(3),
+    sku_master_created_at TIMESTAMP(3),
+    sku_master_updated_at TIMESTAMP(3),
+    product_node_override_created_at TIMESTAMP(3),
+    product_node_override_updated_at TIMESTAMP(3),
+    -- Aggregated timestamps (MIN for created, MAX for updated)
     created_at TIMESTAMP(3) NOT NULL,
     updated_at TIMESTAMP(3) NOT NULL,
-    event_time TIMESTAMP(3) NOT NULL,
-    WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND,
     PRIMARY KEY (sku_id, node_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = '${KAFKA_ENV}.encarta.public.skus_overrides',
+    'topic' = '${KAFKA_ENV}.encarta.flink.skus_overrides',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -533,26 +501,28 @@ SELECT sno.sku_id,
     COALESCE(sno.active, pno.active, sm.active) AS active,
     sm.classifications,
     sm.product_classifications,
-    -- Combine is_snapshot from all sources
-    sno.is_snapshot AND sm.is_snapshot AND COALESCE(pno.is_snapshot, TRUE) AS is_snapshot,
-    sm.created_at,
-    -- Update timestamp should reflect the latest change from any source
+    -- Individual source table timestamps
+    sno.created_at AS node_override_created_at,
+    sno.updated_at AS node_override_updated_at,
+    sm.created_at AS sku_master_created_at,
+    sm.updated_at AS sku_master_updated_at,
+    pno.created_at AS product_node_override_created_at,
+    pno.updated_at AS product_node_override_updated_at,
+    -- Aggregated timestamps
+    LEAST(
+        COALESCE(sno.created_at, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(sm.created_at, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(pno.created_at, TIMESTAMP '2099-12-31 23:59:59')
+    ) AS created_at,
     GREATEST(
         COALESCE(sm.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(sno.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(pno.updated_at, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updated_at,
-    -- Compute event_time from all sources
-    GREATEST(
-        COALESCE(sm.event_time, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(sno.event_time, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(pno.event_time, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS event_time
+    ) AS updated_at
 FROM node_overrides sno
     INNER JOIN skus_master sm ON sno.sku_id = sm.id
     LEFT JOIN product_node_overrides pno ON sm.product_id = pno.product_id
     AND sno.node_id = pno.node_id
-WHERE sm.event_time > TIMESTAMP '1970-01-01 00:00:00'
 UNION ALL
 -- Records from product_node_overrides (product-level overrides) 
 -- Only for SKUs that don't have node-specific overrides
@@ -670,23 +640,24 @@ SELECT sm.id AS sku_id,
     COALESCE(pno.active, sm.active) AS active,
     sm.classifications,
     sm.product_classifications,
-    -- Combine is_snapshot from both sources
-    pno.is_snapshot AND sm.is_snapshot AS is_snapshot,
-    sm.created_at,
-    -- Update timestamp should reflect the latest change from any source
+    -- Individual source table timestamps (NULL for node_override since not in this query)
+    CAST(NULL AS TIMESTAMP(3)) AS node_override_created_at,
+    CAST(NULL AS TIMESTAMP(3)) AS node_override_updated_at,
+    sm.created_at AS sku_master_created_at,
+    sm.updated_at AS sku_master_updated_at,
+    pno.created_at AS product_node_override_created_at,
+    pno.updated_at AS product_node_override_updated_at,
+    -- Aggregated timestamps
+    LEAST(
+        COALESCE(sm.created_at, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(pno.created_at, TIMESTAMP '2099-12-31 23:59:59')
+    ) AS created_at,
     GREATEST(
         COALESCE(sm.updated_at, TIMESTAMP '1970-01-01 00:00:00'),
         COALESCE(pno.updated_at, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS updated_at,
-    -- Compute event_time from both sources
-    GREATEST(
-        COALESCE(sm.event_time, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(pno.event_time, TIMESTAMP '1970-01-01 00:00:00')
-    ) AS event_time
+    ) AS updated_at
 FROM product_node_overrides pno
     INNER JOIN skus_master sm ON pno.product_id = sm.product_id
     LEFT JOIN node_overrides sno2 ON sno2.sku_id = sm.id
     AND sno2.node_id = pno.node_id
-WHERE sm.event_time > TIMESTAMP '1970-01-01 00:00:00'
-    -- Exclude SKUs that already have node-specific overrides for this node
-    AND sno2.sku_id IS NULL;
+WHERE sno2.sku_id IS NULL;

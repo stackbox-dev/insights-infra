@@ -4,9 +4,9 @@ SET 'parallelism.default' = '1';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.exec.resource.default-parallelism' = '1';
 -- State TTL configuration to prevent unbounded state growth
--- State will be kept for 12 hours after last access
-SET 'table.exec.state.ttl' = '43200000';
--- 12 hours in milliseconds
+-- State will be kept for 10 years after last access (master data)
+SET 'table.exec.state.ttl' = '315360000000';
+-- 10 years in milliseconds
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -21,12 +21,12 @@ SET 'table.optimizer.multiple-input-enabled' = 'true';
 -- Create source tables (DDL for Kafka topics)
 -- storage_bin source table
 CREATE TABLE storage_bin (
-    id STRING,
-    whId BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    code STRING NOT NULL,
     description STRING,
-    binTypeId STRING,
-    zoneId STRING,
+    binTypeId STRING NOT NULL,
+    zoneId STRING NOT NULL,
     binHuId STRING,
     multiSku BOOLEAN,
     createdAt TIMESTAMP(3),
@@ -67,9 +67,9 @@ CREATE TABLE storage_bin (
 );
 -- storage_bin_fixed_mapping source table
 CREATE TABLE storage_bin_fixed_mapping (
-    id STRING,
-    whId BIGINT,
-    binId STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    binId STRING NOT NULL,
     `value` STRING,
     active BOOLEAN,
     createdAt TIMESTAMP(3),
@@ -98,9 +98,9 @@ CREATE TABLE storage_bin_fixed_mapping (
 );
 -- storage_bin_type source table
 CREATE TABLE storage_bin_type (
-    id STRING,
-    whId BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    code STRING NOT NULL,
     description STRING,
     maxVolumeInCC DOUBLE,
     maxWeightInKG DOUBLE,
@@ -137,12 +137,12 @@ CREATE TABLE storage_bin_type (
 );
 -- storage_zone source table
 CREATE TABLE storage_zone (
-    id STRING,
-    whId BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    code STRING NOT NULL,
     description STRING,
     face STRING,
-    areaId STRING,
+    areaId STRING NOT NULL,
     active BOOLEAN,
     createdAt TIMESTAMP(3),
     updatedAt TIMESTAMP(3),
@@ -171,9 +171,9 @@ CREATE TABLE storage_zone (
 );
 -- storage_area source table
 CREATE TABLE storage_area (
-    id STRING,
-    whId BIGINT,
-    code STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    code STRING NOT NULL,
     description STRING,
     `type` STRING,
     active BOOLEAN,
@@ -203,9 +203,9 @@ CREATE TABLE storage_area (
 );
 -- storage_position source table
 CREATE TABLE storage_position (
-    id STRING,
-    whId BIGINT,
-    storageId STRING,
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    storageId STRING NOT NULL,
     x1 DOUBLE,
     x2 DOUBLE,
     y1 DOUBLE,
@@ -237,9 +237,9 @@ CREATE TABLE storage_position (
 
 -- Create sink table: storage_bin_master
 CREATE TABLE storage_bin_master (
-    wh_id BIGINT,
-    bin_id STRING,
-    bin_code STRING,
+    wh_id BIGINT NOT NULL,
+    bin_id STRING NOT NULL,
+    bin_code STRING NOT NULL,
     bin_description STRING,
     bin_status STRING,
     bin_hu_id STRING,
@@ -293,13 +293,26 @@ CREATE TABLE storage_bin_master (
     -- Bin attrs and mapping type
     attrs STRING,
     bin_mapping STRING,
-    -- Metadata
-    createdAt TIMESTAMP(3),
-    updatedAt TIMESTAMP(3),
+    -- Individual table timestamps
+    bin_created_at TIMESTAMP(3),
+    bin_updated_at TIMESTAMP(3),
+    bin_type_created_at TIMESTAMP(3),
+    bin_type_updated_at TIMESTAMP(3),
+    zone_created_at TIMESTAMP(3),
+    zone_updated_at TIMESTAMP(3),
+    area_created_at TIMESTAMP(3),
+    area_updated_at TIMESTAMP(3),
+    position_created_at TIMESTAMP(3),
+    position_updated_at TIMESTAMP(3),
+    mapping_created_at TIMESTAMP(3),
+    mapping_updated_at TIMESTAMP(3),
+    -- Aggregated metadata
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
     PRIMARY KEY (wh_id, bin_code) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
-    'topic' = '${KAFKA_ENV}.wms.public.storage_bin_master',
+    'topic' = '${KAFKA_ENV}.wms.flink.storage_bin_master',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
@@ -380,9 +393,36 @@ SELECT
         WHEN sbfm.active = true THEN 'FIXED'
         ELSE 'DYNAMIC'
     END AS bin_mapping,
-    -- Metadata
-    sb.createdAt,
-    sb.updatedAt
+    -- Individual table timestamps
+    sb.createdAt AS bin_created_at,
+    sb.updatedAt AS bin_updated_at,
+    sbt.createdAt AS bin_type_created_at,
+    sbt.updatedAt AS bin_type_updated_at,
+    sz.createdAt AS zone_created_at,
+    sz.updatedAt AS zone_updated_at,
+    sa.createdAt AS area_created_at,
+    sa.updatedAt AS area_updated_at,
+    sp.createdAt AS position_created_at,
+    sp.updatedAt AS position_updated_at,
+    sbfm.createdAt AS mapping_created_at,
+    sbfm.updatedAt AS mapping_updated_at,
+    -- Aggregated metadata (MIN for created, MAX for updated)
+    LEAST(
+        COALESCE(sb.createdAt, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(sbt.createdAt, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(sz.createdAt, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(sa.createdAt, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(sp.createdAt, TIMESTAMP '2099-12-31 23:59:59'),
+        COALESCE(sbfm.createdAt, TIMESTAMP '2099-12-31 23:59:59')
+    ) AS created_at,
+    GREATEST(
+        COALESCE(sb.updatedAt, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(sbt.updatedAt, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(sz.updatedAt, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(sa.updatedAt, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(sp.updatedAt, TIMESTAMP '1970-01-01 00:00:00'),
+        COALESCE(sbfm.updatedAt, TIMESTAMP '1970-01-01 00:00:00')
+    ) AS updated_at
 FROM storage_bin AS sb
     INNER JOIN storage_bin_type sbt ON sb.binTypeId = sbt.id
     INNER JOIN storage_zone sz ON sb.zoneId = sz.id
