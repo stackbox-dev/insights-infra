@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS wms_trip_relations
 )
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (sessionId, childTripId)  -- Primary key for this rekeyed table
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Trip Relations dimension table';
 
 -- Add projection for parent-child lookups

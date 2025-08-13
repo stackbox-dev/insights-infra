@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS wms_trips
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (id)  -- id is globally unique
 SETTINGS index_granularity = 8192,
-         deduplicate_merge_projection_mode = 'drop'
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Trips dimension table';
 
 -- Add projection for common query pattern (sessionId)

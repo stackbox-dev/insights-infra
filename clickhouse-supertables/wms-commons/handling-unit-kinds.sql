@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS wms_handling_unit_kinds
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id)  -- id is globally unique
 SETTINGS index_granularity = 8192,
-         deduplicate_merge_projection_mode = 'drop'
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Handling Unit Kinds dimension table';
 
 -- Add projection for common query pattern (whId, code)

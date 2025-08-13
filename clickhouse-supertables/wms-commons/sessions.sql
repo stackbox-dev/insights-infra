@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS wms_sessions
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id)  -- id is globally unique
 SETTINGS index_granularity = 8192,
-         deduplicate_merge_projection_mode = 'drop'
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Sessions dimension table';
 
 -- Add projection for common query pattern (whId, code)

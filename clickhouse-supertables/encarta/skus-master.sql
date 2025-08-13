@@ -187,7 +187,8 @@ CREATE TABLE IF NOT EXISTS encarta_skus_master
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (principal_id, code)
 SETTINGS index_granularity = 8192,
-         deduplicate_merge_projection_mode = 'drop'
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180
 COMMENT 'Encarta SKUs master data with complete product hierarchy and UOM specifications';
 
 -- Projection for SKU ID lookups (most common in enrichment)
