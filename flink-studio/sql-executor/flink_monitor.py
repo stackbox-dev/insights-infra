@@ -111,7 +111,7 @@ class FlinkMonitor:
             print(f"Error fetching cluster overview: {e}")
             return None
     
-    def get_expected_streaming_pipelines(self, sql_path: str = "sbx-uat") -> Set[str]:
+    def get_expected_streaming_pipelines(self, sql_path: str = "pipelines") -> Set[str]:
         """Get list of expected streaming (non-batch) pipelines from SQL files"""
         expected_pipelines = set()
         sql_dir = Path(sql_path)
@@ -218,7 +218,7 @@ class FlinkMonitor:
             
             print("-" * 80)
 
-    def print_health_report(self, sql_path: str = "sbx-uat"):
+    def print_health_report(self, sql_path: str = "pipelines"):
         """Print overall cluster health report including pipeline status check"""
         print("\n📊 Flink Cluster Health Report")
         print("=" * 80)
@@ -484,8 +484,8 @@ def main():
     
     parser.add_argument(
         "--sql-path",
-        default="sbx-uat",
-        help="Path to SQL files directory for pipeline checking (default: sbx-uat)"
+        default="pipelines",
+        help="Path to SQL files directory for pipeline checking (default: pipelines)"
     )
     
     args = parser.parse_args()
