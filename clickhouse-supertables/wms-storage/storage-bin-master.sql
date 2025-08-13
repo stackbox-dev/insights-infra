@@ -73,11 +73,23 @@ CREATE TABLE IF NOT EXISTS wms_storage_bin_master
     attrs String DEFAULT '{}',  -- JSON stored as String
     bin_mapping String DEFAULT 'DYNAMIC',  -- FIXED or DYNAMIC
     
-    -- System Fields
-    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    is_snapshot Bool DEFAULT false,
-    event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    -- Individual table timestamps
+    bin_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    bin_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    bin_type_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    bin_type_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    zone_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    zone_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    area_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    area_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    position_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    position_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    mapping_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    mapping_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- Aggregated metadata
+    created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
     -- Indexes for faster lookups in enrichment
     INDEX idx_bin_id bin_id TYPE bloom_filter(0.01) GRANULARITY 1,
@@ -86,17 +98,19 @@ CREATE TABLE IF NOT EXISTS wms_storage_bin_master
     INDEX idx_zone_code zone_code TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_area_code area_code TYPE bloom_filter(0.01) GRANULARITY 4
 )
-ENGINE = ReplacingMergeTree(event_time)
+ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (bin_id)
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180
 COMMENT 'Comprehensive storage bin master data with types, zones, areas, positions, and mapping configurations';
 
--- Projection optimized for JOIN on bin_id (if used)
-ALTER TABLE wms_storage_bin_master ADD PROJECTION proj_by_bin_id (
+-- Projection optimized for warehouse + bin_code queries
+ALTER TABLE wms_storage_bin_master ADD PROJECTION proj_by_wh_code (
     SELECT 
-        bin_id,
         wh_id,
         bin_code,
+        bin_id,
         bin_description,
         bin_status,
         bin_hu_id,
@@ -122,7 +136,7 @@ ALTER TABLE wms_storage_bin_master ADD PROJECTION proj_by_bin_id (
         max_volume_in_cc,
         max_weight_in_kg,
         pallet_capacity
-    ORDER BY bin_id
+    ORDER BY (wh_id, bin_code)
 );
 
 -- Projection for zone/area analytics

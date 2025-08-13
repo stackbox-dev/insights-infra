@@ -36,13 +36,15 @@ CREATE TABLE IF NOT EXISTS wms_storage_bin_dockdoor_master
     dockdoor_y_coordinate Float64 DEFAULT 0,
     dockdoor_position_active Bool DEFAULT false,
     
-    -- System Fields
-    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    is_snapshot Bool DEFAULT false,
-    event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
+    -- Metadata
+    bin_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    bin_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    dockdoor_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    dockdoor_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
 )
-ENGINE = ReplacingMergeTree(event_time)
+ENGINE = ReplacingMergeTree(dockdoor_updated_at)
 ORDER BY (wh_id, bin_code, dockdoor_code)
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180
 COMMENT 'Storage bin to dock door mapping for staging area management and logistics operations';
