@@ -1,15 +1,15 @@
--- ClickHouse table for WMS Inventory Weekly Cumulative Snapshots
--- Stores cumulative quantities at weekly intervals for performance optimization
--- Matches the full detail level of wms_inventory_events_enriched
+-- ClickHouse table for WMS Inventory Snapshots
+-- Stores complete inventory position snapshots every 6 hours
+-- Replaces the previous 3-tier architecture with a simpler 2-tier approach
 
-CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
+CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
 (
     -- Snapshot metadata
-    snapshot_timestamp DateTime COMMENT 'Timestamp of the snapshot (Sunday midnight)',
-    snapshot_type String DEFAULT 'weekly' COMMENT 'Type of snapshot (weekly)',
-    wh_id Int64 DEFAULT 0 COMMENT 'Warehouse ID',
+    snapshot_timestamp DateTime COMMENT 'Snapshot timestamp (every 6 hours: 00:00, 06:00, 12:00, 18:00)',
+    snapshot_type String DEFAULT 'scheduled' COMMENT 'Type of snapshot: scheduled, manual, recovery',
     
     -- Core inventory identifiers
+    wh_id Int64 DEFAULT 0 COMMENT 'Warehouse ID',
     hu_id String DEFAULT '' COMMENT 'Handling unit ID',
     hu_code String DEFAULT '' COMMENT 'Handling unit code',
     sku_id String DEFAULT '' COMMENT 'SKU ID',
@@ -21,16 +21,16 @@ CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
     locked_by_task_id String DEFAULT '' COMMENT 'Task that has locked this inventory',
     lock_mode String DEFAULT '' COMMENT 'Lock mode (shared/exclusive)',
     
-    -- Cumulative metrics at snapshot time
-    cumulative_qty Int64 DEFAULT 0 COMMENT 'Total cumulative quantity from beginning of time to snapshot',
-    total_event_count UInt64 DEFAULT 0 COMMENT 'Total number of events processed up to this snapshot',
+    -- Cumulative quantity at snapshot time
+    cumulative_qty Int64 DEFAULT 0 COMMENT 'Total quantity at snapshot time',
+    total_event_count UInt64 DEFAULT 0 COMMENT 'Total number of events up to this snapshot',
     
-    -- Event identifiers at snapshot time
+    -- Latest event identifiers at snapshot time
     hu_event_id String DEFAULT '',
     quant_event_id String DEFAULT '',
-    last_event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3) COMMENT 'Timestamp of last event in this snapshot',
+    last_event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
-    -- Handling unit event fields at snapshot time
+    -- Handling unit event fields (latest at snapshot)
     hu_event_seq Int64 DEFAULT 0,
     hu_event_type String DEFAULT '',
     hu_event_payload String DEFAULT '',
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
     effective_storage_id String DEFAULT '',
     quant_iloc String DEFAULT '',
     
-    -- Handling unit attributes at snapshot time
+    -- Handling unit attributes
     hu_state String DEFAULT '',
     hu_attrs String DEFAULT '',
     hu_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
     hu_lock_task_id String DEFAULT '',
     hu_effective_storage_id String DEFAULT '',
     
-    -- Handling unit kind fields at snapshot time
+    -- Handling unit kind fields
     hu_kind_id String DEFAULT '',
     hu_kind_code String DEFAULT '',
     hu_kind_name String DEFAULT '',
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
     hu_kind_height Float64 DEFAULT 0,
     hu_kind_weight Float64 DEFAULT 0,
     
-    -- Storage bin fields at snapshot time
+    -- Storage bin fields
     storage_bin_code String DEFAULT '',
     storage_bin_description String DEFAULT '',
     storage_bin_status String DEFAULT '',
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
     storage_attrs String DEFAULT '',
     storage_bin_mapping String DEFAULT '',
     
-    -- SKU fields at snapshot time
+    -- SKU fields
     sku_code String DEFAULT '',
     sku_name String DEFAULT '',
     sku_short_description String DEFAULT '',
@@ -217,13 +217,11 @@ CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
     outer_hu_kind_height Float64 DEFAULT 0,
     outer_hu_kind_weight Float64 DEFAULT 0,
     
-    -- Snapshot generation metadata
-    generated_at DateTime64(3) DEFAULT now64(3) COMMENT 'When this snapshot was generated'
+    -- Processing metadata
+    _created_at DateTime64(3) DEFAULT now64(3) COMMENT 'When this snapshot was created'
 )
-ENGINE = ReplacingMergeTree(generated_at)
+ENGINE = ReplacingMergeTree(_created_at)
 PARTITION BY toYYYYMM(snapshot_timestamp)
-ORDER BY (wh_id, snapshot_timestamp, hu_id, sku_id, uom, bucket, batch)
-SETTINGS index_granularity = 8192,
-         deduplicate_merge_projection_mode = 'drop',
-         min_age_to_force_merge_seconds = 180
-COMMENT 'Weekly cumulative inventory snapshots with full enriched dimension data';
+ORDER BY (wh_id, snapshot_timestamp, hu_id, sku_id, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode, quant_iloc)
+SETTINGS index_granularity = 8192
+COMMENT 'Inventory position snapshots taken every 6 hours for efficient point-in-time queries';
