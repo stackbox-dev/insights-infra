@@ -1,0 +1,419 @@
+-- Backfill script for WMS Pick-Drop Enriched table
+-- This script manually populates the enriched table from staging data
+-- Use this when you need to backfill historical data or fix data issues
+
+-- Check current data status
+SELECT 
+    'Staging table' as table_name,
+    count(*) as row_count,
+    min(pick_item_created_at) as min_date,
+    max(pick_item_created_at) as max_date
+FROM wms_pick_drop_staging
+UNION ALL
+SELECT 
+    'Enriched table' as table_name,
+    count(*) as row_count,
+    min(pick_item_created_at) as min_date,
+    max(pick_item_created_at) as max_date
+FROM wms_pick_drop_enriched;
+
+-- Optional: Clear existing data (uncomment if needed)
+-- TRUNCATE TABLE wms_pick_drop_enriched;
+
+-- Backfill enriched table from staging with enrichment
+-- You can add WHERE clauses to filter by date range or specific conditions
+INSERT INTO wms_pick_drop_enriched
+SELECT
+    -- Core identifiers
+    pb.wh_id AS wh_id,
+    COALESCE(so.principal_id, sm.principal_id, 0) AS principal_id,
+    pb.pick_item_id AS pick_item_id,
+    pb.drop_item_id AS drop_item_id,
+    
+    -- All fields from pick_drop_staging
+    pb.picked_bin AS picked_bin,
+    pb.picked_sku_id AS picked_sku_id,
+    pb.picked_batch AS picked_batch,
+    pb.picked_uom AS picked_uom,
+    pb.overall_qty AS overall_qty,
+    pb.qty AS qty,
+    pb.hu_code AS hu_code,
+    pb.destination_bin_code AS destination_bin_code,
+    pb.pick_item_created_at AS pick_item_created_at,
+    pb.picked_qty AS picked_qty,
+    pb.picked_at AS picked_at,
+    pb.picked_by_worker_id AS picked_by_worker_id,
+    pb.moved_at AS moved_at,
+    pb.processed_at AS processed_at,
+    pb.picked_hu_eq_uom AS picked_hu_eq_uom,
+    pb.picked_has_inner_hus AS picked_has_inner_hus,
+    pb.picked_inner_hu_eq_uom AS picked_inner_hu_eq_uom,
+    pb.picked_bin_assigned_at AS picked_bin_assigned_at,
+    pb.scan_source_hu_kind AS scan_source_hu_kind,
+    pb.pick_source_hu_kind AS pick_source_hu_kind,
+    pb.carrier_hu_kind AS carrier_hu_kind,
+    pb.scanned_source_hu_code AS scanned_source_hu_code,
+    pb.picked_source_hu_code AS picked_source_hu_code,
+    pb.carrier_hu_code AS carrier_hu_code,
+    pb.hu_kind AS hu_kind,
+    pb.source_hu_eq_uom AS source_hu_eq_uom,
+    pb.pick_item_updated_at AS pick_item_updated_at,
+    pb.eligible_drop_locations AS eligible_drop_locations,
+    pb.parent_item_id AS parent_item_id,
+    pb.old_batch AS old_batch,
+    pb.dest_bucket AS dest_bucket,
+    pb.original_source_bin_code AS original_source_bin_code,
+    pb.lm_trip_id AS lm_trip_id,
+    pb.session_id AS session_id,
+    pb.task_id AS task_id,
+    pb.picked_inner_hu_code AS picked_inner_hu_code,
+    pb.picked_inner_hu_kind_code AS picked_inner_hu_kind_code,
+    pb.picked_quant_bucket AS picked_quant_bucket,
+    pb.pick_auto_complete AS pick_auto_complete,
+    pb.pick_hu AS pick_hu,
+    pb.short_allocation_reason AS short_allocation_reason,
+    pb.pd_previous_task_id AS drop_item_previous_task_id,
+    pb.dropped_sku_id AS dropped_sku_id,
+    pb.dropped_batch AS dropped_batch,
+    pb.dropped_uom AS dropped_uom,
+    pb.drop_bucket AS drop_bucket,
+    pb.picked_hu_code AS picked_hu_code,
+    pb.dropped_bin_code AS dropped_bin_code,
+    pb.dropped_qty AS dropped_qty,
+    pb.dropped_at AS dropped_at,
+    pb.drop_item_updated_at AS drop_item_updated_at,
+    pb.drop_hu_in_bin AS drop_hu_in_bin,
+    pb.scan_dest_hu AS scan_dest_hu,
+    pb.allow_hu_break AS allow_hu_break,
+    pb.dropped_has_inner_hus AS dropped_has_inner_hus,
+    pb.scan_inner_hus AS scan_inner_hus,
+    pb.dropped_hu_eq_uom AS dropped_hu_eq_uom,
+    pb.dest_hu_code AS dest_hu_code,
+    pb.dropped_inner_hu_id AS dropped_inner_hu_id,
+    pb.dropped_inner_hu_eq_uom AS dropped_inner_hu_eq_uom,
+    pb.dest_bin_assigned_at AS dest_bin_assigned_at,
+    pb.drop_uom AS drop_uom,
+    pb.drop_parent_item_id AS drop_parent_item_id,
+    pb.hu_broken AS hu_broken,
+    pb.drop_original_source_bin_code AS drop_original_source_bin_code,
+    pb.processed_for_loading_at AS processed_for_loading_at,
+    pb.drop_quant_bucket AS drop_quant_bucket,
+    pb.drop_inner_hu_code AS drop_inner_hu_code,
+    pb.dropped_inner_hu_kind_code AS dropped_inner_hu_kind_code,
+    pb.drop_inner_hu AS drop_inner_hu,
+    pb.allow_inner_hu_break AS allow_inner_hu_break,
+    pb.inner_hu_broken AS inner_hu_broken,
+    pb.drop_auto_complete AS drop_auto_complete,
+    pb.quant_slotting_for_hus AS quant_slotting_for_hus,
+    pb.processed_on_drop_at AS processed_on_drop_at,
+    pb.allow_hu_break_v2 AS allow_hu_break_v2,
+    
+    -- Additional Pick Items columns
+    pb.bin_id AS bin_id,
+    pb.bin_hu_id AS bin_hu_id,
+    pb.destination_bin_id AS destination_bin_id,
+    pb.destination_bin_hu_id AS destination_bin_hu_id,
+    pb.pick_deactivated_at AS pick_deactivated_at,
+    pb.pick_deactivated_by AS pick_deactivated_by,
+    pb.moved_by AS moved_by,
+    pb.scanned_source_hu_id AS scanned_source_hu_id,
+    pb.picked_source_hu_id AS picked_source_hu_id,
+    pb.carrier_hu_id AS carrier_hu_id,
+    pb.original_source_bin_id AS original_source_bin_id,
+    pb.inner_hu_id AS inner_hu_id,
+    pb.inner_hu_kind_id AS inner_hu_kind_id,
+    pb.pd_previous_task_id AS pd_previous_task_id,
+    pb.input_source_bin_id AS input_source_bin_id,
+    pb.provisional_item_id AS provisional_item_id,
+    pb.input_dest_hu_id AS input_dest_hu_id,
+    pb.pick_item_kind AS pick_item_kind,
+    pb.tp_assigned_at AS tp_assigned_at,
+    pb.leg_index AS leg_index,
+    pb.last_leg AS last_leg,
+    pb.ep_assigned_at AS ep_assigned_at,
+    pb.carrier_hu_formed_id AS carrier_hu_formed_id,
+    pb.hu_index AS hu_index,
+    pb.pick_sequence AS pick_sequence,
+    pb.carrier_hu_force_closed AS carrier_hu_force_closed,
+    pb.input_dest_bin_id AS input_dest_bin_id,
+    pb.inner_hu_index AS inner_hu_index,
+    pb.inner_carrier_hu_key AS inner_carrier_hu_key,
+    pb.inner_carrier_hu_formed_id AS inner_carrier_hu_formed_id,
+    pb.inner_carrier_hu_id AS inner_carrier_hu_id,
+    pb.inner_carrier_hu_code AS inner_carrier_hu_code,
+    pb.inner_carrier_hu_kind AS inner_carrier_hu_kind,
+    pb.induction_id AS induction_id,
+    pb.inner_carrier_hu_force_closed AS inner_carrier_hu_force_closed,
+    pb.mhe_id AS mhe_id,
+    pb.pick_attrs AS pick_attrs,
+    pb.iloc AS iloc,
+    pb.dest_iloc AS dest_iloc,
+    
+    -- Additional Drop Items columns
+    pb.source_bin_id AS source_bin_id,
+    pb.source_bin_hu_id AS source_bin_hu_id,
+    pb.drop_bin_id AS drop_bin_id,
+    pb.drop_bin_hu_id AS drop_bin_hu_id,
+    pb.drop_created_at AS drop_created_at,
+    pb.drop_deactivated_at AS drop_deactivated_at,
+    pb.drop_deactivated_by AS drop_deactivated_by,
+    pb.dropped_by_worker_id AS dropped_by_worker_id,
+    pb.dest_hu_id AS dest_hu_id,
+    pb.source_bucket AS source_bucket,
+    pb.original_destination_bin_id AS original_destination_bin_id,
+    pb.drop_lm_trip_id AS drop_lm_trip_id,
+    pb.processed_for_pick_at AS processed_for_pick_at,
+    pb.drop_provisional_item_id AS drop_provisional_item_id,
+    pb.drop_input_dest_hu_id AS drop_input_dest_hu_id,
+    pb.drop_leg_index AS drop_leg_index,
+    pb.drop_last_leg AS drop_last_leg,
+    pb.drop_input_dest_bin_id AS drop_input_dest_bin_id,
+    pb.drop_induction_id AS drop_induction_id,
+    pb.drop_attrs AS drop_attrs,
+    pb.drop_mhe_id AS drop_mhe_id,
+    pb.drop_iloc AS drop_iloc,
+    pb.source_iloc AS source_iloc,
+    
+    -- Mapping fields
+    pb.mapping_id AS mapping_id,
+    pb.mapping_created_at AS mapping_created_at,
+    
+    -- Worker enrichment (picked_by)
+    w.code AS worker_code,
+    w.name AS worker_name,
+    w.phone AS worker_phone,
+    w.supervisor AS worker_supervisor,
+    w.active AS worker_active,
+    
+    -- Handling Unit enrichment (for dropped_inner_hu_id)
+    hu.code AS dropped_hu_code,
+    hu.kindId AS dropped_hu_kind_id,
+    hu.sessionId AS dropped_hu_session_id,
+    hu.taskId AS dropped_hu_task_id,
+    hu.storageId AS dropped_hu_storage_id,
+    hu.outerHuId AS dropped_hu_outer_hu_id,
+    hu.state AS dropped_hu_state,
+    hu.attrs AS dropped_hu_attrs,
+    hu.lockTaskId AS dropped_hu_lock_task_id,
+    hu.effectiveStorageId AS dropped_hu_effective_storage_id,
+    hu.createdAt AS dropped_hu_created_at,
+    hu.updatedAt AS dropped_hu_updated_at,
+    
+    -- SKU enrichment (from picked_sku_id only) - COALESCE overrides over master
+    sm.category AS sku_category,
+    sm.product AS sku_product,
+    sm.product_id AS sku_product_id,
+    sm.category_group AS sku_category_group,
+    sm.sub_brand AS sku_sub_brand,
+    sm.brand AS sku_brand,
+    COALESCE(so.code, sm.code, '') AS sku_code,
+    COALESCE(so.name, sm.name, '') AS sku_name,
+    COALESCE(so.short_description, sm.short_description, '') AS sku_short_description,
+    COALESCE(so.description, sm.description, '') AS sku_description,
+    COALESCE(so.fulfillment_type, sm.fulfillment_type, '') AS sku_fulfillment_type,
+    COALESCE(so.inventory_type, sm.inventory_type, '') AS sku_inventory_type,
+    COALESCE(so.shelf_life, sm.shelf_life, 0) AS sku_shelf_life,
+    COALESCE(so.tag1, sm.tag1, '') AS sku_tag1,
+    COALESCE(so.tag2, sm.tag2, '') AS sku_tag2,
+    COALESCE(so.tag3, sm.tag3, '') AS sku_tag3,
+    COALESCE(so.tag4, sm.tag4, '') AS sku_tag4,
+    COALESCE(so.tag5, sm.tag5, '') AS sku_tag5,
+    COALESCE(so.handling_unit_type, sm.handling_unit_type, '') AS sku_handling_unit_type,
+    COALESCE(so.cases_per_layer, sm.cases_per_layer, 0) AS sku_cases_per_layer,
+    COALESCE(so.layers, sm.layers, 0) AS sku_layers,
+    COALESCE(so.l0_units, sm.l0_units, 0) AS sku_l0_units,
+    COALESCE(so.l1_units, sm.l1_units, 0) AS sku_l1_units,
+    COALESCE(so.l2_units, sm.l2_units, 0) AS sku_l2_units,
+    COALESCE(so.l3_units, sm.l3_units, 0) AS sku_l3_units,
+    COALESCE(so.l0_name, sm.l0_name, '') AS sku_l0_name,
+    COALESCE(so.l0_weight, sm.l0_weight, 0) AS sku_l0_weight,
+    COALESCE(so.l0_volume, sm.l0_volume, 0) AS sku_l0_volume,
+    COALESCE(so.l0_package_type, sm.l0_package_type, '') AS sku_l0_package_type,
+    COALESCE(so.l0_length, sm.l0_length, 0) AS sku_l0_length,
+    COALESCE(so.l0_width, sm.l0_width, 0) AS sku_l0_width,
+    COALESCE(so.l0_height, sm.l0_height, 0) AS sku_l0_height,
+    COALESCE(so.l0_itf_code, sm.l0_itf_code, '') AS sku_l0_itf_code,
+    
+    -- SKU UOM L1 details  
+    COALESCE(so.l1_name, sm.l1_name, '') AS sku_l1_name,
+    COALESCE(so.l1_weight, sm.l1_weight, 0) AS sku_l1_weight,
+    COALESCE(so.l1_volume, sm.l1_volume, 0) AS sku_l1_volume,
+    COALESCE(so.l1_package_type, sm.l1_package_type, '') AS sku_l1_package_type,
+    COALESCE(so.l1_length, sm.l1_length, 0) AS sku_l1_length,
+    COALESCE(so.l1_width, sm.l1_width, 0) AS sku_l1_width,
+    COALESCE(so.l1_height, sm.l1_height, 0) AS sku_l1_height,
+    COALESCE(so.l1_itf_code, sm.l1_itf_code, '') AS sku_l1_itf_code,
+    
+    -- SKU UOM L2 details
+    COALESCE(so.l2_name, sm.l2_name, '') AS sku_l2_name,
+    COALESCE(so.l2_weight, sm.l2_weight, 0) AS sku_l2_weight,
+    COALESCE(so.l2_volume, sm.l2_volume, 0) AS sku_l2_volume,
+    COALESCE(so.l2_package_type, sm.l2_package_type, '') AS sku_l2_package_type,
+    COALESCE(so.l2_length, sm.l2_length, 0) AS sku_l2_length,
+    COALESCE(so.l2_width, sm.l2_width, 0) AS sku_l2_width,
+    COALESCE(so.l2_height, sm.l2_height, 0) AS sku_l2_height,
+    COALESCE(so.l2_itf_code, sm.l2_itf_code, '') AS sku_l2_itf_code,
+    
+    -- SKU UOM L3 details
+    COALESCE(so.l3_name, sm.l3_name, '') AS sku_l3_name,
+    COALESCE(so.l3_weight, sm.l3_weight, 0) AS sku_l3_weight,
+    COALESCE(so.l3_volume, sm.l3_volume, 0) AS sku_l3_volume,
+    COALESCE(so.l3_package_type, sm.l3_package_type, '') AS sku_l3_package_type,
+    COALESCE(so.l3_length, sm.l3_length, 0) AS sku_l3_length,
+    COALESCE(so.l3_width, sm.l3_width, 0) AS sku_l3_width,
+    COALESCE(so.l3_height, sm.l3_height, 0) AS sku_l3_height,
+    COALESCE(so.l3_itf_code, sm.l3_itf_code, '') AS sku_l3_itf_code,
+    
+    -- Additional SKU fields
+    COALESCE(so.avg_l0_per_put, sm.avg_l0_per_put, 0) AS sku_avg_l0_per_put,
+    sm.combined_classification AS sku_combined_classification,
+    
+    -- Event time from staging
+    pb.event_time AS event_time
+FROM wms_pick_drop_staging AS pb
+-- Worker enrichment
+LEFT JOIN wms_workers AS w ON pb.picked_by_worker_id = w.id
+-- Handling Unit enrichment  
+LEFT JOIN wms_handling_units AS hu ON pb.dropped_inner_hu_id = hu.id
+-- SKU Master data
+LEFT JOIN encarta_skus_master AS sm ON pb.picked_sku_id = sm.id
+-- SKU Overrides for specific warehouse (unique on sku_id + node_id)
+LEFT JOIN encarta_skus_overrides AS so ON pb.picked_sku_id = so.sku_id AND pb.wh_id = so.node_id
+-- Optional: Add date filter to backfill specific period
+-- WHERE pb.pick_item_created_at >= '2024-01-01' AND pb.pick_item_created_at < '2024-02-01'
+;
+
+-- Verify the backfill
+SELECT 
+    'After backfill - Enriched table' as status,
+    count(*) as row_count,
+    min(pick_item_created_at) as min_date,
+    max(pick_item_created_at) as max_date
+FROM wms_pick_drop_enriched;
+
+-- Check sample enriched data
+SELECT 
+    wh_id,
+    principal_id,
+    pick_item_id,
+    picked_sku_id,
+    sku_code,
+    sku_name,
+    worker_code,
+    worker_name,
+    event_time
+FROM wms_pick_drop_enriched
+LIMIT 10;
+
+-- Check principal_id distribution to debug zero values
+SELECT 
+    principal_id,
+    count(*) as count
+FROM wms_pick_drop_enriched
+GROUP BY principal_id
+ORDER BY count DESC
+LIMIT 10;
+
+-- Debug: Check SKUs that exist in staging but not getting enriched
+WITH staging_skus AS (
+    SELECT DISTINCT 
+        picked_sku_id,
+        wh_id
+    FROM wms_pick_drop_staging
+    WHERE picked_sku_id != ''
+    LIMIT 100
+)
+SELECT 
+    s.picked_sku_id,
+    s.wh_id,
+    sm.id as master_id,
+    sm.code as master_code,
+    sm.principal_id as master_principal_id,
+    so.sku_id as override_sku_id,
+    so.node_id as override_node_id,
+    so.principal_id as override_principal_id
+FROM staging_skus s
+LEFT JOIN encarta_skus_master sm ON s.picked_sku_id = sm.id
+LEFT JOIN encarta_skus_overrides so ON s.picked_sku_id = so.sku_id AND s.wh_id = so.node_id
+WHERE sm.id IS NULL AND so.sku_id IS NULL
+LIMIT 20;
+
+-- Check if there's a data type or formatting issue
+SELECT 
+    'Staging SKUs' as source,
+    picked_sku_id,
+    length(picked_sku_id) as len,
+    hex(picked_sku_id) as hex_value
+FROM wms_pick_drop_staging
+WHERE picked_sku_id != ''
+LIMIT 5
+UNION ALL
+SELECT 
+    'Master SKUs' as source,
+    id,
+    length(id) as len,
+    hex(id) as hex_value
+FROM encarta_skus_master
+LIMIT 5;
+
+-- Check specific SKU that's not getting enriched
+SELECT 
+    'Check specific SKU in master' as check_type,
+    count(*) as found_count
+FROM encarta_skus_master
+WHERE id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0'
+UNION ALL
+SELECT 
+    'Check specific SKU in overrides' as check_type,
+    count(*) as found_count  
+FROM encarta_skus_overrides
+WHERE sku_id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0';
+
+-- Check if the SKU exists with different format (lowercase/uppercase)
+SELECT 
+    id,
+    code,
+    name,
+    principal_id
+FROM encarta_skus_master
+WHERE lower(id) = lower('a5fbb228-35ce-4c1c-a148-12fb75fa38e0')
+LIMIT 1;
+
+-- TEST THE EXACT JOIN - This simulates what the MV is doing
+SELECT 
+    pb.pick_item_id,
+    pb.picked_sku_id,
+    pb.wh_id,
+    sm.id as master_id,
+    sm.code as master_code,
+    sm.name as master_name,
+    sm.principal_id as master_principal_id,
+    so.sku_id as override_sku_id,
+    so.principal_id as override_principal_id,
+    COALESCE(so.principal_id, sm.principal_id, 0) AS final_principal_id
+FROM wms_pick_drop_staging AS pb
+LEFT JOIN encarta_skus_master AS sm ON pb.picked_sku_id = sm.id
+LEFT JOIN encarta_skus_overrides AS so ON pb.picked_sku_id = so.sku_id AND pb.wh_id = so.node_id
+WHERE pb.picked_sku_id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0'
+LIMIT 5;
+
+-- Check if there's an issue with the alias or table reference
+SELECT 
+    'Direct query test' as test_type,
+    sm.id,
+    sm.code,
+    sm.principal_id
+FROM encarta_skus_master sm
+WHERE sm.id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0';
+
+-- Check if ReplacingMergeTree is causing issues (multiple versions)
+SELECT 
+    id,
+    code,
+    principal_id,
+    updated_at,
+    _version
+FROM encarta_skus_master
+WHERE id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0'
+ORDER BY _version DESC
+LIMIT 5;

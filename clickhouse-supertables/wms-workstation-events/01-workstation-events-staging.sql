@@ -49,8 +49,5 @@ SETTINGS index_granularity = 8192,
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Workstation Events Staging data from Flink pipeline - Source table for enrichment';
 
--- Projection optimized for enrichment MV access pattern  
-ALTER TABLE wms_workstation_events_staging ADD PROJECTION proj_for_enrichment (
-    SELECT *
-    ORDER BY (wh_id, event_type, event_source_id)
-);
+-- Projections removed to prevent stale data issues in enrichment MVs
+-- Enrichment MVs will use the main table data for fresh, complete results

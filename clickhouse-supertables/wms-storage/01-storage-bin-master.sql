@@ -105,49 +105,5 @@ SETTINGS index_granularity = 8192,
          min_age_to_force_merge_seconds = 180
 COMMENT 'Comprehensive storage bin master data with types, zones, areas, positions, and mapping configurations';
 
--- Projection optimized for warehouse + bin_code queries
-ALTER TABLE wms_storage_bin_master ADD PROJECTION proj_by_wh_code (
-    SELECT 
-        wh_id,
-        bin_code,
-        bin_id,
-        bin_description,
-        bin_status,
-        bin_hu_id,
-        multi_sku,
-        multi_batch,
-        picking_position,
-        putaway_position,
-        rank,
-        aisle,
-        bay,
-        level,
-        position,
-        depth,
-        bin_type_code,
-        zone_id,
-        zone_code,
-        zone_description,
-        area_id,
-        area_code,
-        area_description,
-        x1,
-        y1,
-        max_volume_in_cc,
-        max_weight_in_kg,
-        pallet_capacity
-    ORDER BY (wh_id, bin_code)
-);
-
--- Projection for zone/area analytics
-ALTER TABLE wms_storage_bin_master ADD PROJECTION proj_by_zone_area (
-    SELECT 
-        wh_id,
-        zone_code,
-        area_code,
-        bin_code,
-        bin_id,
-        picking_position,
-        putaway_position
-    ORDER BY (wh_id, zone_code, area_code)
-);
+-- Projections removed to prevent stale data issues in enrichment MVs
+-- Table is already optimized with ORDER BY (bin_id) for direct JOIN performance

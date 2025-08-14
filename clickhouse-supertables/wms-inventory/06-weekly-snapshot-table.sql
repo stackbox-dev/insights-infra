@@ -94,7 +94,9 @@ CREATE TABLE IF NOT EXISTS wms_inventory_weekly_snapshot
 ENGINE = ReplacingMergeTree(generated_at)
 PARTITION BY toYYYYMM(snapshot_timestamp)
 ORDER BY (wh_id, snapshot_timestamp, hu_id, sku_id, uom, bucket, batch)
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180
 COMMENT 'Weekly cumulative inventory snapshots with enriched dimension data';
 
 -- Projection for inventory balance queries by SKU

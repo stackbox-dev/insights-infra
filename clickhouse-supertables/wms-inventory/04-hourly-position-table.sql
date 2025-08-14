@@ -93,7 +93,8 @@ CREATE TABLE IF NOT EXISTS wms_inventory_hourly_position
 ENGINE = AggregatingMergeTree()
 PARTITION BY toYYYYMM(hour_window)
 ORDER BY (wh_id, hour_window, hu_id, sku_id, uom, bucket, batch)
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192,
+         min_age_to_force_merge_seconds = 180
 COMMENT 'Hourly aggregated inventory positions with enriched dimension data';
 
 -- Projection for time-series queries by SKU

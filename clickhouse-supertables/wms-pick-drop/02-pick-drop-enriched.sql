@@ -1,20 +1,16 @@
--- ClickHouse table for WMS Pick-Drop Staging
--- Raw pick-drop data from Flink processing pipeline
--- Source: sbx_uat.wms.flink.pick_drop_staging
+-- ClickHouse table for WMS Pick Drop Summary
+-- Optimized data types with non-nullable defaults
+-- Matches Flink sink table: sbx_uat.wms.public.pick_drop_summary
 
-CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
+CREATE TABLE IF NOT EXISTS wms_pick_drop_enriched
 (
-    -- Primary Keys
-    pick_item_id String,
-    drop_item_id String,
-    
-    -- Core IDs
+    -- Core Identifiers
     wh_id Int64 DEFAULT 0,
-    session_id String DEFAULT '',
-    task_id String DEFAULT '',
-    lm_trip_id String DEFAULT '',
+    principal_id Int64 DEFAULT 0,
+    pick_item_id String DEFAULT '',
+    drop_item_id String DEFAULT '',
     
-    -- Pick item fields
+    -- Pick Item Core Fields
     picked_bin String DEFAULT '',
     picked_sku_id String DEFAULT '',
     picked_batch String DEFAULT '',
@@ -29,6 +25,8 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     picked_by_worker_id String DEFAULT '',
     moved_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     processed_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- Pick Handling Unit Fields
     picked_hu_eq_uom String DEFAULT '',
     picked_has_inner_hus Bool DEFAULT false,
     picked_inner_hu_eq_uom String DEFAULT '',
@@ -42,11 +40,16 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     hu_kind String DEFAULT '',
     source_hu_eq_uom String DEFAULT '',
     pick_item_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- Pick Additional Fields
     eligible_drop_locations String DEFAULT '',
     parent_item_id String DEFAULT '',
     old_batch String DEFAULT '',
     dest_bucket String DEFAULT '',
     original_source_bin_code String DEFAULT '',
+    lm_trip_id String DEFAULT '',
+    session_id String DEFAULT '',
+    task_id String DEFAULT '',
     picked_inner_hu_code String DEFAULT '',
     picked_inner_hu_kind_code String DEFAULT '',
     picked_quant_bucket String DEFAULT '',
@@ -54,7 +57,8 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     pick_hu Bool DEFAULT false,
     short_allocation_reason String DEFAULT '',
     
-    -- Drop item fields
+    -- Drop Item Core Fields
+    drop_item_previous_task_id String DEFAULT '',
     dropped_sku_id String DEFAULT '',
     dropped_batch String DEFAULT '',
     dropped_uom String DEFAULT '',
@@ -64,6 +68,8 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     dropped_qty Int32 DEFAULT 0,
     dropped_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     drop_item_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- Drop Handling Unit Fields
     drop_hu_in_bin Bool DEFAULT false,
     scan_dest_hu Bool DEFAULT false,
     allow_hu_break Bool DEFAULT false,
@@ -89,13 +95,9 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     quant_slotting_for_hus Bool DEFAULT false,
     processed_on_drop_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     allow_hu_break_v2 Bool DEFAULT false,
-    deactivated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
-    -- Mapping fields
-    mapping_id String DEFAULT '',
-    mapping_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
-    -- Additional fields
+    -- Additional Pick Item IDs
     bin_id String DEFAULT '',
     bin_hu_id String DEFAULT '',
     destination_bin_id String DEFAULT '',
@@ -135,6 +137,8 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     pick_attrs String DEFAULT '',
     iloc String DEFAULT '',
     dest_iloc String DEFAULT '',
+    
+    -- Additional Drop Item IDs
     source_bin_id String DEFAULT '',
     source_bin_hu_id String DEFAULT '',
     drop_bin_id String DEFAULT '',
@@ -158,23 +162,140 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     drop_mhe_id String DEFAULT '',
     drop_iloc String DEFAULT '',
     source_iloc String DEFAULT '',
-    -- Event time (maximum of pick and drop updated_at)
+    
+    -- Pick Drop Mapping Fields
+    mapping_id String DEFAULT '',
+    mapping_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    
+    -- Worker Fields
+    worker_code String DEFAULT '',
+    worker_name String DEFAULT '',
+    worker_phone String DEFAULT '',
+    worker_supervisor Bool DEFAULT false,
+    worker_active Bool DEFAULT false,
+    
+    -- Dropped Handling Unit Enrichment
+    dropped_hu_code String DEFAULT '',
+    dropped_hu_kind_id String DEFAULT '',
+    dropped_hu_session_id String DEFAULT '',
+    dropped_hu_task_id String DEFAULT '',
+    dropped_hu_storage_id String DEFAULT '',
+    dropped_hu_outer_hu_id String DEFAULT '',
+    dropped_hu_state String DEFAULT '',
+    dropped_hu_attrs String DEFAULT '',
+    dropped_hu_lock_task_id String DEFAULT '',
+    dropped_hu_effective_storage_id String DEFAULT '',
+    dropped_hu_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    dropped_hu_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- SKU Enrichment Fields (from picked_sku_id)
+    sku_category String DEFAULT '',
+    sku_product String DEFAULT '',
+    sku_product_id String DEFAULT '',
+    sku_category_group String DEFAULT '',
+    sku_sub_brand String DEFAULT '',
+    sku_brand String DEFAULT '',
+    sku_code String DEFAULT '',
+    sku_name String DEFAULT '',
+    sku_short_description String DEFAULT '',
+    sku_description String DEFAULT '',
+    sku_fulfillment_type String DEFAULT '',
+    sku_inventory_type String DEFAULT '',
+    sku_shelf_life Int32 DEFAULT 0,
+    sku_tag1 String DEFAULT '',
+    sku_tag2 String DEFAULT '',
+    sku_tag3 String DEFAULT '',
+    sku_tag4 String DEFAULT '',
+    sku_tag5 String DEFAULT '',
+    sku_handling_unit_type String DEFAULT '',
+    sku_cases_per_layer Int32 DEFAULT 0,
+    sku_layers Int32 DEFAULT 0,
+    sku_l0_units Int32 DEFAULT 0,
+    sku_l1_units Int32 DEFAULT 0,
+    sku_l2_units Int32 DEFAULT 0,
+    sku_l3_units Int32 DEFAULT 0,
+    sku_l0_name String DEFAULT '',
+    sku_l0_weight Float64 DEFAULT 0,
+    sku_l0_volume Float64 DEFAULT 0,
+    sku_l0_package_type String DEFAULT '',
+    sku_l0_length Float64 DEFAULT 0,
+    sku_l0_width Float64 DEFAULT 0,
+    sku_l0_height Float64 DEFAULT 0,
+    sku_l0_itf_code String DEFAULT '',
+    
+    -- SKU UOM L1 details
+    sku_l1_name String DEFAULT '',
+    sku_l1_weight Float64 DEFAULT 0,
+    sku_l1_volume Float64 DEFAULT 0,
+    sku_l1_package_type String DEFAULT '',
+    sku_l1_length Float64 DEFAULT 0,
+    sku_l1_width Float64 DEFAULT 0,
+    sku_l1_height Float64 DEFAULT 0,
+    sku_l1_itf_code String DEFAULT '',
+    
+    -- SKU UOM L2 details
+    sku_l2_name String DEFAULT '',
+    sku_l2_weight Float64 DEFAULT 0,
+    sku_l2_volume Float64 DEFAULT 0,
+    sku_l2_package_type String DEFAULT '',
+    sku_l2_length Float64 DEFAULT 0,
+    sku_l2_width Float64 DEFAULT 0,
+    sku_l2_height Float64 DEFAULT 0,
+    sku_l2_itf_code String DEFAULT '',
+    
+    -- SKU UOM L3 details
+    sku_l3_name String DEFAULT '',
+    sku_l3_weight Float64 DEFAULT 0,
+    sku_l3_volume Float64 DEFAULT 0,
+    sku_l3_package_type String DEFAULT '',
+    sku_l3_length Float64 DEFAULT 0,
+    sku_l3_width Float64 DEFAULT 0,
+    sku_l3_height Float64 DEFAULT 0,
+    sku_l3_itf_code String DEFAULT '',
+    
+    -- Additional SKU fields
+    sku_avg_l0_per_put Int32 DEFAULT 0,
+    sku_combined_classification String DEFAULT '',
+    
+    
+    -- System Fields
     event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
-    -- Indexes for enrichment MV JOIN performance
+    -- Indexes for query performance
     INDEX idx_wh_id wh_id TYPE minmax GRANULARITY 1,
-    INDEX idx_picked_by_worker_id picked_by_worker_id TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_dropped_inner_hu_id dropped_inner_hu_id TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_picked_sku_id picked_sku_id TYPE bloom_filter(0.01) GRANULARITY 1
-)
+    INDEX idx_principal_id principal_id TYPE minmax GRANULARITY 1,
+    INDEX idx_picked_at picked_at TYPE minmax GRANULARITY 1,
+    INDEX idx_dropped_at dropped_at TYPE minmax GRANULARITY 1,
+    INDEX idx_event_time event_time TYPE minmax GRANULARITY 1,
+    INDEX idx_picked_sku_id picked_sku_id TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_session_id session_id TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_task_id task_id TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_worker_code worker_code TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_sku_code sku_code TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_sku_category sku_category TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_sku_brand sku_brand TYPE bloom_filter(0.01) GRANULARITY 1
+) 
 ENGINE = ReplacingMergeTree(event_time)
 PARTITION BY toYYYYMM(pick_item_created_at)
 ORDER BY (wh_id, pick_item_created_at, pick_item_id, drop_item_id)
-SETTINGS index_granularity = 8192
-COMMENT 'WMS Pick-Drop Staging data from Flink pipeline - Source table for enrichment MV';
+SETTINGS index_granularity = 8192,
+         min_age_to_force_merge_seconds = 180,
+         deduplicate_merge_projection_mode = 'drop'
+COMMENT 'WMS Pick Drop enriched with workers, handling units, and SKU data - Monthly partitioned by pick_item_created_at';
 
--- Projection optimized for enrichment MV access pattern
-ALTER TABLE wms_pick_drop_staging ADD PROJECTION proj_for_enrichment (
+-- Add projections for common query patterns
+ALTER TABLE wms_pick_drop_enriched ADD PROJECTION IF NOT EXISTS proj_by_time (
     SELECT *
-    ORDER BY (wh_id, pick_item_id, drop_item_id)
+    ORDER BY (wh_id, event_time, pick_item_id)
+);
+
+ALTER TABLE wms_pick_drop_enriched ADD PROJECTION IF NOT EXISTS proj_by_worker (
+    SELECT *
+    ORDER BY (wh_id, picked_by_worker_id, pick_item_created_at)
+);
+
+ALTER TABLE wms_pick_drop_enriched ADD PROJECTION IF NOT EXISTS proj_by_sku (
+    SELECT *
+    ORDER BY (wh_id, picked_sku_id, pick_item_created_at)
 );

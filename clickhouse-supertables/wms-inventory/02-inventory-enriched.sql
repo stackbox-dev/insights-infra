@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_events_enriched
     locked_by_task_id String DEFAULT '',
     lock_mode String DEFAULT '',
     qty_added Int32 DEFAULT 0,
+    quant_iloc String DEFAULT '',  -- Added to match Flink sink structure
     
     -- Enriched handling unit fields
     hu_code String DEFAULT '',
@@ -118,34 +119,84 @@ CREATE TABLE IF NOT EXISTS wms_inventory_events_enriched
     sku_short_description String DEFAULT '',
     sku_description String DEFAULT '',
     sku_category String DEFAULT '',
+    sku_category_group String DEFAULT '',
     sku_product String DEFAULT '',
     sku_product_id String DEFAULT '',
-    sku_category_group String DEFAULT '',
-    sku_sub_brand String DEFAULT '',
     sku_brand String DEFAULT '',
+    sku_sub_brand String DEFAULT '',
     sku_fulfillment_type String DEFAULT '',
     sku_inventory_type String DEFAULT '',
     sku_shelf_life Int32 DEFAULT 0,
     sku_handling_unit_type String DEFAULT '',
-    sku_cases_per_layer Int32 DEFAULT 0,
-    sku_layers Int32 DEFAULT 0,
-    sku_active_from DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    sku_active_till DateTime64(3) DEFAULT toDateTime64('2099-12-31 23:59:59', 3),
-    sku_l0_units Int32 DEFAULT 0,
+    sku_active Boolean DEFAULT false,
+    sku_principal_id Int64 DEFAULT 0,
+    sku_node_id Int64 DEFAULT 0,
+    
+    -- SKU identifiers and tags
+    sku_identifier1 String DEFAULT '',
+    sku_identifier2 String DEFAULT '',
+    sku_tag1 String DEFAULT '',
+    sku_tag2 String DEFAULT '',
+    sku_tag3 String DEFAULT '',
+    sku_tag4 String DEFAULT '',
+    sku_tag5 String DEFAULT '',
+    sku_tag6 String DEFAULT '',
+    sku_tag7 String DEFAULT '',
+    sku_tag8 String DEFAULT '',
+    sku_tag9 String DEFAULT '',
+    sku_tag10 String DEFAULT '',
+    
+    -- SKU UOM hierarchy L0
     sku_l0_name String DEFAULT '',
+    sku_l0_units Int32 DEFAULT 0,
     sku_l0_weight Float64 DEFAULT 0,
     sku_l0_volume Float64 DEFAULT 0,
+    sku_l0_package_type String DEFAULT '',
     sku_l0_length Float64 DEFAULT 0,
     sku_l0_width Float64 DEFAULT 0,
     sku_l0_height Float64 DEFAULT 0,
-    sku_l1_units Int32 DEFAULT 0,
+    sku_l0_itf_code String DEFAULT '',
+    
+    -- SKU UOM hierarchy L1
     sku_l1_name String DEFAULT '',
+    sku_l1_units Int32 DEFAULT 0,
     sku_l1_weight Float64 DEFAULT 0,
     sku_l1_volume Float64 DEFAULT 0,
+    sku_l1_package_type String DEFAULT '',
     sku_l1_length Float64 DEFAULT 0,
     sku_l1_width Float64 DEFAULT 0,
     sku_l1_height Float64 DEFAULT 0,
-    sku_active Boolean DEFAULT false,
+    sku_l1_itf_code String DEFAULT '',
+    
+    -- SKU UOM hierarchy L2
+    sku_l2_name String DEFAULT '',
+    sku_l2_units Int32 DEFAULT 0,
+    sku_l2_weight Float64 DEFAULT 0,
+    sku_l2_volume Float64 DEFAULT 0,
+    sku_l2_package_type String DEFAULT '',
+    sku_l2_length Float64 DEFAULT 0,
+    sku_l2_width Float64 DEFAULT 0,
+    sku_l2_height Float64 DEFAULT 0,
+    sku_l2_itf_code String DEFAULT '',
+    
+    -- SKU UOM hierarchy L3
+    sku_l3_name String DEFAULT '',
+    sku_l3_units Int32 DEFAULT 0,
+    sku_l3_weight Float64 DEFAULT 0,
+    sku_l3_volume Float64 DEFAULT 0,
+    sku_l3_package_type String DEFAULT '',
+    sku_l3_length Float64 DEFAULT 0,
+    sku_l3_width Float64 DEFAULT 0,
+    sku_l3_height Float64 DEFAULT 0,
+    sku_l3_itf_code String DEFAULT '',
+    
+    -- SKU packaging config
+    sku_cases_per_layer Int32 DEFAULT 0,
+    sku_layers Int32 DEFAULT 0,
+    sku_avg_l0_per_put Int32 DEFAULT 0,
+    
+    -- SKU classifications
+    sku_combined_classification String DEFAULT '',
     sku_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     sku_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
@@ -240,7 +291,8 @@ ORDER BY (
     quant_event_id
 )
 SETTINGS index_granularity = 8192,
-         min_age_to_force_merge_seconds = 180;
+         min_age_to_force_merge_seconds = 180,
+         deduplicate_merge_projection_mode = 'drop';
 
 -- Create indexes for common query patterns
 ALTER TABLE wms_inventory_events_enriched ADD INDEX idx_hu_code hu_code TYPE bloom_filter(0.01) GRANULARITY 4;
