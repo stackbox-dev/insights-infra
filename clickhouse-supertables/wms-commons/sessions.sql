@@ -29,17 +29,3 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Sessions dimension table';
-
--- Add projection for common query pattern (whId, code)
-ALTER TABLE wms_sessions ADD PROJECTION IF NOT EXISTS by_wh_code (
-    SELECT * ORDER BY (whId, code)
-);
-
--- Add projection for sessions by kind
-ALTER TABLE wms_sessions ADD PROJECTION IF NOT EXISTS by_wh_kind (
-    SELECT * ORDER BY (whId, kind, id)
-);
-
--- Materialize the projections
-ALTER TABLE wms_sessions MATERIALIZE PROJECTION by_wh_code;
-ALTER TABLE wms_sessions MATERIALIZE PROJECTION by_wh_kind;

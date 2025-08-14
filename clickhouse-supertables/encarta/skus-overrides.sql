@@ -178,62 +178,15 @@ CREATE TABLE IF NOT EXISTS encarta_skus_overrides
     created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     -- Indexes for faster lookups in WMS enrichment
-    INDEX idx_sku_id sku_id TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_node_id node_id TYPE minmax GRANULARITY 1,
     INDEX idx_principal_id principal_id TYPE minmax GRANULARITY 1,
     INDEX idx_code code TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_sku_node (sku_id, node_id) TYPE minmax GRANULARITY 1,
     INDEX idx_category category TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_brand brand TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_active active TYPE minmax GRANULARITY 1
 ) 
 ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (node_id, code)
+ORDER BY (node_id, sku_id)
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'Encarta SKUs node-specific overrides for warehouse-specific customizations';
-
--- Projection for SKU + Node lookups (most common in enrichment)
-ALTER TABLE encarta_skus_overrides ADD PROJECTION proj_by_sku_node (
-    SELECT 
-        sku_id,
-        node_id,
-        principal_id,
-        category,
-        product,
-        product_id,
-        category_group,
-        sub_brand,
-        brand,
-        code,
-        name,
-        short_description,
-        description,
-        fulfillment_type,
-        inventory_type,
-        shelf_life,
-        handling_unit_type,
-        l0_units,
-        l1_units,
-        l2_units,
-        l3_units,
-        l0_weight,
-        l0_volume,
-        active,
-        updated_at
-    ORDER BY (sku_id, node_id)
-);
-
--- Projection for node-specific lookups
-ALTER TABLE encarta_skus_overrides ADD PROJECTION proj_by_node (
-    SELECT 
-        node_id,
-        sku_id,
-        code,
-        name,
-        category,
-        brand,
-        active
-    ORDER BY (node_id, sku_id)
-);

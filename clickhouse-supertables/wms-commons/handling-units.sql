@@ -32,19 +32,3 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Handling Units dimension table';
-
--- Projection optimized for JOIN on id (primary enrichment pattern)
--- Already optimal since ORDER BY (id) is the primary key
-
--- Projection for warehouse + code lookups
-ALTER TABLE wms_handling_units ADD PROJECTION proj_by_wh_code (
-    SELECT 
-        whId,
-        code,
-        id,
-        kindId,
-        state,
-        storageId,
-        effectiveStorageId
-    ORDER BY (whId, code)
-);

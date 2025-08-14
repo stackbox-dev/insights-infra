@@ -30,29 +30,3 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Workers dimension table';
-
--- Projection optimized for JOIN on id (primary enrichment pattern)
--- Already optimal since ORDER BY (id) is the primary key
-
--- Projection for warehouse + code lookups
-ALTER TABLE wms_workers ADD PROJECTION proj_by_wh_code (
-    SELECT 
-        whId,
-        code,
-        id,
-        name,
-        active,
-        supervisor
-    ORDER BY (whId, code)
-);
-
--- Projection for warehouse-based worker lookups
-ALTER TABLE wms_workers ADD PROJECTION proj_by_wh_id (
-    SELECT 
-        whId,
-        id,
-        code,
-        name,
-        active
-    ORDER BY (whId, id)
-);

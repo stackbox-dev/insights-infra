@@ -40,17 +40,3 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Tasks dimension table';
-
--- Add projection for common query pattern (sessionId, seq)
-ALTER TABLE wms_tasks ADD PROJECTION IF NOT EXISTS by_session_seq (
-    SELECT * ORDER BY (sessionId, seq)
-);
-
--- Add projection for whId, kind pattern
-ALTER TABLE wms_tasks ADD PROJECTION IF NOT EXISTS by_wh_kind (
-    SELECT * ORDER BY (whId, kind, id)
-);
-
--- Materialize the projections
-ALTER TABLE wms_tasks MATERIALIZE PROJECTION by_session_seq;
-ALTER TABLE wms_tasks MATERIALIZE PROJECTION by_wh_kind;

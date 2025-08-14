@@ -34,17 +34,3 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Trips dimension table';
-
--- Add projection for common query pattern (sessionId)
-ALTER TABLE wms_trips ADD PROJECTION IF NOT EXISTS by_session (
-    SELECT * ORDER BY (sessionId, createdAt)
-);
-
--- Add projection for delivery date lookups
-ALTER TABLE wms_trips ADD PROJECTION IF NOT EXISTS by_delivery_date (
-    SELECT * ORDER BY (whId, deliveryDate, id)
-);
-
--- Materialize the projections
-ALTER TABLE wms_trips MATERIALIZE PROJECTION by_session;
-ALTER TABLE wms_trips MATERIALIZE PROJECTION by_delivery_date;

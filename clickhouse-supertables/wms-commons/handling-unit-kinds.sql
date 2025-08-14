@@ -34,16 +34,5 @@ SETTINGS index_granularity = 8192,
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Handling Unit Kinds dimension table';
 
--- Add projection for common query pattern (whId, code)
-ALTER TABLE wms_handling_unit_kinds ADD PROJECTION IF NOT EXISTS by_wh_code (
-    SELECT * ORDER BY (whId, code)
-);
-
--- Add projection for usage type queries
-ALTER TABLE wms_handling_unit_kinds ADD PROJECTION IF NOT EXISTS by_usage_type (
-    SELECT * ORDER BY (whId, usageType, id)
-);
-
--- Materialize the projections
-ALTER TABLE wms_handling_unit_kinds MATERIALIZE PROJECTION by_wh_code;
-ALTER TABLE wms_handling_unit_kinds MATERIALIZE PROJECTION by_usage_type;
+-- Projections removed to prevent stale data issues in enrichment MVs
+-- Table is already optimized with ORDER BY (id) for direct JOIN performance

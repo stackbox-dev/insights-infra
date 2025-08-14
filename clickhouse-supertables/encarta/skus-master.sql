@@ -177,59 +177,15 @@ CREATE TABLE IF NOT EXISTS encarta_skus_master
     created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     -- Indexes for faster lookups in WMS enrichment
-    INDEX idx_id id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_principal_id principal_id TYPE minmax GRANULARITY 1,
     INDEX idx_code code TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_category category TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_brand brand TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_active active TYPE minmax GRANULARITY 1
-) 
+)
 ENGINE = ReplacingMergeTree(updated_at)
-ORDER BY (principal_id, code)
+ORDER BY (id)
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'Encarta SKUs master data with complete product hierarchy and UOM specifications';
-
--- Projection for SKU ID lookups (most common in enrichment)
-ALTER TABLE encarta_skus_master ADD PROJECTION proj_by_id (
-    SELECT 
-        id,
-        principal_id,
-        category,
-        product,
-        product_id,
-        category_group,
-        sub_brand,
-        brand,
-        code,
-        name,
-        short_description,
-        description,
-        fulfillment_type,
-        inventory_type,
-        shelf_life,
-        handling_unit_type,
-        l0_units,
-        l1_units,
-        l2_units,
-        l3_units,
-        l0_weight,
-        l0_volume,
-        active,
-        updated_at
-    ORDER BY id
-);
-
--- Projection for category/brand analytics
-ALTER TABLE encarta_skus_master ADD PROJECTION proj_by_category_brand (
-    SELECT 
-        category,
-        brand,
-        sub_brand,
-        id,
-        code,
-        name,
-        active
-    ORDER BY (category, brand)
-);
