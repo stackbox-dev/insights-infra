@@ -34,6 +34,11 @@
 7. **Separated MV and Table Definitions** - Keep enriched table definition separate from its MV for cleaner architecture:
    - Define the enriched table structure in its own file (e.g., `workstation-events-enriched.sql`)
    - Define the MV with `TO <table>` clause in a separate file (e.g., `workstation-events-enriched-mv.sql`)
+8. **CRITICAL: Materialized View Column Aliases** - When using `TO <table>` in MVs, EVERY column MUST have an explicit alias:
+   - ❌ WRONG: `ie.quant_event_id,` 
+   - ✅ CORRECT: `ie.quant_event_id AS quant_event_id,`
+   - This applies to ALL columns, even if the column name doesn't change
+   - Without explicit aliases, ClickHouse cannot map columns correctly and will throw "NOT_FOUND_COLUMN_IN_BLOCK" errors
 
 ### Flink SQL Patterns
 1. **Use TTL not Interval Joins** for CDC data: `SET 'table.exec.state.ttl' = '43200000';`

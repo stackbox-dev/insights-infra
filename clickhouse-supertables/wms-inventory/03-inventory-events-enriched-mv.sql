@@ -6,78 +6,59 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS wms_inventory_enriched_mv
 TO wms_inventory_events_enriched
 AS
 SELECT
-    -- Core fields from staging events (using original field names from Flink)
+    -- Event identifiers (matching target table order)
     ie.event_id AS hu_event_id,
-    ie.wh_id,
+    ie.quant_event_id AS quant_event_id,
+    ie.wh_id AS wh_id,
+    
+    -- Handling unit event fields
     ie.seq AS hu_event_seq,
-    ie.hu_id,
+    ie.hu_id AS hu_id,
     ie.event_type AS hu_event_type,
     ie.`timestamp` AS hu_event_timestamp,
     ie.payload AS hu_event_payload,
     ie.attrs AS hu_event_attrs,
-    ie.session_id,
-    ie.task_id,
-    ie.correlation_id,
-    ie.storage_id,
-    ie.outer_hu_id,
-    ie.effective_storage_id,
-    ie.quant_event_id,
-    ie.sku_id,
-    ie.uom,
-    ie.bucket,
-    ie.batch,
-    ie.price,
-    ie.inclusion_status,
-    ie.locked_by_task_id,
-    ie.lock_mode,
-    ie.qty_added,
-    ie.quant_iloc AS quant_iloc,  -- Added field from Flink
+    ie.session_id AS session_id,
+    ie.task_id AS task_id,
+    ie.correlation_id AS correlation_id,
+    ie.storage_id AS storage_id,
+    ie.outer_hu_id AS outer_hu_id,
+    ie.effective_storage_id AS effective_storage_id,
     
-    -- Handling Unit enrichment (based on hu_id)
+    -- Handling unit quant event fields
+    ie.sku_id AS sku_id,
+    ie.uom AS uom,
+    ie.bucket AS bucket,
+    ie.batch AS batch,
+    ie.price AS price,
+    ie.inclusion_status AS inclusion_status,
+    ie.locked_by_task_id AS locked_by_task_id,
+    ie.lock_mode AS lock_mode,
+    ie.qty_added AS qty_added,
+    ie.quant_iloc AS quant_iloc,
+    
+    -- Enriched handling unit fields
     hu.code AS hu_code,
     hu.kindId AS hu_kind_id,
-    hu.sessionId AS hu_session_id,
-    hu.taskId AS hu_task_id,
-    hu.storageId AS hu_storage_id,
-    hu.outerHuId AS hu_outer_hu_id,
     hu.state AS hu_state,
     hu.attrs AS hu_attrs,
-    hu.lockTaskId AS hu_lock_task_id,
-    hu.effectiveStorageId AS hu_effective_storage_id,
     hu.createdAt AS hu_created_at,
     hu.updatedAt AS hu_updated_at,
+    hu.lockTaskId AS hu_lock_task_id,
+    hu.effectiveStorageId AS hu_effective_storage_id,
     
-    -- Storage Bin enrichment (based on storage_id or effective_storage_id)
-    sbm.bin_code AS storage_bin_code,
-    sbm.createdAt AS storage_bin_created_at,
-    sbm.updatedAt AS storage_bin_updated_at,
-    
-    -- Storage Bin Master enrichment (based on bin_code)
-    sbm.bin_description AS storage_bin_description,
-    sbm.bin_status AS storage_bin_status,
-    sbm.bin_hu_id AS storage_bin_hu_id,
-    sbm.multi_sku AS storage_multi_sku,
-    sbm.multi_batch AS storage_multi_batch,
-    sbm.picking_position AS storage_picking_position,
-    sbm.putaway_position AS storage_putaway_position,
-    sbm.rank AS storage_bin_rank,
-    sbm.aisle AS storage_aisle,
-    sbm.bay AS storage_bay,
-    sbm.level AS storage_level,
-    sbm.position AS storage_position,
-    sbm.depth AS storage_depth,
-    sbm.bin_type_code AS storage_bin_type_code,
-    sbm.zone_id AS storage_zone_id,
-    sbm.zone_code AS storage_zone_code,
-    sbm.zone_description AS storage_zone_description,
-    sbm.area_id AS storage_area_id,
-    sbm.area_code AS storage_area_code,
-    sbm.area_description AS storage_area_description,
-    sbm.x1 AS storage_x1,
-    sbm.y1 AS storage_y1,
-    sbm.max_volume_in_cc AS storage_max_volume_in_cc,
-    sbm.max_weight_in_kg AS storage_max_weight_in_kg,
-    sbm.pallet_capacity AS storage_pallet_capacity,
+    -- Handling unit kind enrichment
+    huk.code AS hu_kind_code,
+    huk.name AS hu_kind_name,
+    huk.attrs AS hu_kind_attrs,
+    huk.maxVolume AS hu_kind_max_volume,
+    huk.maxWeight AS hu_kind_max_weight,
+    huk.usageType AS hu_kind_usage_type,
+    huk.abbr AS hu_kind_abbr,
+    huk.length AS hu_kind_length,
+    huk.breadth AS hu_kind_breadth,
+    huk.height AS hu_kind_height,
+    huk.weight AS hu_kind_weight,
     
     -- SKU enrichment with overrides logic (COALESCE: override > master > default)
     COALESCE(so.code, sm.code, '') AS sku_code,
@@ -95,9 +76,7 @@ SELECT
     COALESCE(so.inventory_type, sm.inventory_type, '') AS sku_inventory_type,
     COALESCE(so.shelf_life, sm.shelf_life, 0) AS sku_shelf_life,
     COALESCE(so.handling_unit_type, sm.handling_unit_type, '') AS sku_handling_unit_type,
-    sm.active AS sku_active,
     sm.principal_id AS sku_principal_id,
-    COALESCE(so.node_id, 0) AS sku_node_id,
     
     -- SKU identifiers and tags
     COALESCE(so.identifier1, sm.identifier1, '') AS sku_identifier1,
@@ -165,14 +144,85 @@ SELECT
     -- SKU classifications
     sm.combined_classification AS sku_combined_classification,
     
-    -- SKU timestamps
-    sm.created_at AS sku_created_at,
-    sm.updated_at AS sku_updated_at
+    -- Storage Bin enrichment (based on effective_storage_id only)
+    sbm.bin_code AS storage_bin_code,
+    sbm.bin_description AS storage_bin_description,
+    sbm.bin_status AS storage_bin_status,
+    sbm.bin_hu_id AS storage_bin_hu_id,
+    sbm.multi_sku AS storage_multi_sku,
+    sbm.multi_batch AS storage_multi_batch,
+    sbm.picking_position AS storage_picking_position,
+    sbm.putaway_position AS storage_putaway_position,
+    sbm.rank AS storage_rank,
+    sbm.aisle AS storage_aisle,
+    sbm.bay AS storage_bay,
+    sbm.level AS storage_level,
+    sbm.position AS storage_position,
+    sbm.depth AS storage_depth,
+    sbm.max_sku_count AS storage_max_sku_count,
+    sbm.max_sku_batch_count AS storage_max_sku_batch_count,
+    sbm.bin_type_id AS storage_bin_type_id,
+    sbm.bin_type_code AS storage_bin_type_code,
+    sbm.bin_type_description AS storage_bin_type_description,
+    sbm.max_volume_in_cc AS storage_max_volume_in_cc,
+    sbm.max_weight_in_kg AS storage_max_weight_in_kg,
+    sbm.pallet_capacity AS storage_pallet_capacity,
+    sbm.storage_hu_type AS storage_hu_type,
+    sbm.auxiliary_bin AS storage_auxiliary_bin,
+    sbm.hu_multi_sku AS storage_hu_multi_sku,
+    sbm.hu_multi_batch AS storage_hu_multi_batch,
+    sbm.use_derived_pallet_best_fit AS storage_use_derived_pallet_best_fit,
+    sbm.only_full_pallet AS storage_only_full_pallet,
+    sbm.zone_id AS storage_zone_id,
+    sbm.zone_code AS storage_zone_code,
+    sbm.zone_description AS storage_zone_description,
+    sbm.zone_face AS storage_zone_face,
+    sbm.peripheral AS storage_peripheral,
+    sbm.surveillance_config AS storage_surveillance_config,
+    sbm.area_id AS storage_area_id,
+    sbm.area_code AS storage_area_code,
+    sbm.area_description AS storage_area_description,
+    sbm.area_type AS storage_area_type,
+    sbm.rolling_days AS storage_rolling_days,
+    sbm.x1 AS storage_x1,
+    sbm.x2 AS storage_x2,
+    sbm.y1 AS storage_y1,
+    sbm.y2 AS storage_y2,
+    sbm.attrs AS storage_attrs,
+    sbm.bin_mapping AS storage_bin_mapping,
+    
+    -- Outer HU enrichment
+    ohu.code AS outer_hu_code,
+    ohu.kindId AS outer_hu_kind_id,
+    ohu.sessionId AS outer_hu_session_id,
+    ohu.taskId AS outer_hu_task_id,
+    ohu.storageId AS outer_hu_storage_id,
+    ohu.outerHuId AS outer_hu_outer_hu_id,
+    ohu.state AS outer_hu_state,
+    ohu.attrs AS outer_hu_attrs,
+    ohu.lockTaskId AS outer_hu_lock_task_id,
+    
+    -- Outer HU kind enrichment
+    ohuk.code AS outer_hu_kind_code,
+    ohuk.name AS outer_hu_kind_name,
+    ohuk.attrs AS outer_hu_kind_attrs,
+    ohuk.maxVolume AS outer_hu_kind_max_volume,
+    ohuk.maxWeight AS outer_hu_kind_max_weight,
+    ohuk.usageType AS outer_hu_kind_usage_type,
+    ohuk.abbr AS outer_hu_kind_abbr,
+    ohuk.length AS outer_hu_kind_length,
+    ohuk.breadth AS outer_hu_kind_breadth,
+    ohuk.height AS outer_hu_kind_height,
+    ohuk.weight AS outer_hu_kind_weight
 FROM wms_inventory_events_staging ie
 -- Handling Unit enrichment
 LEFT JOIN wms_handling_units hu ON ie.hu_id = hu.id
+LEFT JOIN wms_handling_unit_kinds huk ON hu.kindId = huk.id
 -- Storage Bin Master enrichment (using effective_storage_id as bin_id)
 LEFT JOIN wms_storage_bin_master sbm ON ie.effective_storage_id = sbm.bin_id
+-- Outer HU enrichment
+LEFT JOIN wms_handling_units ohu ON ie.outer_hu_id = ohu.id
+LEFT JOIN wms_handling_unit_kinds ohuk ON ohu.kindId = ohuk.id
 -- SKU Master data
 LEFT JOIN encarta_skus_master sm ON ie.sku_id = sm.id
 -- SKU Overrides for specific warehouse (wh_id as node_id)

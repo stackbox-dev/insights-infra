@@ -28,7 +28,7 @@ echo "Using TOPIC_PREFIX: $TOPIC_PREFIX"
 
 # Define topic to table mappings as JSON
 TOPIC_MAPPINGS='[
-  {"namespace": "flink", "topic": "inventory_events_staging", "table": "wms_inventory_staging"}
+  {"namespace": "flink", "topic": "inventory_events_staging", "table": "wms_inventory_events_staging"}
 ]'
 
 # Generate topics list using jq

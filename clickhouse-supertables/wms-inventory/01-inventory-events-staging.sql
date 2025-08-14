@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS wms_inventory_events_staging
     quant_iloc String DEFAULT '',  -- Added to match Flink sink structure
     
     -- Indexes for enrichment MV JOIN performance
-    INDEX idx_wh_id wh_id TYPE minmax GRANULARITY 1,
     INDEX idx_hu_id hu_id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_effective_storage_id effective_storage_id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_sku_id sku_id TYPE bloom_filter(0.01) GRANULARITY 1

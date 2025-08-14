@@ -64,7 +64,7 @@ Design for computing inventory position at any arbitrary timestamp, maintaining 
 
 **Key Design Decisions:**
 - **Granularity**: One row per unique inventory position per hour
-- **Primary Key**: (wh_id, hour_window, hu_code, sku_code, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode)
+- **Primary Key**: (wh_id, hour_window, hu_id, hu_code, sku_id, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode)
 - **Deduplication**: By (hu_event_id, quant_event_id) within each hour
 - **Delta Tracking**: Stores only hourly_qty_change per hour (cumulative is in weekly snapshots)
 
@@ -75,8 +75,9 @@ hour_window DateTime
 wh_id UInt64
 
 -- Inventory position keys (what defines a unique position)
+hu_id String
 hu_code String
-sku_code String  
+sku_id String
 uom String
 bucket String
 batch String
@@ -93,11 +94,13 @@ event_count UInt64             -- Number of events in this hour
 -- These are the most recent values as of this hour
 hu_event_id String             -- Latest event ID
 quant_event_id String          -- Latest quant event ID
-hu_event_timestamp DateTime64(3)  -- Latest event timestamp
+first_event_time DateTime64(3)  -- First event in this hour
+last_event_time DateTime64(3)   -- Last event in this hour
 
 -- All 200+ enriched fields with latest values...
-hu_id String
-hu_event_type String
+hu_event_seq, hu_event_type, hu_event_payload, hu_event_attrs
+session_id, task_id, correlation_id, storage_id, outer_hu_id
+effective_storage_id, quant_iloc
 hu_event_payload String
 ... (all other fields from enriched table)
 ```
