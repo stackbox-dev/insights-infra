@@ -263,7 +263,6 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_enriched
     event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
     -- Indexes for query performance
-    INDEX idx_wh_id wh_id TYPE minmax GRANULARITY 1,
     INDEX idx_principal_id principal_id TYPE minmax GRANULARITY 1,
     INDEX idx_picked_at picked_at TYPE minmax GRANULARITY 1,
     INDEX idx_dropped_at dropped_at TYPE minmax GRANULARITY 1,
@@ -283,19 +282,3 @@ SETTINGS index_granularity = 8192,
          min_age_to_force_merge_seconds = 180,
          deduplicate_merge_projection_mode = 'drop'
 COMMENT 'WMS Pick Drop enriched with workers, handling units, and SKU data - Monthly partitioned by pick_item_created_at';
-
--- Add projections for common query patterns
-ALTER TABLE wms_pick_drop_enriched ADD PROJECTION IF NOT EXISTS proj_by_time (
-    SELECT *
-    ORDER BY (wh_id, event_time, pick_item_id)
-);
-
-ALTER TABLE wms_pick_drop_enriched ADD PROJECTION IF NOT EXISTS proj_by_worker (
-    SELECT *
-    ORDER BY (wh_id, picked_by_worker_id, pick_item_created_at)
-);
-
-ALTER TABLE wms_pick_drop_enriched ADD PROJECTION IF NOT EXISTS proj_by_sku (
-    SELECT *
-    ORDER BY (wh_id, picked_sku_id, pick_item_created_at)
-);

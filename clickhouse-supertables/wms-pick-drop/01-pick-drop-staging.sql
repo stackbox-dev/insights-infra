@@ -162,7 +162,6 @@ CREATE TABLE IF NOT EXISTS wms_pick_drop_staging
     event_time DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
     -- Indexes for enrichment MV JOIN performance
-    INDEX idx_wh_id wh_id TYPE minmax GRANULARITY 1,
     INDEX idx_picked_by_worker_id picked_by_worker_id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_dropped_inner_hu_id dropped_inner_hu_id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_picked_sku_id picked_sku_id TYPE bloom_filter(0.01) GRANULARITY 1

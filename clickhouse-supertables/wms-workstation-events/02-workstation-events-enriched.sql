@@ -170,21 +170,3 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'Enriched workstation events with full dimension data for analytics';
-
--- Add projection for time-based queries
-ALTER TABLE wms_workstation_events_enriched ADD PROJECTION IF NOT EXISTS proj_by_time (
-    SELECT *
-    ORDER BY (wh_id, event_timestamp, event_type)
-);
-
--- Add projection for user analysis
-ALTER TABLE wms_workstation_events_enriched ADD PROJECTION IF NOT EXISTS proj_by_user (
-    SELECT *
-    ORDER BY (wh_id, user_id, event_timestamp)
-);
-
--- Add projection for SKU analysis
-ALTER TABLE wms_workstation_events_enriched ADD PROJECTION IF NOT EXISTS proj_by_sku (
-    SELECT *
-    ORDER BY (wh_id, sku_id, event_timestamp)
-);

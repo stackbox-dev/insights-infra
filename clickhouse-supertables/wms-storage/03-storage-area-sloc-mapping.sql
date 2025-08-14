@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS wms_storage_area_sloc
     updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (whId, areaCode, quality, sloc)
+ORDER BY (whId, areaCode, quality, iloc)
 TTL toDateTime(coalesce(deactivatedAt, toDateTime64('2099-12-31 23:59:59', 3))) + INTERVAL 1 MINUTE DELETE WHERE deactivatedAt IS NOT NULL
 SETTINGS index_granularity = 8192,
          min_age_to_force_merge_seconds = 180,

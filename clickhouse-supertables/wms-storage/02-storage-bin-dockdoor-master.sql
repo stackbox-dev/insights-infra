@@ -40,10 +40,15 @@ CREATE TABLE IF NOT EXISTS wms_storage_bin_dockdoor_master
     bin_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     bin_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     dockdoor_created_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    dockdoor_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
+    dockdoor_updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    
+    -- Indexes for fast queries
+    INDEX idx_wh_id wh_id TYPE minmax GRANULARITY 1,
+    INDEX idx_bin_code bin_code TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_dockdoor_code dockdoor_code TYPE bloom_filter(0.01) GRANULARITY 1
 )
 ENGINE = ReplacingMergeTree(dockdoor_updated_at)
-ORDER BY (wh_id, bin_code, dockdoor_code)
+ORDER BY (bin_id, dockdoor_id)
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180

@@ -29,7 +29,7 @@ OPTIMIZE TABLE wms_storage_bin_dockdoor_master FINAL;
 -- ========================================
 -- WMS Inventory Tables
 -- ========================================
-OPTIMIZE TABLE wms_inventory_staging FINAL;
+OPTIMIZE TABLE wms_inventory_events_staging FINAL;
 OPTIMIZE TABLE wms_inventory_events_enriched FINAL;
 OPTIMIZE TABLE wms_inventory_hourly_position FINAL;
 OPTIMIZE TABLE wms_inventory_weekly_snapshot FINAL;
@@ -44,6 +44,7 @@ OPTIMIZE TABLE wms_pick_drop_enriched FINAL;
 -- WMS Workstation Events Tables
 -- ========================================
 OPTIMIZE TABLE wms_workstation_events_staging FINAL;
+OPTIMIZE TABLE wms_workstation_events_enriched FINAL;
 
 -- ========================================
 -- Note: OPTIMIZE FINAL forces merge of all parts in the table

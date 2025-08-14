@@ -196,7 +196,11 @@ execute_sql_file() {
         fi
         
         # Execute with timeout and connection settings
-        if kubectl exec -n default $DEV_POD -- clickhouse-client \
+        local cmd_output=""
+        local cmd_exit_code=0
+        
+        # Run the command and capture output
+        cmd_output=$(kubectl exec -n default $DEV_POD -- clickhouse-client \
             --host="$CLICKHOUSE_HOST" \
             --port="$CLICKHOUSE_PORT" \
             --user="$CLICKHOUSE_USER" \
@@ -207,16 +211,29 @@ execute_sql_file() {
             --connect_timeout=30 \
             --receive_timeout=300 \
             --send_timeout=300 \
-            --queries-file="/tmp/$file_name" 2>&1 | while IFS= read -r line; do
-                if [[ $line == *"Error"* ]] || [[ $line == *"Exception"* ]]; then
-                    echo -e "  ${RED}✗ Error: $line${NC}"
-                    return 1
-                elif [[ $line == *"CREATE TABLE"* ]] || [[ $line == *"ALTER TABLE"* ]] || [[ $line == *"CREATE MATERIALIZED VIEW"* ]]; then
-                    echo -e "  ${GREEN}✓ $line${NC}"
+            --progress \
+            --queries-file="/tmp/$file_name" 2>&1) || cmd_exit_code=$?
+        
+        # Display the output with appropriate coloring
+        if [ -n "$cmd_output" ]; then
+            echo "$cmd_output" | while IFS= read -r line; do
+                if [[ $line == *"Error"* ]] || [[ $line == *"Exception"* ]] || [[ $line == *"FAILED"* ]]; then
+                    echo -e "  ${RED}$line${NC}"
+                elif [[ $line == *"CREATE"* ]] || [[ $line == *"ALTER"* ]] || [[ $line == *"DROP"* ]] || [[ $line == *"Ok."* ]]; then
+                    echo -e "  ${GREEN}$line${NC}"
+                elif [[ $line == *"rows in set"* ]] || [[ $line == *"Elapsed:"* ]]; then
+                    echo -e "  ${YELLOW}$line${NC}"
+                else
+                    echo "  $line"
                 fi
-            done; then
+            done
+        fi
+        
+        if [ $cmd_exit_code -eq 0 ]; then
             success=true
+            echo -e "  ${GREEN}✓ Query executed successfully${NC}"
         else
+            echo -e "  ${RED}✗ Query failed with exit code $cmd_exit_code${NC}"
             retry_count=$((retry_count + 1))
         fi
     done

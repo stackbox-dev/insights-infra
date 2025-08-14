@@ -35,10 +35,10 @@ CREATE TABLE IF NOT EXISTS wms_workstation_events_staging
     
     
     -- Indexes for enrichment MV JOIN performance
-    INDEX idx_wh_id wh_id TYPE minmax GRANULARITY 1,
     INDEX idx_event_timestamp event_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_hu_id hu_id TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_bin_id bin_id TYPE bloom_filter(0.01) GRANULARITY 1
+    INDEX idx_bin_id bin_id TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_sku_id sku_id TYPE bloom_filter(0.01) GRANULARITY 1
 )
 ENGINE = ReplacingMergeTree(event_timestamp)
 PARTITION BY toYYYYMM(event_timestamp)
@@ -48,6 +48,3 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180
 COMMENT 'WMS Workstation Events Staging data from Flink pipeline - Source table for enrichment';
-
--- Projections removed to prevent stale data issues in enrichment MVs
--- Enrichment MVs will use the main table data for fresh, complete results

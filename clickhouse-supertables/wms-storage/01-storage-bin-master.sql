@@ -92,7 +92,6 @@ CREATE TABLE IF NOT EXISTS wms_storage_bin_master
     updated_at DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     
     -- Indexes for faster lookups in enrichment
-    INDEX idx_bin_id bin_id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_wh_id wh_id TYPE minmax GRANULARITY 1,
     INDEX idx_bin_code bin_code TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_zone_code zone_code TYPE bloom_filter(0.01) GRANULARITY 4,
