@@ -13,13 +13,13 @@ WITH week_dates AS (
     -- MODIFY THIS SECTION to specify exact weeks
     -- Format: toStartOfWeek(toDate('YYYY-MM-DD'))
     -- Example weeks for 2024:
-    SELECT toStartOfWeek(toDate('2024-01-01')) as week_date  -- Week 1, 2024
+    SELECT toStartOfWeek(toDate('2025-01-01')) as week_date
     UNION ALL
-    SELECT toStartOfWeek(toDate('2024-04-01')) as week_date  -- Week 14, 2024
+    SELECT toStartOfWeek(toDate('2025-03-01')) as week_date
     UNION ALL
-    SELECT toStartOfWeek(toDate('2024-07-01')) as week_date  -- Week 27, 2024
+    SELECT toStartOfWeek(toDate('2025-05-01')) as week_date
     UNION ALL
-    SELECT toStartOfWeek(toDate('2024-10-01')) as week_date  -- Week 40, 2024
+    SELECT toStartOfWeek(toDate('2025-08-01')) as week_date
     
     -- Add more weeks as needed:
     -- UNION ALL
