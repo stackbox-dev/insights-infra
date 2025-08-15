@@ -1,11 +1,9 @@
 -- ClickHouse table for WMS Inventory Snapshots
--- Stores complete inventory position snapshots every 6 hours
--- Replaces the previous 3-tier architecture with a simpler 2-tier approach
 
 CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
 (
     -- Snapshot metadata
-    snapshot_timestamp DateTime COMMENT 'Snapshot timestamp (every 6 hours: 00:00, 06:00, 12:00, 18:00)',
+    snapshot_timestamp DateTime COMMENT 'Snapshot timestamp (rounded to the nearest hour)',
     snapshot_type String DEFAULT 'scheduled' COMMENT 'Type of snapshot: scheduled, manual, recovery',
     
     -- Core inventory identifiers
@@ -224,4 +222,4 @@ ENGINE = ReplacingMergeTree(_created_at)
 PARTITION BY toYYYYMM(snapshot_timestamp)
 ORDER BY (wh_id, snapshot_timestamp, hu_id, sku_id, uom, bucket, batch, price, inclusion_status, locked_by_task_id, lock_mode, quant_iloc)
 SETTINGS index_granularity = 8192
-COMMENT 'Inventory position snapshots taken every 6 hours for efficient point-in-time queries';
+COMMENT 'Inventory position snapshots for efficient point-in-time queries';
