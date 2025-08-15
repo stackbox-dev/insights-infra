@@ -8,25 +8,85 @@ metadata:
     app.kubernetes.io/component: flink-cluster
     app.kubernetes.io/cloud: azure
 spec:
-  image: flink:2.0.0-scala_2.12-java21 # Using default Docker Hub Flink image
+  image: asia-docker.pkg.dev/sbx-ci-cd/public/flink:2.0.0-scala_2.12-java21
   flinkVersion: v2_0
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   flinkConfiguration:
-    taskmanager.numberOfTaskSlots: "4"
-    state.backend: "hashmap"
-    # Azure Blob Storage paths for Flink state management (using modern abfss:// protocol)
-    state.checkpoints.dir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/checkpoints
-    state.savepoints.dir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/savepoints
+    taskmanager.numberOfTaskSlots: "3"
+    parallelism.default: "2"
+    # Network and memory configuration for TaskManager
+    taskmanager.memory.network.fraction: "0.15"
+    # State backend optimized for persistent storage with Azure Blob Storage backup
+    state.backend.type: "rocksdb"
+    state.backend.incremental: "true"
+    state.backend.rocksdb.memory.managed: "true"
+    # Use persistent storage for RocksDB local state
+    state.backend.rocksdb.localdir: "/data/flink-rocksdb"
+    # Optimized for medium-sized jobs with 8GB memory, 50GB storage
+    state.backend.rocksdb.memory.fixed-per-slot: "1024mb" # Conservative for 8GB total memory
+    # Balanced write buffers for medium-sized state
+    state.backend.rocksdb.writebuffer.size: "128mb" # Good balance for medium jobs
+    state.backend.rocksdb.writebuffer.count: "3" # Standard count for medium state
+    # Moderate block cache for medium datasets
+    state.backend.rocksdb.block.cache-size: "384mb" # Balanced cache size
+    state.backend.rocksdb.thread.num: "3" # Conservative thread count
+    # Configure memory ratios for medium-sized persistent storage
+    state.backend.rocksdb.memory.write-buffer-ratio: "0.4"
+    state.backend.rocksdb.memory.high-prio-pool-ratio: "0.08"
+    # Add bloom filters for faster lookups (great for joins):
+    state.backend.rocksdb.predefined-options: "FLASH_SSD_OPTIMIZED"
+    state.backend.rocksdb.use-bloom-filter: true
+    # Changelog disabled to fix checkpoint blocking issue
+    # state.changelog.enabled: false
+    # state.changelog.storage: filesystem
+    # state.changelog.dstl.dfs.base-path: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/changelog
+    # Force session cluster to start TaskManager pods immediately
+    slotmanager.number-of-slots.min: "1"
+    slotmanager.number-of-slots.max: "36"
+    slotmanager.slot-request-timeout: "300000"
+    # Azure Blob Storage paths for Flink state management - removed duplicate state.checkpoints.dir
+    state.savepoints.dir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/savepoints
     high-availability.type: kubernetes
-    high-availability.storageDir: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/ha
+    high-availability.storageDir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/ha
     restart-strategy.type: failure-rate
     restart-strategy.failure-rate.max-failures-per-interval: "10"
     restart-strategy.failure-rate.failure-rate-interval: "10 min"
     restart-strategy.failure-rate.delay: "30 s"
-    execution.checkpointing.interval: "30 s"
+    execution.checkpointing.interval: "300 s" # 5 minutes
     execution.checkpointing.mode: EXACTLY_ONCE
-    execution.checkpointing.timeout: "10 min"
+    execution.checkpointing.timeout: "5 min"
+    execution.checkpointing.incremental: true
+    execution.checkpointing.dir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/flink-checkpoints
+    execution.checkpointing.data-inline-threshold: "64 kb"
+    # Additional checkpoint settings for maximum Azure Blob Storage usage
+    execution.checkpointing.max-concurrent-checkpoints: 1
+    execution.checkpointing.min-pause: "5 s"
+    execution.checkpointing.tolerable-failure-number: 3
+    # Enable unaligned checkpoints for backpressure handling
+    execution.checkpointing.unaligned.enabled: true
+    # Retain checkpoints on cancellation for better recovery
+    execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+    # Additional reliability settings
+    execution.checkpointing.checkpoints-after-tasks-finish.enabled: true
+    # Native savepoint format for better performance
+    state.savepoints.format: native
+    # Reduce local state TTL to force more frequent Azure Blob Storage writes
+    table.exec.state.ttl: "1 h"
+    # Set source idle timeout back to reasonable value (was causing issues with 0ms)
     table.exec.source.idle-timeout: "30 s"
+    table.exec.resource.default-parallelism: "2" # Match your slot count
+    table.optimizer.join-reorder-enabled: true
+    # Job History and Archive Settings
+    jobmanager.archive.fs.dir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/archived-jobs
+    web.history: 50
+    web.checkpoints.history: 100
+    web.exception-history-size: 50
+    jobstore.cache-size: 104857600
+    jobstore.expiration-time: 86400
+    jobstore.max-capacity: 1000
+    jobstore.type: File
+    # Azure Storage Account Key Authentication
+    fs.azure.account.key.sbxunileverflinkstorage1.dfs.core.windows.net: ${env.AZURE_STORAGE_KEY}
   serviceAccount: flink
   jobManager:
     resource:
@@ -34,53 +94,114 @@ spec:
       cpu: 1
     replicas: 1
     podTemplate:
+      metadata:
+        labels:
+          azure.workload.identity/use: "true"
       spec:
+        serviceAccountName: flink
         containers:
           - name: flink-main-container
             env:
-              - name: HADOOP_CONF_DIR
-                value: /opt/hadoop/conf
-              - name: AZURE_STORAGE_ACCOUNT_KEY
+              - name: AZURE_TENANT_ID
+                value: f66fae02-5d36-495b-bfe0-78a6ff9f8e6e
+              - name: AZURE_CLIENT_ID
+                value: 911d60a1-3770-40cb-978b-8b7342bf02b8
+              - name: AZURE_FEDERATED_TOKEN_FILE
+                value: /var/run/secrets/azure/tokens/azure-identity-token
+              - name: AZURE_STORAGE_KEY
                 valueFrom:
                   secretKeyRef:
                     name: azure-storage-secret
                     key: storage-account-key
-            # No volume mounts needed - using Azure Blob Storage directly
+            volumeMounts:
+              - name: truststore-volume
+                mountPath: /etc/kafka/secrets
+                readOnly: true
+        volumes:
+          - name: truststore-volume
+            secret:
+              secretName: aiven-credentials
   taskManager:
     resource:
-      memory: "3072m"
-      cpu: 1
-    replicas: 2
+      memory: "8192m"
+      cpu: 2
+    replicas: 16
     podTemplate:
+      metadata:
+        labels:
+          azure.workload.identity/use: "true"
       spec:
+        serviceAccountName: flink
+        # Schedule TaskManager pods on AKS spot instances for cost optimization
+        nodeSelector:
+          kubernetes.azure.com/scalesetpriority: spot
+        tolerations:
+          - key: kubernetes.azure.com/scalesetpriority
+            operator: Equal
+            value: spot
+            effect: NoSchedule
+        initContainers:
+          - name: rocksdb-init
+            image: busybox:1.35
+            command: ["sh", "-c"]
+            args:
+              - |
+                mkdir -p /data/flink-rocksdb
+                chmod -R 777 /data/flink-rocksdb
+                echo "RocksDB directory initialized successfully"
+            volumeMounts:
+              - name: rocksdb-storage
+                mountPath: /data/flink-rocksdb
         containers:
           - name: flink-main-container
+            resources:
+              requests:
+                memory: "8Gi"
+                cpu: "2"
+              limits:
+                memory: "8Gi"
             env:
-              - name: HADOOP_CONF_DIR
-                value: /opt/hadoop/conf
-              - name: AZURE_STORAGE_ACCOUNT_KEY
+              - name: AZURE_TENANT_ID
+                value: f66fae02-5d36-495b-bfe0-78a6ff9f8e6e
+              - name: AZURE_CLIENT_ID
+                value: 911d60a1-3770-40cb-978b-8b7342bf02b8
+              - name: AZURE_FEDERATED_TOKEN_FILE
+                value: /var/run/secrets/azure/tokens/azure-identity-token
+              - name: AZURE_STORAGE_KEY
                 valueFrom:
                   secretKeyRef:
                     name: azure-storage-secret
                     key: storage-account-key
-            # No volume mounts needed - using Azure Blob Storage directly
+            volumeMounts:
+              - name: rocksdb-storage
+                mountPath: /data/flink-rocksdb
+              - name: truststore-volume
+                mountPath: /etc/kafka/secrets
+                readOnly: true
+        volumes:
+          - name: rocksdb-storage
+            emptyDir:
+              sizeLimit: 50Gi
+          - name: truststore-volume
+            secret:
+              secretName: aiven-credentials
   mode: native
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: flink-session-cluster-web
+  name: flink-session-cluster
   namespace: flink-studio
   labels:
     app.kubernetes.io/name: flink-session-cluster
     app.kubernetes.io/component: web-service
 spec:
   selector:
-    app.kubernetes.io/name: flink-session-cluster
-    app.kubernetes.io/component: jobmanager
+    app: flink-session-cluster
+    component: jobmanager
   ports:
-  - name: web
-    port: 80
-    targetPort: 8081
-    protocol: TCP
+    - name: web
+      port: 80
+      targetPort: 8081
+      protocol: TCP
   type: ClusterIP

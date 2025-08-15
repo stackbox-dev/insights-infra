@@ -227,6 +227,56 @@
         "version": "3.8.1"
       }
     },
+    "hadoop-azure": {
+      "hadoop-common": {
+        "artifactId": "hadoop-common",
+        "description": "Hadoop Common",
+        "groupId": "org.apache.hadoop",
+        "version": "3.4.1"
+      },
+      "hadoop-auth": {
+        "artifactId": "hadoop-auth",
+        "description": "Hadoop Auth",
+        "groupId": "org.apache.hadoop",
+        "version": "3.4.1"
+      },
+      "hadoop-azure": {
+        "artifactId": "hadoop-azure",
+        "description": "Hadoop Azure FileSystem",
+        "groupId": "org.apache.hadoop",
+        "version": "3.4.1"
+      },
+      "azure-storage": {
+        "artifactId": "azure-storage",
+        "description": "Azure Storage SDK",
+        "groupId": "com.microsoft.azure",
+        "version": "8.6.6"
+      },
+      "commons-configuration2": {
+        "artifactId": "commons-configuration2",
+        "description": "Apache Commons Configuration 2",
+        "groupId": "org.apache.commons",
+        "version": "2.11.0"
+      },
+      "hadoop-hdfs-client": {
+        "artifactId": "hadoop-hdfs-client",
+        "description": "Hadoop HDFS Client",
+        "groupId": "org.apache.hadoop",
+        "version": "3.4.1"
+      },
+      "woodstox-core": {
+        "artifactId": "woodstox-core",
+        "description": "Woodstox XML processor",
+        "groupId": "com.fasterxml.woodstox",
+        "version": "6.6.2"
+      },
+      "hadoop-shaded-guava": {
+        "artifactId": "hadoop-shaded-guava",
+        "description": "Hadoop Shaded Guava",
+        "groupId": "org.apache.hadoop.thirdparty",
+        "version": "1.1.1"
+      }
+    },
     "misc": {
       "snakeyaml": {
         "artifactId": "snakeyaml",

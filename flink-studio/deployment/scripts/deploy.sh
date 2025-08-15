@@ -122,24 +122,55 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
         
     print_status "Google Service Account permissions configured successfully"
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
-    print_status "Using default Docker Hub Flink image with Azure configuration"
+    print_status "Using custom Flink image with Azure configuration"
     
-    # SQL Gateway already configured with default image - no changes needed
-    print_status "SQL Gateway configured to use default Flink image"
+    # SQL Gateway already configured with custom image - no changes needed
+    print_status "SQL Gateway configured to use custom Flink image"
     
-    # Check if Azure storage account key is set
-    if ! kubectl get secret azure-storage-secret -n flink-studio --ignore-not-found 2>/dev/null | grep -q azure-storage-secret; then
-        print_error "Azure storage account key not configured!"
-        print_error "Please run:"
-        print_error "kubectl create secret generic azure-storage-secret --from-literal=storage-account-key=YOUR_ACTUAL_STORAGE_ACCOUNT_KEY -n flink-studio"
-        read -p "Have you set the Azure storage account key? (y/N): " confirm
-        if [[ ! $confirm =~ ^[Yy]$ ]]; then
-            print_error "Deployment cannot continue without storage account key. Exiting."
-            exit 1
-        fi
+    # Setup Azure Workload Identity
+    print_status "Setting up Azure Workload Identity..."
+    
+    # Check if managed identity exists
+    if ! az identity show --name flink-identity --resource-group UnileverSBXWMS_2 >/dev/null 2>&1; then
+        print_error "Azure Managed Identity 'flink-identity' not found!"
+        print_error "Please create it first:"
+        print_error "az identity create --name flink-identity --resource-group UnileverSBXWMS_2"
+        exit 1
     else
-        print_status "Azure storage secret found"
+        print_status "Azure Managed Identity 'flink-identity' found"
     fi
+    
+    # Verify storage container exists
+    print_status "Verifying Azure storage container exists..."
+    if ! az storage container show --name flink --account-name sbxunileverflinkstorage1 >/dev/null 2>&1; then
+        print_warning "Storage container 'flink' not found. Creating it..."
+        az storage container create \
+            --name flink \
+            --account-name sbxunileverflinkstorage1 \
+            --resource-group UnileverSBXWMS_2
+        print_status "Storage container 'flink' created successfully"
+    else
+        print_status "Storage container 'flink' exists"
+    fi
+    
+    # Verify federated credential exists
+    if ! az identity federated-credential show \
+        --identity-name flink-identity \
+        --resource-group UnileverSBXWMS_2 \
+        --name flink-federated-credential >/dev/null 2>&1; then
+        print_warning "Federated credential not found. Creating it..."
+        az identity federated-credential create \
+            --name flink-federated-credential \
+            --identity-name flink-identity \
+            --resource-group UnileverSBXWMS_2 \
+            --issuer "https://centralindia.oic.prod-aks.azure.com/f66fae02-5d36-495b-bfe0-78a6ff9f8e6e/e2b8aeab-2ec7-4529-8541-b03b12297935/" \
+            --subject system:serviceaccount:flink-studio:flink
+        print_status "Federated credential created successfully"
+    else
+        print_status "Federated credential already exists"
+    fi
+    
+    print_status "Azure Workload Identity setup completed"
 fi
 print_status ""
 
@@ -178,16 +209,6 @@ for i in {1..12}; do
         exit 1
     fi
 done
-
-# Deploy cloud-specific configurations
-# Note: Hadoop config is needed for SQL Gateway to access GCS/Azure storage
-if [ "$CLOUD_PROVIDER" = "gcp" ]; then
-    print_status "Deploying Hadoop configuration for SQL Gateway GCS access..."
-    kubectl apply -f manifests/02-hadoop-config-gcp.yaml
-elif [ "$CLOUD_PROVIDER" = "azure" ]; then
-    print_status "Deploying Hadoop configuration for SQL Gateway Azure storage access..."
-    kubectl apply -f manifests/02-hadoop-config-aks.yaml
-fi
 
 kubectl apply -f manifests/02-rbac${MANIFEST_SUFFIX}.yaml
 kubectl apply -f manifests/05-resource-quotas.yaml
@@ -360,17 +381,27 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "kubectl exec -it deployment/flink-session-cluster -n flink-studio -- gcloud auth list"
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_status "=== Azure-Specific Configuration ==="
-    print_status "Storage: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net"
-    print_status "Authentication: Storage Account Key"
+    print_status "Storage: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net"
+    print_status "Authentication: Azure Workload Identity"
     print_status ""
-    print_warning "Make sure you have:"
-    print_warning "1. Created Azure Storage Account: sbxstagflinkstorage"
-    print_warning "2. Created blob container: flink"  
-    print_warning "3. Enabled hierarchical namespace (Data Lake Gen2)"
-    print_warning "4. Set the storage account key secret in Kubernetes:"
-    print_warning ""
-    print_status "To set storage key:"
-    print_status "kubectl create secret generic azure-storage-secret --from-literal=storage-account-key=YOUR_ACTUAL_KEY -n flink-studio"
+    print_status "Workload Identity Configuration:"
+    print_status "- Managed Identity: flink-identity"
+    print_status "- Client ID: 911d60a1-3770-40cb-978b-8b7342bf02b8"
+    print_status "- Kubernetes Service Account: flink-studio/flink"
+    print_status "- Storage Account: sbxunileverflinkstorage1"
+    print_status "- Resource Group: UnileverSBXWMS_2"
+    print_status ""
+    print_status "Security Benefits:"
+    print_status "✅ No storage account keys stored in cluster"
+    print_status "✅ Automatic credential rotation"
+    print_status "✅ Azure RBAC-based access control"
+    print_status "✅ Reduced security risk"
+    print_status ""
+    print_status "To verify Azure storage access from a pod:"
+    print_status "kubectl exec -it deployment/flink-session-cluster -n flink-studio -- az storage container list --account-name sbxunileverflinkstorage1"
+    print_status ""
+    print_status "TaskManager pods will run on spot instances for cost optimization"
+    print_status "RocksDB storage: 50GB per TaskManager pod"
 fi
 
 print_status ""

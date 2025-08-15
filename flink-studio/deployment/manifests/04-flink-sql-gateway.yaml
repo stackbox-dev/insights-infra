@@ -40,16 +40,6 @@ spec:
             - "-Dsql-gateway.worker.keepalive-time=5min"
             # Parallelism Configuration
             - "-Dparallelism.default=2"
-            # Checkpointing Configuration
-            - "-Dexecution.checkpointing.interval=300s"
-            - "-Dexecution.checkpointing.mode=AT_LEAST_ONCE"
-            - "-Dexecution.checkpointing.timeout=10min"
-            - "-Dexecution.checkpointing.incremental=true"
-            - "-Dexecution.checkpointing.dir=gs://sbx-stag-flink-storage/flink-checkpoints"
-            - "-Dexecution.checkpointing.externalized-checkpoint-retention=RETAIN_ON_CANCELLATION"
-            - "-Dexecution.checkpointing.unaligned.enabled=true"
-            - "-Dexecution.checkpointing.tolerable-failure-number=5"
-            - "-Dstate.savepoints.format=native"
             # Table and SQL Configuration
             - "-Dtable.exec.source.idle-timeout=30s"
             - "-Dtable.exec.resource.default-parallelism=2"
@@ -57,15 +47,7 @@ spec:
           ports:
             - containerPort: 80
               name: rest-api
-          env:
-            - name: HADOOP_CONF_DIR
-              value: /opt/hadoop/conf
-            - name: GOOGLE_CLOUD_PROJECT
-              value: sbx-stag
           volumeMounts:
-            - name: hadoop-config
-              mountPath: /opt/hadoop/conf
-              readOnly: true
             - name: truststore-volume
               mountPath: /etc/kafka/secrets
               readOnly: true
@@ -93,9 +75,6 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
       volumes:
-        - name: hadoop-config
-          configMap:
-            name: hadoop-config
         - name: truststore-volume
           secret:
             secretName: aiven-credentials
