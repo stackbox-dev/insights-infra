@@ -92,15 +92,9 @@ RUN npm install -g \
     kafkajs \
     node-rdkafka
 
-# Install VS Code CLI for tunneling
-RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vscode-cli.tar.gz && \
-    tar -xzf /tmp/vscode-cli.tar.gz -C /usr/local/bin && \
-    chmod +x /usr/local/bin/code && \
-    rm /tmp/vscode-cli.tar.gz
 
 # Copy scripts and configurations
 COPY scripts/ /usr/local/bin/
-COPY configs/vscode-tunnel.conf /etc/supervisor/conf.d/
 
 # Make scripts executable and create supervisor config directory
 RUN chmod +x /usr/local/bin/*.sh && \

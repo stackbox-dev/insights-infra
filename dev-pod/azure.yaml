@@ -10,7 +10,7 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: standard # For GCP. Use "managed-csi" for Azure
+  storageClassName: managed-csi # For Azure. Use "standard" for GCP
 ---
 # StatefulSet for persistent dev environment
 apiVersion: apps/v1
@@ -90,13 +90,13 @@ spec:
         - name: npm-cache
           emptyDir: {}
 
-      # Node selector for GCP (optional)
-      # nodeSelector:
-      #   cloud.google.com/gke-nodepool: default-pool
-
       # Node selector for Azure (optional)
       # nodeSelector:
       #   agentpool: nodepool1
+
+      # Node selector for GCP (optional)
+      # nodeSelector:
+      #   cloud.google.com/gke-nodepool: default-pool
 ---
 # Headless service for StatefulSet
 apiVersion: v1
