@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
     inclusion_status String DEFAULT '' COMMENT 'Inclusion status for inventory',
     locked_by_task_id String DEFAULT '' COMMENT 'Task that has locked this inventory',
     lock_mode String DEFAULT '' COMMENT 'Lock mode (shared/exclusive)',
+    quant_iloc String DEFAULT '' COMMENT 'Inventory location',
     
     -- Cumulative quantity at snapshot time
     cumulative_qty Int64 DEFAULT 0 COMMENT 'Total quantity at snapshot time',
@@ -39,7 +40,6 @@ CREATE TABLE IF NOT EXISTS wms_inventory_snapshot
     storage_id String DEFAULT '',
     outer_hu_id String DEFAULT '',
     effective_storage_id String DEFAULT '',
-    quant_iloc String DEFAULT '',
     
     -- Handling unit attributes
     hu_state String DEFAULT '',
