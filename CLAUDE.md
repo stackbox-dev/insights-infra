@@ -10,13 +10,17 @@
 - **Flink**: Produces staging event streams (no enrichment) to `.flink` namespace topics
 - **ClickHouse**: Performs all enrichment via materialized views with dimension tables
 - **Kafka**: Uses `${KAFKA_ENV}` environment variable for topic prefixes (e.g., `sbx_uat`)
+- **Two-Tier Model**: Staging tables consume Flink events, enriched tables populated via MVs
+- **Inventory Snapshots**: 2-tier snapshot model with point-in-time views for efficiency
 
 ## Critical Rules
 
 ### Naming Conventions
-- **Files/Folders**: Use kebab-case (`pick-drop-basic.sql`, `wms-inventory/`)
+- **Files/Folders**: Use kebab-case (`pick-drop-staging.sql`, `wms-inventory/`)
 - **SQL Tables**: Use snake_case (`wms_pick_drop_staging`)
 - **No `wms_` prefix** in file names (redundant when already in wms directories)
+- **File numbering**: Prefix with `01-`, `02-`, etc. for execution order
+- **Utility scripts**: Prefix with `XX-` for non-sequential scripts
 
 ### ClickHouse Best Practices
 1. **No Nullable columns** - Use defaults for better performance (e.g., `String DEFAULT ''`, `Int64 DEFAULT 0`)
@@ -62,10 +66,18 @@
 ## Directory Structure
 ```
 insights-infra/
-├── clickhouse-summary-tables/
+├── clickhouse-supertables/
 │   ├── encarta/              # SKU master data
+│   │   ├── 01-skus-master.sql
+│   │   ├── 02-skus-overrides.sql
+│   │   └── 03-skus-combined-view.sql
 │   ├── wms-commons/          # Dimension tables (workers, handling_units)
 │   ├── wms-inventory/        # Inventory events and positions
+│   │   ├── 01-inventory-events-staging.sql
+│   │   ├── 02-inventory-events-enriched.sql
+│   │   ├── 03-inventory-events-enriched-mv.sql
+│   │   ├── 04-inventory-snapshot-table.sql
+│   │   └── 05-position-at-time-view.sql
 │   ├── wms-pick-drop/        # Pick-drop events
 │   ├── wms-storage/          # Storage bins and areas
 │   └── wms-workstation-events/
@@ -89,16 +101,20 @@ python flink_sql_executor.py --sql-file pipelines/wms-pick-drop-staging.sql --en
 LEFT JOIN encarta_skus_combined(node_id = wh_id) sku ON picked_sku_id = sku.sku_id
 ```
 
-### Enrichment Pattern
+### Two-Tier Enrichment Pattern
 1. Flink produces to `${KAFKA_ENV}.wms.flink.<entity>_staging`
-2. ClickHouse staging table consumes staging events
-3. Materialized view enriches with JOINs to dimension tables
-4. Enriched data feeds downstream aggregations
+2. ClickHouse staging table consumes staging events (minimal processing)
+3. Enriched table defined separately from MV (cleaner architecture)
+4. Materialized view enriches with JOINs to dimension tables using `TO <table>`
+5. All MV columns must have explicit aliases when using `TO <table>`
+6. Enriched data feeds downstream aggregations and views
 
 ## Testing & Validation
 - Run lint/typecheck after changes: `npm run lint`, `npm run typecheck`
 - Test complete pipeline flow before committing
 - Verify indexes and projections are partitioned correctly
+- Use backfill scripts (`XX-backfill-*.sql`) to rebuild enriched tables
+- Monitor with `XX-monitoring-queries.sql` for inventory validation
 
 ## Accessing Schema Registry
 To get Avro schemas from Kafka Schema Registry, use the flink-session-cluster pod (not taskmanager or sql-gateway):
@@ -115,4 +131,11 @@ kubectl exec -n flink-studio <pod-name> -- bash -c '
   curl -s -u "${KAFKA_USERNAME}:${KAFKA_PASSWORD}" \
     "${SCHEMA_REGISTRY_URL}/subjects/sbx_uat.encarta.public.skus-value/versions/latest"
 ' | jq -r '.schema' | jq '.'
+```
+
+## Inventory Snapshot Model
+- **Two-tier approach**: Base snapshots + recent events
+- **Point-in-time queries**: Use `wms_inventory_position_at_time` view
+- **Snapshot building**: Run `build-inventory-snapshots.sh` periodically
+- **Configurable frequency**: Adjust snapshot intervals based on needs
 ```

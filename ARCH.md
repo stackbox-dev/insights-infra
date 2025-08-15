@@ -10,6 +10,8 @@ This repository contains the data pipeline infrastructure for warehouse manageme
 2. **Single Source of Truth**: Each system component has a clearly defined responsibility
 3. **Performance Optimization**: Indexes, projections, and partitioning for optimal query performance
 4. **Maintainability**: Centralized logic, consistent naming conventions, and clear data flow
+5. **Two-Tier Architecture**: Staging tables consume Flink events, enriched tables populated via MVs
+6. **Snapshot-Based Recovery**: Inventory snapshots enable efficient point-in-time queries
 
 ## Data Flow Architecture
 
@@ -29,7 +31,7 @@ This repository contains the data pipeline infrastructure for warehouse manageme
 │  Topics:                                                            │
 │  • sbx_uat.wms.public.* (CDC tables)                                │
 │  • sbx_uat.encarta.public.* (CDC tables)                           │
-│  • sbx_uat.wms.internal.* (Processed events)                       │
+│  • sbx_uat.wms.flink.* (Flink staging events)                      │
 └──────────────────────┬──────────────────────────────────────────────┘
                        │
                        ▼
@@ -43,9 +45,9 @@ This repository contains the data pipeline infrastructure for warehouse manageme
 │  • Snapshot detection                                               │
 │                                                                     │
 │  Pipelines:                                                         │
-│  • wms-pick-drop-basic.sql                                          │
-│  • wms-workstation-events-basic.sql                                 │
-│  • wms-inventory-events-basic.sql                                   │
+│  • wms-pick-drop-staging.sql                                        │
+│  • wms-workstation-events-staging.sql                               │
+│  • wms-inventory-events-staging.sql                                 │
 │  • encarta-skus-master.sql                                          │
 │  • encarta-skus-overrides.sql                                       │
 └──────────────────────┬──────────────────────────────────────────────┘
@@ -54,24 +56,25 @@ This repository contains the data pipeline infrastructure for warehouse manageme
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         ClickHouse                                  │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Layer 1: Staging Tables (Basic Events)                             │
-│  • wms_pick_drop_basic                                              │
-│  • wms_workstation_events_basic                                     │
-│  • wms_inventory_basic_raw_events                                   │
+│  Layer 1: Staging Tables (Flink Events)                             │
+│  • wms_pick_drop_staging                                            │
+│  • wms_workstation_events_staging                                   │
+│  • wms_inventory_events_staging                                     │
 │                                                                     │
 │  Layer 2: Dimension Tables                                          │
 │  • wms_workers, wms_handling_units, wms_storage_bins                │
 │  • wms_storage_bin_master, encarta_skus_master                      │
 │  • encarta_skus_overrides                                           │
 │                                                                     │
-│  Layer 3: Enrichment (Materialized Views)                           │
-│  • wms_pick_drop_enriched_mv                                        │
-│  • wms_workstation_events_enriched_mv                               │
-│  • wms_inventory_enriched_raw_events_mv                             │
+│  Layer 3: Enriched Tables & Materialized Views                      │
+│  • wms_pick_drop_enriched (table + MV)                              │
+│  • wms_workstation_events_enriched (table + MV)                     │
+│  • wms_inventory_events_enriched (table + MV)                       │
 │                                                                     │
-│  Layer 4: Aggregations                                              │
-│  • wms_inventory_hourly_position (hourly aggregates)                │
-│  • wms_inventory_weekly_snapshot (cumulative snapshots)             │
+│  Layer 4: Aggregations & Views                                      │
+│  • wms_inventory_snapshot (2-tier snapshot model)                   │
+│  • wms_inventory_position_at_time (point-in-time view)              │
+│  • Various analytics views and aggregations                         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,15 +87,18 @@ This repository contains the data pipeline infrastructure for warehouse manageme
 **Key Responsibilities**:
 - Process CDC events from Debezium
 - Join related event streams (e.g., pick items + drop items + mappings)
-- Handle event time and watermarks
-- Detect CDC snapshots
-- Produce "basic" events without enrichment
+- Handle event time computation (e.g., GREATEST for pick-drop)
+- Detect CDC snapshots via snapshot field
+- Produce "staging" events without enrichment
+- Filter tombstones: `updatedAt > TIMESTAMP '1970-01-01 00:00:00'`
 
 **Configuration**:
-- State TTL: 12 hours for pick-drop, 1 hour for inventory
+- State TTL: 12 hours (43200000ms) for pick-drop, 1 hour for inventory
 - Checkpointing: 10-minute intervals
 - Parallelism: 2 (configurable)
 - Output format: Upsert-Kafka with Avro
+- NO WATERMARKS by default (unless explicitly required)
+- Reserved keywords: Must quote with backticks (e.g., ``timestamp``, ``type``)
 
 ### ClickHouse (`/clickhouse-summary-tables/`)
 
@@ -100,7 +106,7 @@ This repository contains the data pipeline infrastructure for warehouse manageme
 
 **Directory Structure**:
 ```
-clickhouse-summary-tables/
+clickhouse-supertables/
 ├── encarta/                 # Product catalog dimension tables
 │   ├── skus-master.sql
 │   ├── skus-overrides.sql
@@ -113,17 +119,19 @@ clickhouse-summary-tables/
 │   ├── storage-bins.sql
 │   └── storage-bin-master.sql
 ├── wms-pick-drop/           # Pick-drop event processing
-│   ├── pick-drop-basic.sql
-│   └── pick-drop-enriched-mv.sql
+│   ├── 01-pick-drop-staging.sql
+│   ├── 02-pick-drop-enriched.sql
+│   └── 03-pick-drop-enriched-mv.sql
 ├── wms-workstation-events/ # Workstation event processing
-│   ├── workstation-events-basic.sql
-│   └── workstation-events-enriched-mv.sql
+│   ├── 01-workstation-events-staging.sql
+│   ├── 02-workstation-events-enriched.sql
+│   └── 03-workstation-events-enriched-mv.sql
 └── wms-inventory/           # Inventory event processing
-    ├── inventory-basic-raw-events.sql
-    ├── inventory-enriched-raw-events-mv.sql
-    ├── hourly-position-table.sql
-    ├── hourly-position-mv.sql
-    └── weekly-snapshot-table.sql
+    ├── 01-inventory-events-staging.sql
+    ├── 02-inventory-events-enriched.sql
+    ├── 03-inventory-events-enriched-mv.sql
+    ├── 04-inventory-snapshot-table.sql
+    └── 05-position-at-time-view.sql
 ```
 
 ## Data Enrichment Strategy
@@ -134,17 +142,25 @@ All dimension tables are optimized with:
 - **Indexes**: Bloom filters on frequently queried columns
 - **Projections**: Alternative sort orders for common access patterns
 
-### Enrichment Pattern
-1. **Staging tables** receive raw events from Flink
-2. **Materialized views** JOIN with dimension tables for enrichment
-3. **JOINs** are optimized using single-column lookups on unique IDs
-4. **Exception**: SKU overrides use composite key (sku_id, node_id) for node-specific data
+### Two-Tier Enrichment Pattern
+1. **Flink produces** staging events to `${KAFKA_ENV}.wms.flink.<entity>_staging` topics
+2. **Staging tables** consume Flink events with minimal processing
+3. **Enriched tables** are populated by MVs that JOIN staging with dimension tables
+4. **Separated definitions**: Enriched table structure separate from MV definition
+5. **JOINs** are optimized using single-column lookups on unique IDs
+6. **SKU enrichment**: Uses parameterized view `encarta_skus_combined(node_id)`
+7. **Column aliases**: All MV columns must have explicit aliases when using `TO <table>`
 
 ### SKU Data Management
 - **Master Data**: Global SKU information (encarta_skus_master)
 - **Overrides**: Node/warehouse-specific customizations (encarta_skus_overrides)
 - **Combined View**: Parameterized view that merges master and overrides
-- **Logic**: Product hierarchy always from master, other fields prioritize overrides
+- **Override Pattern**: 
+  - String: `if(so.field != '', so.field, sm.field)`
+  - Numeric: `if(so.field != 0, so.field, sm.field)`
+  - JSON: `JSONMergePatch` with empty string handling
+  - SKU code: Always use `sm.code` (never overridden)
+  - Filter: `AND so.active = true` for all override JOINs
 
 ## Performance Optimizations
 
@@ -208,8 +224,25 @@ All dimension tables are optimized with:
 **Decision**: Use state TTL instead of interval joins for CDC data
 **Rationale**:
 - CDC events have random ordering
-- TTL provides predictable state cleanup
+- TTL provides predictable state cleanup (12h for pick-drop, 1h for inventory)
 - Works better with historical reprocessing
+- No watermarks by default to avoid event dropping
+
+### 5. Separated Table and MV Definitions
+**Decision**: Keep enriched table definitions separate from their materialized views
+**Rationale**:
+- Cleaner architecture and easier maintenance
+- Table schema can be modified independently
+- MV uses `TO <table>` clause for better performance
+- Explicit column aliases required for proper mapping
+
+### 6. Two-Tier Inventory Snapshot Model
+**Decision**: Implement snapshot tables with point-in-time view
+**Rationale**:
+- Efficient historical queries via snapshots
+- Combines snapshot + recent events for current state
+- Reduces computation for time-travel queries
+- Supports configurable snapshot frequency
 
 ## Monitoring and Operations
 
@@ -222,6 +255,8 @@ All dimension tables are optimized with:
 - **Partition Management**: Monthly archival of old partitions
 - **Projection Materialization**: After schema changes
 - **Statistics Update**: Regular OPTIMIZE TABLE operations
+- **Snapshot Building**: Periodic inventory snapshots via scripts
+- **Backfill Operations**: Scripts for rebuilding enriched tables
 
 ## Future Considerations
 
@@ -238,7 +273,8 @@ All dimension tables are optimized with:
 ## Development Guidelines
 
 See [`CLAUDE.md`](./CLAUDE.md) for detailed development guidelines including:
-- Naming conventions
-- ClickHouse best practices
-- Flink SQL patterns
-- Code style requirements
+- Naming conventions (kebab-case files, snake_case tables)
+- ClickHouse best practices (no nullable columns, separated MVs)
+- Flink SQL patterns (TTL-based joins, tombstone filtering)
+- Security rules (no hardcoded credentials)
+- Testing and validation requirements
