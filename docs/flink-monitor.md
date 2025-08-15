@@ -20,25 +20,25 @@ The monitor uses the same virtual environment as the SQL executor. No additional
 
 ```bash
 # Check for jobs with more than 5 exceptions (default threshold)
-./run_monitor.sh --exceptions
+./flink-studio/sql-executor/run_monitor.sh --exceptions
 
 # Check for jobs with custom exception threshold
-./run_monitor.sh --exceptions --threshold 10
+./flink-studio/sql-executor/run_monitor.sh --exceptions --threshold 10
 
 # Show overall cluster health report
-./run_monitor.sh --health
+./flink-studio/sql-executor/run_monitor.sh --health
 
 # Show details for specific job(s)
-./run_monitor.sh --job "pick-drop"
+./flink-studio/sql-executor/run_monitor.sh --job "pick-drop"
 
 # Continuous monitoring mode (updates every 30 seconds)
-./run_monitor.sh --watch
+./flink-studio/sql-executor/run_monitor.sh --watch
 
 # Continuous monitoring with custom interval
-./run_monitor.sh --watch --interval 60
+./flink-studio/sql-executor/run_monitor.sh --watch --interval 60
 
 # Output in JSON format (for automation)
-./run_monitor.sh --exceptions --json
+./flink-studio/sql-executor/run_monitor.sh --exceptions --json
 ```
 
 ### Combined Reports
@@ -46,12 +46,12 @@ The monitor uses the same virtual environment as the SQL executor. No additional
 Running without any specific flags shows both exception report and health status:
 
 ```bash
-./run_monitor.sh
+./flink-studio/sql-executor/run_monitor.sh
 ```
 
 ## Configuration
 
-The monitor uses the same `config.yaml` file as the SQL executor. It reads the Flink cluster URL from:
+The monitor uses the same `flink-studio/sql-executor/config.yaml` file as the SQL executor. It reads the Flink cluster URL from:
 
 ```yaml
 flink_cluster:
@@ -116,7 +116,7 @@ In watch mode, the screen refreshes automatically showing:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--config` | Path to configuration file | `config.yaml` |
+| `--config` | Path to configuration file | `flink-studio/sql-executor/config.yaml` |
 | `--exceptions` | Check for jobs with exceptions | - |
 | `--threshold` | Exception count threshold | 5 |
 | `--health` | Show cluster health report | - |
@@ -131,7 +131,7 @@ The monitor can be integrated into CI/CD pipelines for automated health checks:
 
 ```bash
 # Check for job failures and exit with error code if found
-./run_monitor.sh --exceptions --threshold 0 --json > exceptions.json
+./flink-studio/sql-executor/run_monitor.sh --exceptions --threshold 0 --json > exceptions.json
 if [ $? -ne 0 ]; then
     echo "Jobs with exceptions detected!"
     exit 1
@@ -167,7 +167,7 @@ The monitor tracks the following metrics:
 
 If the monitor cannot connect to the Flink cluster:
 
-1. Verify the cluster URL in `config.yaml`
+1. Verify the cluster URL in `flink-studio/sql-executor/config.yaml`
 2. Ensure you're connected to the correct Kubernetes cluster
 3. Check that the Flink service is running:
    ```bash
@@ -180,8 +180,8 @@ If you encounter import errors, ensure the virtual environment is properly set u
 
 ```bash
 # Recreate the virtual environment
-rm -rf .venv
-./run_monitor.sh --help  # This will recreate the venv
+rm -rf flink-studio/sql-executor/.venv
+./flink-studio/sql-executor/run_monitor.sh --help  # This will recreate the venv
 ```
 
 ## Examples
@@ -190,10 +190,10 @@ rm -rf .venv
 
 ```bash
 # Monitor all pick-drop related jobs
-./run_monitor.sh --job "pick-drop"
+./flink-studio/sql-executor/run_monitor.sh --job "pick-drop"
 
 # Monitor enrichment pipelines
-./run_monitor.sh --job "enrichment"
+./flink-studio/sql-executor/run_monitor.sh --job "enrichment"
 ```
 
 ### Automated Alerting
@@ -202,7 +202,7 @@ Create a cron job for regular monitoring:
 
 ```bash
 # Add to crontab: Check every 5 minutes
-*/5 * * * * cd /path/to/sql-executor && ./run_monitor.sh --exceptions --threshold 5 --json >> /var/log/flink-monitor.log 2>&1
+*/5 * * * * cd /path/to/insights-infra && ./flink-studio/sql-executor/run_monitor.sh --exceptions --threshold 5 --json >> /var/log/flink-monitor.log 2>&1
 ```
 
 ## Exit Codes

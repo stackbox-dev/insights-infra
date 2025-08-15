@@ -1,5 +1,5 @@
 -- Simplified 2-tier view for inventory position at any point in time
--- Uses snapshot (every 6 hours) + raw events for recent data
+-- Uses nearest snapshot + raw events for recent data
 
 DROP VIEW IF EXISTS wms_inventory_position_at_time;
 
