@@ -9,7 +9,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 200Gi
   storageClassName: managed-csi # For Azure. Use "standard" for GCP
 ---
 # StatefulSet for persistent dev environment
