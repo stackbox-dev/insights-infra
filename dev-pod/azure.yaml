@@ -9,8 +9,8 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 200Gi
-  storageClassName: managed-csi # For Azure. Use "standard" for GCP
+      storage: 500Gi
+  storageClassName: managed-csi-premium # For Azure Premium SSD. Use "standard" for GCP
 ---
 # StatefulSet for persistent dev environment
 apiVersion: apps/v1
@@ -37,11 +37,11 @@ spec:
           # Resource limits (adjust as needed)
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "16Gi"
+              cpu: "2"
             limits:
-              memory: "8Gi"
-              cpu: "4"
+              memory: "32Gi"
+              cpu: "8"
 
           # Environment variables
           env:
@@ -90,13 +90,23 @@ spec:
         - name: npm-cache
           emptyDir: {}
 
-      # Node selector for Azure (optional)
-      # nodeSelector:
-      #   agentpool: nodepool1
-
-      # Node selector for GCP (optional)
-      # nodeSelector:
-      #   cloud.google.com/gke-nodepool: default-pool
+      # Allow scheduling on spot instances
+      tolerations:
+        - key: "kubernetes.azure.com/scalesetpriority"
+          operator: "Equal"
+          value: "spot"
+          effect: "NoSchedule"
+      
+      # Prefer spot instances but allow regular nodes as fallback
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: "kubernetes.azure.com/scalesetpriority"
+                    operator: In
+                    values: ["spot"]
 ---
 # Headless service for StatefulSet
 apiVersion: v1
