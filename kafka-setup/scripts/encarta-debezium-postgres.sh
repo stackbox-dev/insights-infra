@@ -96,6 +96,30 @@ cleanup_function() {
 }
 setup_signal_handlers cleanup_function
 
+# Define table list for easier maintenance
+TABLE_LIST=$(cat <<EOF
+public.skus,
+public.uoms,
+public.products,
+public.sub_categories,
+public.categories,
+public.classifications,
+public.node_overrides,
+public.node_override_classifications,
+public.eans,
+public.product_classifications,
+public.product_node_overrides,
+public.product_node_override_classifications,
+public.category_groups,
+public.default_values,
+public.sub_brands,
+public.brands
+EOF
+)
+
+# Convert multiline to single line for JSON
+TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
+
 # Prepare connector configuration
 CONNECTOR_CONFIG=$(cat <<EOF
 {
@@ -107,7 +131,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.dbname": "${ENCARTA_DB_NAME}",
       "database.server.name": "${ENCARTA_DB_NAME}",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.skus,public.uoms,public.products,public.sub_categories,public.categories,public.classifications,public.node_overrides,public.node_override_classifications,public.eans,public.product_classifications,public.product_node_overrides,public.product_node_override_classifications,public.category_groups,public.default_values,public.sub_brands,public.brands", 
+      "table.include.list": "${TABLE_LIST_COMPACT}", 
       "database.history.kafka.topic": "debezium_schemas.encarta",
       "publication.name": "${ENCARTA_PUBLICATION_NAME}",
       "slot.name": "${ENCARTA_SLOT_NAME}",

@@ -96,6 +96,16 @@ cleanup_function() {
 }
 setup_signal_handlers cleanup_function
 
+# Define table list for easier maintenance
+TABLE_LIST=$(cat <<EOF
+public.node,
+public.node_closure
+EOF
+)
+
+# Convert multiline to single line for JSON
+TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
+
 # Prepare connector configuration
 CONNECTOR_CONFIG=$(cat <<EOF
 {
@@ -107,7 +117,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.dbname": "${BACKBONE_DB_NAME}",
       "database.server.name": "${BACKBONE_DB_NAME}",
       "plugin.name": "pgoutput",
-      "table.include.list": "public.node,public.node_closure", 
+      "table.include.list": "${TABLE_LIST_COMPACT}", 
       "database.history.kafka.topic": "debezium_schemas.backbone",
       "publication.name": "${BACKBONE_PUBLICATION_NAME}",
       "slot.name": "${BACKBONE_SLOT_NAME}",

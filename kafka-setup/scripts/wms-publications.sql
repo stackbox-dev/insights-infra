@@ -38,6 +38,4 @@ public.inb_serialization_item,
 public.inb_qc_item_v2,
 public.ira_bin_items,
 public.ob_qa_lineitem,
-public.handling_unit_kind,
-public.handling_unit_quant_event,
-public.handling_unit_event;
+public.handling_unit_kind;
