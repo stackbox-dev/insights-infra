@@ -1,32 +1,19 @@
 ---
-# PersistentVolumeClaim for workspace data
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: dev-pod-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 500Gi
-  storageClassName: managed-csi-premium # For Azure Premium SSD. Use "standard" for GCP
----
 # StatefulSet for persistent dev environment
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: dev-pod
+  name: dev-pod-v2
 spec:
-  serviceName: dev-pod-service
+  serviceName: dev-pod-v2-service
   replicas: 1
   selector:
     matchLabels:
-      app: dev-pod
+      app: dev-pod-v2
   template:
     metadata:
       labels:
-        app: dev-pod
+        app: dev-pod-v2
         environment: development
     spec:
       containers:
@@ -37,11 +24,10 @@ spec:
           # Resource limits (adjust as needed)
           resources:
             requests:
-              memory: "16Gi"
-              cpu: "2"
+              memory: "24Gi"
+              cpu: "4"
             limits:
               memory: "32Gi"
-              cpu: "8"
 
           # Environment variables
           env:
@@ -81,11 +67,6 @@ spec:
             periodSeconds: 10
 
       volumes:
-        # Persistent volume for workspace
-        - name: workspace
-          persistentVolumeClaim:
-            claimName: dev-pod-pvc
-
         # EmptyDir for npm cache
         - name: npm-cache
           emptyDir: {}
@@ -107,17 +88,29 @@ spec:
                   - key: "kubernetes.azure.com/scalesetpriority"
                     operator: In
                     values: ["spot"]
+  
+  # Volume claim templates for each pod replica
+  volumeClaimTemplates:
+    - metadata:
+        name: workspace
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 500Gi
+        storageClassName: managed-csi-premium
 ---
 # Headless service for StatefulSet
 apiVersion: v1
 kind: Service
 metadata:
-  name: dev-pod-service
+  name: dev-pod-v2-service
 spec:
   type: ClusterIP
   clusterIP: None # Headless service for StatefulSet
   selector:
-    app: dev-pod
+    app: dev-pod-v2
   ports:
     - name: nodejs
       port: 3000

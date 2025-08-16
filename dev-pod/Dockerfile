@@ -22,9 +22,16 @@ RUN apt-get update && \
         tmux \
         supervisor \
         tzdata \
-        apt-transport-https && \
+        apt-transport-https \
+        sqlite3 \
+        htop \
+        iputils-ping \
+        dnsutils && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Install DuckDB using official installer
+RUN curl https://install.duckdb.org | sh
 
 # Install Node.js 22
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
