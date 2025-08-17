@@ -1,29 +1,30 @@
 -- SET 'execution.savepoint.path' = '<path to checkpoint/savepoint>';
 --
-SET 'pipeline.name' = 'WMS Pick Drop Staging Processing';
+SET 'pipeline.name' = 'WMS Pick Drop Staging Unified Processing';
 SET 'table.exec.sink.not-null-enforcer' = 'drop';
-SET 'parallelism.default' = '4';
+SET 'parallelism.default' = '6';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
 SET 'table.optimizer.adaptive-join.enabled' = 'true';
-SET 'table.exec.resource.default-parallelism' = '4';
-;
+SET 'table.exec.resource.default-parallelism' = '6';
+
 -- State TTL configuration to prevent unbounded state growth
 -- State will be kept for 4 hours after last access
 SET 'table.exec.state.ttl' = '14400000';
--- 4 hours in milliseconds
--- Performance optimizations
+
+-- Enhanced performance optimizations for unified pipeline
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
-SET 'table.exec.mini-batch.allow-latency' = '1s';
-SET 'table.exec.mini-batch.size' = '5000';
-SET 'execution.checkpointing.interval' = '600000';
+SET 'table.exec.mini-batch.allow-latency' = '2s';
+SET 'table.exec.mini-batch.size' = '10000';
+SET 'execution.checkpointing.interval' = '300000';
 SET 'execution.checkpointing.timeout' = '1800000';
 SET 'state.backend.incremental' = 'true';
 SET 'state.backend.rocksdb.compression.type' = 'LZ4';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.optimizer.multiple-input-enabled' = 'true';
--- Source Table 1: Pick Items
-CREATE TABLE pick_items (
+
+-- Source Table 1: Pick Items (Raw with duplicates)
+CREATE TABLE pick_items_raw (
     id STRING NOT NULL,
     `whId` BIGINT NOT NULL,
     `sessionId` STRING NOT NULL,
@@ -107,13 +108,12 @@ CREATE TABLE pick_items (
     `mheId` STRING,
     attrs STRING,
     iloc STRING,
-    `destIloc` STRING,
-    PRIMARY KEY (id) NOT ENFORCED
+    `destIloc` STRING
 ) WITH (
-    'connector' = 'upsert-kafka',
+    'connector' = 'kafka',
     'topic' = '${KAFKA_ENV}.wms.public.pd_pick_item',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
-    'properties.group.id' = '${KAFKA_ENV}-wms-pick-drop-staging',
+    'properties.group.id' = '${KAFKA_ENV}-wms-pick-drop-staging-unified',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
@@ -121,17 +121,15 @@ CREATE TABLE pick_items (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
-    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
-    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'format' = 'avro-confluent',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'scan.startup.mode' = 'earliest-offset'
 );
--- Source Table 2: Drop Items
-CREATE TABLE drop_items (
+
+-- Source Table 2: Drop Items (Raw with duplicates)
+CREATE TABLE drop_items_raw (
     id STRING NOT NULL,
     `whId` BIGINT NOT NULL,
     `sessionId` STRING NOT NULL,
@@ -200,13 +198,12 @@ CREATE TABLE drop_items (
     attrs STRING,
     `mheId` STRING,
     iloc STRING,
-    `sourceIloc` STRING,
-    PRIMARY KEY (id) NOT ENFORCED
+    `sourceIloc` STRING
 ) WITH (
-    'connector' = 'upsert-kafka',
+    'connector' = 'kafka',
     'topic' = '${KAFKA_ENV}.wms.public.pd_drop_item',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
-    'properties.group.id' = '${KAFKA_ENV}-wms-pick-drop-staging',
+    'properties.group.id' = '${KAFKA_ENV}-wms-pick-drop-staging-unified',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
@@ -214,30 +211,27 @@ CREATE TABLE drop_items (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
-    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
-    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'format' = 'avro-confluent',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'scan.startup.mode' = 'earliest-offset'
 );
--- Source Table 3: Pick Drop Mapping
-CREATE TABLE pick_drop_mapping (
+
+-- Source Table 3: Pick Drop Mapping (Raw with duplicates)
+CREATE TABLE pick_drop_mapping_raw (
     id STRING,
     `whId` BIGINT,
     `sessionId` STRING,
     `taskId` STRING,
     `pickItemId` STRING,
     `dropItemId` STRING,
-    `createdAt` TIMESTAMP(3),
-    PRIMARY KEY (id) NOT ENFORCED
+    `createdAt` TIMESTAMP(3)
 ) WITH (
-    'connector' = 'upsert-kafka',
+    'connector' = 'kafka',
     'topic' = '${KAFKA_ENV}.wms.public.pd_pick_drop_mapping',
     'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
-    'properties.group.id' = '${KAFKA_ENV}-wms-pick-drop-staging',
+    'properties.group.id' = '${KAFKA_ENV}-wms-pick-drop-staging-unified',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'SCRAM-SHA-512',
     'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
@@ -245,16 +239,14 @@ CREATE TABLE pick_drop_mapping (
     'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
-    'key.format' = 'avro-confluent',
-    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
-    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
-    'value.format' = 'avro-confluent',
-    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
-    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
-    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+    'format' = 'avro-confluent',
+    'avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'scan.startup.mode' = 'earliest-offset'
 );
--- Intermediate sink table for staging pick-drop data
+
+-- Sink table with exact same schema but using standard kafka connector
 CREATE TABLE pick_drop_staging (
     pick_item_id STRING,
     drop_item_id STRING,
@@ -406,7 +398,7 @@ CREATE TABLE pick_drop_staging (
     event_time TIMESTAMP(3) NOT NULL,
     -- Deactivated at - COALESCE of pick and drop deactivated timestamps
     deactivated_at TIMESTAMP(3),
-    -- Primary key for upsert-kafka
+    -- Primary key for partitioning - same as original
     PRIMARY KEY (pick_item_id, drop_item_id) NOT ENFORCED
 ) WITH (
     'connector' = 'upsert-kafka',
@@ -420,8 +412,7 @@ CREATE TABLE pick_drop_staging (
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
     'properties.transaction.timeout.ms' = '900000',
-    'sink.parallelism' = '4',
-    'sink.transactional-id-prefix' = 'pick-drop-staging-sink',
+    'sink.parallelism' = '6',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
     'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
@@ -431,13 +422,186 @@ CREATE TABLE pick_drop_staging (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
--- Staging pick-drop processing with regular equijoins (no time windows)
--- State TTL (4 hours) prevents unbounded growth for both historical and real-time processing
+
+-- Intermediate view for deduplicated pick items
+CREATE VIEW pick_items_deduped AS
+SELECT * FROM (
+    SELECT *, 
+           ROW_NUMBER() OVER (PARTITION BY id ORDER BY `updatedAt` DESC) as rn
+    FROM pick_items_raw
+) WHERE rn = 1;
+
+-- Intermediate view for mapping INNER JOIN drop items (complete pick-drop pairs)
+-- Join first, then deduplicate based on drop item updated_at
+CREATE VIEW pick_drop_pairs AS
+SELECT 
+    mapping_id,
+    mapping_wh_id,
+    mapping_session_id,
+    mapping_task_id,
+    `pickItemId`,
+    `dropItemId`,
+    mapping_created_at,
+    -- All drop item fields
+    drop_id,
+    drop_wh_id,
+    drop_session_id,
+    drop_task_id,
+    `sourceBinId`,
+    `sourceBinHUId`,
+    `sourceBinCode`,
+    drop_sku_id,
+    drop_batch,
+    drop_uom,
+    drop_bucket,
+    drop_qty,
+    drop_hu_id,
+    drop_hu_code,
+    drop_bin_id,
+    drop_bin_hu_id,
+    drop_bin_code,
+    drop_created_at,
+    drop_deactivated_at,
+    drop_deactivated_by,
+    `droppedQty`,
+    `droppedAt`,
+    `droppedBy`,
+    drop_updated_at,
+    `dropHUInBin`,
+    `scanDestHU`,
+    `allowHUBreak`,
+    drop_has_inner_hus,
+    `scanInnerHUs`,
+    drop_hu_eq_uom,
+    `destHUId`,
+    `destHUCode`,
+    `droppedInnerHUId`,
+    drop_inner_hu_eq_uom,
+    drop_bin_assigned_at,
+    `dropUOM`,
+    drop_eligible_drop_locations,
+    drop_parent_item_id,
+    `huBroken`,
+    drop_picked_by,
+    `sourceBucket`,
+    `originalDestinationBinId`,
+    `originalDestinationBinCode`,
+    drop_lm_trip_id,
+    `processedForLoadingAt`,
+    drop_quant_bucket,
+    drop_inner_hu_id,
+    drop_inner_hu_code,
+    drop_inner_hu_kind_id,
+    drop_inner_hu_kind_code,
+    `dropInnerHU`,
+    `allowInnerHUBreak`,
+    `innerHUBroken`,
+    drop_auto_completed,
+    `processedForPickAt`,
+    `quantSlottingForHUs`,
+    drop_pd_previous_task_id,
+    `processedOnDropAt`,
+    drop_provisional_item_id,
+    `allowHUBreakV2`,
+    drop_input_dest_hu_id,
+    drop_leg_index,
+    drop_last_leg,
+    drop_input_dest_bin_id,
+    drop_induction_id,
+    drop_attrs,
+    drop_mhe_id,
+    drop_iloc,
+    `sourceIloc`
+FROM (
+    SELECT 
+        pdm.id AS mapping_id,
+        pdm.`whId` AS mapping_wh_id,
+        pdm.`sessionId` AS mapping_session_id,
+        pdm.`taskId` AS mapping_task_id,
+        pdm.`pickItemId`,
+        pdm.`dropItemId`,
+        pdm.`createdAt` AS mapping_created_at,
+        -- All drop item fields
+        di.id AS drop_id,
+        di.`whId` AS drop_wh_id,
+        di.`sessionId` AS drop_session_id,
+        di.`taskId` AS drop_task_id,
+        di.`sourceBinId`,
+        di.`sourceBinHUId`,
+        di.`sourceBinCode`,
+        di.`skuId` AS drop_sku_id,
+        di.batch AS drop_batch,
+        di.uom AS drop_uom,
+        di.bucket AS drop_bucket,
+        di.qty AS drop_qty,
+        di.`huId` AS drop_hu_id,
+        di.`huCode` AS drop_hu_code,
+        di.`binId` AS drop_bin_id,
+        di.`binHUId` AS drop_bin_hu_id,
+        di.`binCode` AS drop_bin_code,
+        di.`createdAt` AS drop_created_at,
+        di.`deactivatedAt` AS drop_deactivated_at,
+        di.`deactivatedBy` AS drop_deactivated_by,
+        di.`droppedQty`,
+        di.`droppedAt`,
+        di.`droppedBy`,
+        di.`updatedAt` AS drop_updated_at,
+        di.`dropHUInBin`,
+        di.`scanDestHU`,
+        di.`allowHUBreak`,
+        di.`hasInnerHUs` AS drop_has_inner_hus,
+        di.`scanInnerHUs`,
+        di.`huEqUOM` AS drop_hu_eq_uom,
+        di.`destHUId`,
+        di.`destHUCode`,
+        di.`droppedInnerHUId`,
+        di.`innerHUEqUOM` AS drop_inner_hu_eq_uom,
+        di.`binAssignedAt` AS drop_bin_assigned_at,
+        di.`dropUOM`,
+        di.`eligibleDropLocations` AS drop_eligible_drop_locations,
+        di.`parentItemId` AS drop_parent_item_id,
+        di.`huBroken`,
+        di.`pickedBy` AS drop_picked_by,
+        di.`sourceBucket`,
+        di.`originalDestinationBinId`,
+        di.`originalDestinationBinCode`,
+        di.`lmTripId` AS drop_lm_trip_id,
+        di.`processedForLoadingAt`,
+        di.`quantBucket` AS drop_quant_bucket,
+        di.`innerHUId` AS drop_inner_hu_id,
+        di.`innerHUCode` AS drop_inner_hu_code,
+        di.`innerHUKindId` AS drop_inner_hu_kind_id,
+        di.`innerHUKindCode` AS drop_inner_hu_kind_code,
+        di.`dropInnerHU`,
+        di.`allowInnerHUBreak`,
+        di.`innerHUBroken`,
+        di.`autoCompleted` AS drop_auto_completed,
+        di.`processedForPickAt`,
+        di.`quantSlottingForHUs`,
+        di.`pdPreviousTaskId` AS drop_pd_previous_task_id,
+        di.`processedOnDropAt`,
+        di.`provisionalItemId` AS drop_provisional_item_id,
+        di.`allowHUBreakV2`,
+        di.`inputDestHUId` AS drop_input_dest_hu_id,
+        di.`legIndex` AS drop_leg_index,
+        di.`lastLeg` AS drop_last_leg,
+        di.`inputDestBinId` AS drop_input_dest_bin_id,
+        di.`inductionId` AS drop_induction_id,
+        di.attrs AS drop_attrs,
+        di.`mheId` AS drop_mhe_id,
+        di.iloc AS drop_iloc,
+        di.`sourceIloc`,
+        -- Deduplication ranking based on drop item updated_at
+        ROW_NUMBER() OVER (PARTITION BY pdm.`pickItemId`, pdm.`dropItemId` ORDER BY di.`updatedAt` DESC) as rn
+    FROM pick_drop_mapping_raw pdm
+    INNER JOIN drop_items_raw di ON pdm.`dropItemId` = di.id AND pdm.`sessionId` = di.`sessionId`
+) WHERE rn = 1;
+
+-- Unified pick-drop processing with intermediate views
 INSERT INTO pick_drop_staging
 SELECT
-    /*+ BROADCAST('drop_items') */
     pi.id AS pick_item_id,
-    COALESCE(pdm.`dropItemId`, '') AS drop_item_id,
+    COALESCE(pdp.`dropItemId`, '') AS drop_item_id,
     pi.`whId` AS wh_id,
     pi.`sessionId` AS session_id,
     pi.`taskId` AS task_id,
@@ -482,43 +646,43 @@ SELECT
     pi.`pickHU` AS pick_hu,
     pi.`shortAllocationReason` AS short_allocation_reason,
     -- Drop item fields
-    COALESCE(di.`skuId`, '') AS dropped_sku_id,
-    COALESCE(di.batch, '') AS dropped_batch,
-    COALESCE(di.uom, '') AS dropped_uom,
-    COALESCE(di.bucket, '') AS drop_bucket,
+    COALESCE(pdp.drop_sku_id, '') AS dropped_sku_id,
+    COALESCE(pdp.drop_batch, '') AS dropped_batch,
+    COALESCE(pdp.drop_uom, '') AS dropped_uom,
+    COALESCE(pdp.drop_bucket, '') AS drop_bucket,
     pi.`huCode` AS picked_hu_code,
-    COALESCE(di.`binCode`, '') AS dropped_bin_code,
-    COALESCE(di.`droppedQty`, 0) AS dropped_qty,
-    di.`droppedAt` AS dropped_at,
-    di.`updatedAt` AS drop_item_updated_at,
-    di.`dropHUInBin` AS drop_hu_in_bin,
-    di.`scanDestHU` AS scan_dest_hu,
-    di.`allowHUBreak` AS allow_hu_break,
-    di.`hasInnerHUs` AS dropped_has_inner_hus,
-    di.`scanInnerHUs` AS scan_inner_hus,
-    di.`huEqUOM` AS dropped_hu_eq_uom,
-    di.`destHUCode` AS dest_hu_code,
-    di.`droppedInnerHUId` AS dropped_inner_hu_id,
-    di.`innerHUEqUOM` AS dropped_inner_hu_eq_uom,
-    di.`binAssignedAt` AS dest_bin_assigned_at,
-    di.`dropUOM` AS drop_uom,
-    di.`parentItemId` AS drop_parent_item_id,
-    di.`huBroken` AS hu_broken,
-    di.`originalDestinationBinCode` AS drop_original_source_bin_code,
-    di.`processedForLoadingAt` AS processed_for_loading_at,
-    di.`quantBucket` AS drop_quant_bucket,
-    di.`innerHUCode` AS drop_inner_hu_code,
-    di.`innerHUKindCode` AS dropped_inner_hu_kind_code,
-    di.`dropInnerHU` AS drop_inner_hu,
-    di.`allowInnerHUBreak` AS allow_inner_hu_break,
-    di.`innerHUBroken` AS inner_hu_broken,
-    di.`autoCompleted` AS drop_auto_complete,
-    di.`quantSlottingForHUs` AS quant_slotting_for_hus,
-    di.`processedOnDropAt` AS processed_on_drop_at,
-    di.`allowHUBreakV2` AS allow_hu_break_v2,
+    COALESCE(pdp.drop_bin_code, '') AS dropped_bin_code,
+    COALESCE(pdp.`droppedQty`, 0) AS dropped_qty,
+    pdp.`droppedAt` AS dropped_at,
+    pdp.drop_updated_at AS drop_item_updated_at,
+    pdp.`dropHUInBin` AS drop_hu_in_bin,
+    pdp.`scanDestHU` AS scan_dest_hu,
+    pdp.`allowHUBreak` AS allow_hu_break,
+    pdp.drop_has_inner_hus AS dropped_has_inner_hus,
+    pdp.`scanInnerHUs` AS scan_inner_hus,
+    pdp.drop_hu_eq_uom AS dropped_hu_eq_uom,
+    pdp.`destHUCode` AS dest_hu_code,
+    pdp.`droppedInnerHUId` AS dropped_inner_hu_id,
+    pdp.drop_inner_hu_eq_uom AS dropped_inner_hu_eq_uom,
+    pdp.drop_bin_assigned_at AS dest_bin_assigned_at,
+    pdp.`dropUOM` AS drop_uom,
+    pdp.drop_parent_item_id AS drop_parent_item_id,
+    pdp.`huBroken` AS hu_broken,
+    pdp.`originalDestinationBinCode` AS drop_original_source_bin_code,
+    pdp.`processedForLoadingAt` AS processed_for_loading_at,
+    pdp.drop_quant_bucket AS drop_quant_bucket,
+    pdp.drop_inner_hu_code AS drop_inner_hu_code,
+    pdp.drop_inner_hu_kind_code AS dropped_inner_hu_kind_code,
+    pdp.`dropInnerHU` AS drop_inner_hu,
+    pdp.`allowInnerHUBreak` AS allow_inner_hu_break,
+    pdp.`innerHUBroken` AS inner_hu_broken,
+    pdp.drop_auto_completed AS drop_auto_complete,
+    pdp.`quantSlottingForHUs` AS quant_slotting_for_hus,
+    pdp.`processedOnDropAt` AS processed_on_drop_at,
+    pdp.`allowHUBreakV2` AS allow_hu_break_v2,
     -- Mapping fields
-    COALESCE(pdm.id, '') AS mapping_id,
-    pdm.`createdAt` AS mapping_created_at,
+    COALESCE(pdp.mapping_id, '') AS mapping_id,
+    pdp.mapping_created_at AS mapping_created_at,
     -- Additional pick item fields
     pi.`binId` AS bin_id,
     pi.`binHUId` AS bin_hu_id,
@@ -560,29 +724,29 @@ SELECT
     pi.iloc AS iloc,
     pi.`destIloc` AS dest_iloc,
     -- Additional drop item fields
-    COALESCE(di.`sourceBinId`, '') AS source_bin_id,
-    COALESCE(di.`sourceBinHUId`, '') AS source_bin_hu_id,
-    COALESCE(di.`binId`, '') AS drop_bin_id,
-    COALESCE(di.`binHUId`, '') AS drop_bin_hu_id,
-    di.`createdAt` AS drop_created_at,
-    di.`deactivatedAt` AS drop_deactivated_at,
-    di.`deactivatedBy` AS drop_deactivated_by,
-    di.`droppedBy` AS dropped_by_worker_id,
-    di.`destHUId` AS dest_hu_id,
-    COALESCE(di.`sourceBucket`, '') AS source_bucket,
-    di.`originalDestinationBinId` AS original_destination_bin_id,
-    di.`lmTripId` AS drop_lm_trip_id,
-    di.`processedForPickAt` AS processed_for_pick_at,
-    di.`provisionalItemId` AS drop_provisional_item_id,
-    di.`inputDestHUId` AS drop_input_dest_hu_id,
-    COALESCE(di.`legIndex`, 0) AS drop_leg_index,
-    di.`lastLeg` AS drop_last_leg,
-    di.`inputDestBinId` AS drop_input_dest_bin_id,
-    di.`inductionId` AS drop_induction_id,
-    di.attrs AS drop_attrs,
-    di.`mheId` AS drop_mhe_id,
-    di.iloc AS drop_iloc,
-    di.`sourceIloc` AS source_iloc,
+    COALESCE(pdp.`sourceBinId`, '') AS source_bin_id,
+    COALESCE(pdp.`sourceBinHUId`, '') AS source_bin_hu_id,
+    COALESCE(pdp.drop_bin_id, '') AS drop_bin_id,
+    COALESCE(pdp.drop_bin_hu_id, '') AS drop_bin_hu_id,
+    pdp.drop_created_at AS drop_created_at,
+    pdp.drop_deactivated_at AS drop_deactivated_at,
+    pdp.drop_deactivated_by AS drop_deactivated_by,
+    pdp.`droppedBy` AS dropped_by_worker_id,
+    pdp.`destHUId` AS dest_hu_id,
+    COALESCE(pdp.`sourceBucket`, '') AS source_bucket,
+    pdp.`originalDestinationBinId` AS original_destination_bin_id,
+    pdp.drop_lm_trip_id AS drop_lm_trip_id,
+    pdp.`processedForPickAt` AS processed_for_pick_at,
+    pdp.drop_provisional_item_id AS drop_provisional_item_id,
+    pdp.drop_input_dest_hu_id AS drop_input_dest_hu_id,
+    COALESCE(pdp.drop_leg_index, 0) AS drop_leg_index,
+    pdp.drop_last_leg AS drop_last_leg,
+    pdp.drop_input_dest_bin_id AS drop_input_dest_bin_id,
+    pdp.drop_induction_id AS drop_induction_id,
+    pdp.drop_attrs AS drop_attrs,
+    pdp.drop_mhe_id AS drop_mhe_id,
+    pdp.drop_iloc AS drop_iloc,
+    pdp.`sourceIloc` AS source_iloc,
     -- Event time is the maximum of pick and drop updated_at
     GREATEST(
         COALESCE(
@@ -591,15 +755,12 @@ SELECT
             TIMESTAMP '1970-01-01 00:00:00'
         ),
         COALESCE(
-            di.`updatedAt`,
-            di.`createdAt`,
+            pdp.drop_updated_at,
+            pdp.drop_created_at,
             TIMESTAMP '1970-01-01 00:00:00'
         )
     ) AS event_time,
     -- Deactivated at - COALESCE of pick and drop deactivated timestamps
-    COALESCE(pi.`deactivatedAt`, di.`deactivatedAt`) AS deactivated_at
-FROM pick_items pi -- upsert-kafka maintains only latest version automatically
-    LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
-    AND pi.`sessionId` = pdm.`sessionId` -- upsert-kafka maintains only latest mapping
-    LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
-    AND pi.`sessionId` = di.`sessionId`;
+    COALESCE(pi.`deactivatedAt`, pdp.drop_deactivated_at) AS deactivated_at
+FROM pick_items_deduped pi
+LEFT JOIN pick_drop_pairs pdp ON pi.id = pdp.`pickItemId` AND pi.`sessionId` = pdp.mapping_session_id;
