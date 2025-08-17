@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS wms_workstation_events_staging
 ENGINE = ReplacingMergeTree(event_timestamp)
 PARTITION BY toYYYYMM(event_timestamp)
 ORDER BY (wh_id, event_type, event_source_id)
-TTL toDateTime(deactivated_at) + INTERVAL 0 SECOND DELETE
+TTL toDateTime(deactivated_at) + INTERVAL 0 SECOND DELETE WHERE deactivated_at > toDateTime64('1970-01-01 00:00:00', 3)
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
          min_age_to_force_merge_seconds = 180

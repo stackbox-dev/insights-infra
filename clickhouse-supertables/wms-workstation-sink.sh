@@ -155,7 +155,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
 -H "Content-Type: application/json" \
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
-      "tasks.max": "1",
+      "tasks.max": "3",
       "topics": "'"$TOPICS"'",
       
       "transforms": "dropNull",
