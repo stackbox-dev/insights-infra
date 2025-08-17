@@ -105,16 +105,16 @@ set +a
 DATABASE="${DATABASE_OVERRIDE:-${CLICKHOUSE_DATABASE:-sbx_uat}}"
 
 # Validate required environment variables
-if [ -z "$CLICKHOUSE_HOST" ] || [ -z "$CLICKHOUSE_PORT" ] || [ -z "$CLICKHOUSE_USER" ]; then
+if [ -z "$CLICKHOUSE_HOSTNAME" ] || [ -z "$CLICKHOUSE_NATIVE_PORT" ] || [ -z "$CLICKHOUSE_USER" ]; then
     echo -e "${RED}Error: Missing required ClickHouse configuration in $ENV_FILE${NC}"
-    echo "Required variables: CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER"
+    echo "Required variables: CLICKHOUSE_HOSTNAME, CLICKHOUSE_NATIVE_PORT, CLICKHOUSE_USER"
     exit 1
 fi
 
 echo -e "${GREEN}ClickHouse Table Setup Script${NC}"
 echo "================================"
 echo "Environment: $ENV_FILE"
-echo "Host: $CLICKHOUSE_HOST:$CLICKHOUSE_PORT"
+echo "Host: $CLICKHOUSE_HOSTNAME:$CLICKHOUSE_NATIVE_PORT"
 echo "Database: $DATABASE"
 echo "User: $CLICKHOUSE_USER"
 if [ -n "$SPECIFIC_FILE" ]; then
@@ -201,8 +201,8 @@ execute_sql_file() {
         
         # Run the command and capture output
         cmd_output=$(kubectl exec -n default $DEV_POD -- clickhouse-client \
-            --host="$CLICKHOUSE_HOST" \
-            --port="$CLICKHOUSE_PORT" \
+            --host="$CLICKHOUSE_HOSTNAME" \
+            --port="$CLICKHOUSE_NATIVE_PORT" \
             --user="$CLICKHOUSE_USER" \
             --password="$CLICKHOUSE_PASSWORD" \
             --database="$DATABASE" \

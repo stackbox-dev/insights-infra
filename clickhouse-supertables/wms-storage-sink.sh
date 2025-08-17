@@ -24,6 +24,26 @@ if [ -z "$TOPIC_PREFIX" ]; then
     exit 1
 fi
 
+if [ -z "$CLICKHOUSE_HOSTNAME" ]; then
+    echo "Error: CLICKHOUSE_HOSTNAME not defined in $ENV_FILE"
+    exit 1
+fi
+
+if [ -z "$CLICKHOUSE_PORT" ]; then
+    echo "Error: CLICKHOUSE_PORT not defined in $ENV_FILE"
+    exit 1
+fi
+
+if [ -z "$SCHEMA_REGISTRY_URL" ]; then
+    echo "Error: SCHEMA_REGISTRY_URL not defined in $ENV_FILE"
+    exit 1
+fi
+
+if [ -z "$CLICKHOUSE_DATABASE" ]; then
+    echo "Error: CLICKHOUSE_DATABASE not defined in $ENV_FILE"
+    exit 1
+fi
+
 echo "Using TOPIC_PREFIX: $TOPIC_PREFIX"
 
 # Define topic to table mappings as JSON
@@ -45,7 +65,15 @@ TOPIC_TABLE_MAP=$(echo "$TOPIC_MAPPINGS" | jq -r --arg prefix "$TOPIC_PREFIX" \
 echo "Generated topics: $TOPICS"
 echo "Generated topic2TableMap: $TOPIC_TABLE_MAP"
 
-gcloud container clusters get-credentials services-1-staging --region asia-south1 --project sbx-stag
+# Check current kubectl context and confirm with user
+CURRENT_CONTEXT=$(kubectl config current-context)
+echo "Current kubectl context: $CURRENT_CONTEXT"
+read -p "Do you want to proceed with this context? (y/N): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Operation cancelled. Please switch to the desired context first."
+    exit 1
+fi
 
 NAMESPACE="kafka"
 LABEL="app=cp-connect"
@@ -139,12 +167,12 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
       "predicates": "isNullRecord",
       "predicates.isNullRecord.type": "org.apache.kafka.connect.transforms.predicates.RecordIsTombstone",
       
-      "hostname": "sbx-stag-clickhouse-stackbox.h.aivencloud.com",
-      "port": "22155",
+      "hostname": "'"$CLICKHOUSE_HOSTNAME"'",
+      "port": "'"$CLICKHOUSE_PORT"'",
       "ssl": "true",
       "username": "avnadmin",
       "password": "'"$CLICKHOUSE_ADMIN_PASSWORD"'",
-      "database": "'${TOPIC_PREFIX}'",
+      "database": "'$CLICKHOUSE_DATABASE'",
       "exactlyOnce": "false",
       "topic2TableMap": "'"$TOPIC_TABLE_MAP"'",
       "clickhouseSettings": "date_time_input_format=best_effort,max_insert_block_size=100000",
@@ -155,8 +183,8 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter.schemas.enable": "true",
       "value.converter.use.logical.type.converters": "true",
-      "key.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
-      "value.converter.schema.registry.url": "https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159",
+      "key.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
+      "value.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
       "key.converter.basic.auth.credentials.source": "USER_INFO",
       "value.converter.basic.auth.credentials.source": "USER_INFO",
       "key.converter.basic.auth.user.info": "'"$SCHEMA_REGISTRY_AUTH"'",

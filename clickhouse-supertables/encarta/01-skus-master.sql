@@ -145,8 +145,9 @@ CREATE TABLE IF NOT EXISTS encarta_skus_master
     -- Handles both array format [{"type": "ABC", "value": "C"}] and object format {"ABC": "C"}
     combined_classification String DEFAULT 
         JSONMergePatch(
-            -- Base: product_classifications (converted if array)
+            -- Base: product_classifications (converted if array, handle "null" string)
             CASE 
+                WHEN product_classifications = 'null' OR product_classifications = '' THEN '{}'
                 WHEN JSONType(product_classifications) = 'Array' THEN
                     arrayFold(
                         (acc, x) -> JSONMergePatch(acc, toJSONString(map(JSONExtractString(x, 'type'), JSONExtractString(x, 'value')))),
@@ -155,8 +156,9 @@ CREATE TABLE IF NOT EXISTS encarta_skus_master
                     )
                 ELSE product_classifications
             END,
-            -- Override: classifications (converted if array)
+            -- Override: classifications (converted if array, handle "null" string)
             CASE 
+                WHEN classifications = 'null' OR classifications = '' THEN '{}'
                 WHEN JSONType(classifications) = 'Array' THEN
                     arrayFold(
                         (acc, x) -> JSONMergePatch(acc, toJSONString(map(JSONExtractString(x, 'type'), JSONExtractString(x, 'value')))),
