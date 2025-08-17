@@ -1,12 +1,16 @@
+-- SET 'execution.savepoint.path' = '<path to checkpoint/savepoint>';
+--
 SET 'pipeline.name' = 'WMS Pick Drop Staging Processing';
 SET 'table.exec.sink.not-null-enforcer' = 'drop';
-SET 'parallelism.default' = '2';
+SET 'parallelism.default' = '4';
 SET 'table.optimizer.join-reorder-enabled' = 'true';
-SET 'table.exec.resource.default-parallelism' = '2';
+SET 'table.optimizer.adaptive-join.enabled' = 'true';
+SET 'table.exec.resource.default-parallelism' = '4';
+;
 -- State TTL configuration to prevent unbounded state growth
--- State will be kept for 12 hours after last access
-SET 'table.exec.state.ttl' = '43200000';
--- 12 hours in milliseconds
+-- State will be kept for 4 hours after last access
+SET 'table.exec.state.ttl' = '14400000';
+-- 4 hours in milliseconds
 -- Performance optimizations
 SET 'taskmanager.memory.managed.fraction' = '0.8';
 SET 'table.exec.mini-batch.enabled' = 'true';
@@ -250,7 +254,6 @@ CREATE TABLE pick_drop_mapping (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
-
 -- Intermediate sink table for staging pick-drop data
 CREATE TABLE pick_drop_staging (
     pick_item_id STRING,
@@ -417,7 +420,7 @@ CREATE TABLE pick_drop_staging (
     'properties.ssl.endpoint.identification.algorithm' = 'https',
     'properties.auto.offset.reset' = 'earliest',
     'properties.transaction.timeout.ms' = '900000',
-    'sink.parallelism' = '2',
+    'sink.parallelism' = '4',
     'sink.transactional-id-prefix' = 'pick-drop-staging-sink',
     'key.format' = 'avro-confluent',
     'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
@@ -429,10 +432,10 @@ CREATE TABLE pick_drop_staging (
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
 -- Staging pick-drop processing with regular equijoins (no time windows)
--- State TTL (12 hours) prevents unbounded growth for both historical and real-time processing
+-- State TTL (4 hours) prevents unbounded growth for both historical and real-time processing
 INSERT INTO pick_drop_staging
 SELECT
-    /*+ USE_HASH_JOIN */
+    /*+ BROADCAST('drop_items') */
     pi.id AS pick_item_id,
     COALESCE(pdm.`dropItemId`, '') AS drop_item_id,
     pi.`whId` AS wh_id,
@@ -582,11 +585,21 @@ SELECT
     di.`sourceIloc` AS source_iloc,
     -- Event time is the maximum of pick and drop updated_at
     GREATEST(
-        COALESCE(pi.`updatedAt`, pi.`createdAt`, TIMESTAMP '1970-01-01 00:00:00'),
-        COALESCE(di.`updatedAt`, di.`createdAt`, TIMESTAMP '1970-01-01 00:00:00')
+        COALESCE(
+            pi.`updatedAt`,
+            pi.`createdAt`,
+            TIMESTAMP '1970-01-01 00:00:00'
+        ),
+        COALESCE(
+            di.`updatedAt`,
+            di.`createdAt`,
+            TIMESTAMP '1970-01-01 00:00:00'
+        )
     ) AS event_time,
     -- Deactivated at - COALESCE of pick and drop deactivated timestamps
     COALESCE(pi.`deactivatedAt`, di.`deactivatedAt`) AS deactivated_at
 FROM pick_items pi -- upsert-kafka maintains only latest version automatically
-    LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId` -- upsert-kafka maintains only latest mapping
-    LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id;
+    LEFT JOIN pick_drop_mapping pdm ON pi.id = pdm.`pickItemId`
+    AND pi.`sessionId` = pdm.`sessionId` -- upsert-kafka maintains only latest mapping
+    LEFT JOIN drop_items di ON pdm.`dropItemId` = di.id
+    AND pi.`sessionId` = di.`sessionId`;
