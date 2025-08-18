@@ -21,16 +21,17 @@ FROM wms_pick_drop_enriched;
 -- TRUNCATE TABLE wms_pick_drop_enriched;
 
 -- Backfill enriched table from staging with enrichment
+-- NOTE: Column selection MUST be identical to MV logic for consistency
 -- You can add WHERE clauses to filter by date range or specific conditions
 INSERT INTO wms_pick_drop_enriched
 SELECT
-    -- Core identifiers
+    -- Core identifiers (must have explicit aliases for MV consistency)
     pb.wh_id AS wh_id,
     if(so.principal_id != 0, so.principal_id, sm.principal_id) AS principal_id,
     pb.pick_item_id AS pick_item_id,
     pb.drop_item_id AS drop_item_id,
     
-    -- All fields from pick_drop_staging
+    -- All fields from pick_drop_basic
     pb.picked_bin AS picked_bin,
     pb.picked_sku_id AS picked_sku_id,
     pb.picked_batch AS picked_batch,
@@ -286,137 +287,5 @@ LEFT JOIN encarta_skus_overrides AS so ON pb.picked_sku_id = so.sku_id AND pb.wh
 -- WHERE pb.pick_item_created_at >= '2024-01-01' AND pb.pick_item_created_at < '2024-02-01'
 ;
 
--- Verify the backfill
-SELECT 
-    'After backfill - Enriched table' as status,
-    count(*) as row_count,
-    min(pick_item_created_at) as min_date,
-    max(pick_item_created_at) as max_date
-FROM wms_pick_drop_enriched;
-
--- Check sample enriched data
-SELECT 
-    wh_id,
-    principal_id,
-    pick_item_id,
-    picked_sku_id,
-    sku_code,
-    sku_name,
-    worker_code,
-    worker_name,
-    event_time
-FROM wms_pick_drop_enriched
-LIMIT 10;
-
--- Check principal_id distribution to debug zero values
-SELECT 
-    principal_id,
-    count(*) as count
-FROM wms_pick_drop_enriched
-GROUP BY principal_id
-ORDER BY count DESC
-LIMIT 10;
-
--- Debug: Check SKUs that exist in staging but not getting enriched
-WITH staging_skus AS (
-    SELECT DISTINCT 
-        picked_sku_id,
-        wh_id
-    FROM wms_pick_drop_staging
-    WHERE picked_sku_id != ''
-    LIMIT 100
-)
-SELECT 
-    s.picked_sku_id,
-    s.wh_id,
-    sm.id as master_id,
-    sm.code as master_code,
-    sm.principal_id as master_principal_id,
-    so.sku_id as override_sku_id,
-    so.node_id as override_node_id,
-    so.principal_id as override_principal_id
-FROM staging_skus s
-LEFT JOIN encarta_skus_master sm ON s.picked_sku_id = sm.id
-LEFT JOIN encarta_skus_overrides so ON s.picked_sku_id = so.sku_id AND s.wh_id = so.node_id AND so.active = true
-WHERE sm.id IS NULL AND so.sku_id IS NULL
-LIMIT 20;
-
--- Check if there's a data type or formatting issue
-SELECT 
-    'Staging SKUs' as source,
-    picked_sku_id,
-    length(picked_sku_id) as len,
-    hex(picked_sku_id) as hex_value
-FROM wms_pick_drop_staging
-WHERE picked_sku_id != ''
-LIMIT 5
-UNION ALL
-SELECT 
-    'Master SKUs' as source,
-    id,
-    length(id) as len,
-    hex(id) as hex_value
-FROM encarta_skus_master
-LIMIT 5;
-
--- Check specific SKU that's not getting enriched
-SELECT 
-    'Check specific SKU in master' as check_type,
-    count(*) as found_count
-FROM encarta_skus_master
-WHERE id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0'
-UNION ALL
-SELECT 
-    'Check specific SKU in overrides' as check_type,
-    count(*) as found_count  
-FROM encarta_skus_overrides
-WHERE sku_id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0';
-
--- Check if the SKU exists with different format (lowercase/uppercase)
-SELECT 
-    id,
-    code,
-    name,
-    principal_id
-FROM encarta_skus_master
-WHERE lower(id) = lower('a5fbb228-35ce-4c1c-a148-12fb75fa38e0')
-LIMIT 1;
-
--- TEST THE EXACT JOIN - This simulates what the MV is doing
-SELECT 
-    pb.pick_item_id,
-    pb.picked_sku_id,
-    pb.wh_id,
-    sm.id as master_id,
-    sm.code as master_code,
-    sm.name as master_name,
-    sm.principal_id as master_principal_id,
-    so.sku_id as override_sku_id,
-    so.principal_id as override_principal_id,
-    if(so.principal_id != 0, so.principal_id, sm.principal_id) AS final_principal_id
-FROM wms_pick_drop_staging AS pb
-LEFT JOIN encarta_skus_master AS sm ON pb.picked_sku_id = sm.id
-LEFT JOIN encarta_skus_overrides AS so ON pb.picked_sku_id = so.sku_id AND pb.wh_id = so.node_id AND so.active = true
-WHERE pb.picked_sku_id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0'
-LIMIT 5;
-
--- Check if there's an issue with the alias or table reference
-SELECT 
-    'Direct query test' as test_type,
-    sm.id,
-    sm.code,
-    sm.principal_id
-FROM encarta_skus_master sm
-WHERE sm.id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0';
-
--- Check if ReplacingMergeTree is causing issues (multiple versions)
-SELECT 
-    id,
-    code,
-    principal_id,
-    updated_at,
-    _version
-FROM encarta_skus_master
-WHERE id = 'a5fbb228-35ce-4c1c-a148-12fb75fa38e0'
-ORDER BY _version DESC
-LIMIT 5;
+-- Verify backfill completion
+SELECT 'After backfill - Enriched count:' AS metric, count(*) AS value FROM wms_pick_drop_enriched;

@@ -12,9 +12,10 @@ UNION ALL
 SELECT 'Latest enriched timestamp:', max(event_timestamp) FROM wms_workstation_events_enriched;
 
 -- Backfill all historical data (use with caution on large tables)
+-- NOTE: Column selection MUST be identical to MV logic for consistency
 INSERT INTO wms_workstation_events_enriched
 SELECT
-    -- Core fields from staging
+    -- Core fields from staging (must have explicit aliases for MV consistency)
     we.event_type AS event_type,
     we.event_source_id AS event_source_id,
     we.event_timestamp AS event_timestamp,
@@ -37,7 +38,7 @@ SELECT
     we.sub_reason AS sub_reason,
     we.deactivated_at AS deactivated_at,
     
-    -- Handling Unit enrichment
+    -- Handling Unit enrichment (based on hu_id)
     hu.code AS hu_enriched_code,
     hu.kindId AS hu_kind_id,
     hu.sessionId AS hu_session_id,
@@ -51,7 +52,7 @@ SELECT
     hu.createdAt AS hu_created_at,
     hu.updatedAt AS hu_updated_at,
     
-    -- Storage Bin Master enrichment
+    -- Storage Bin Master enrichment (based on bin_id)
     sbm.bin_code AS bin_code,
     sbm.bin_created_at AS bin_created_at,
     sbm.bin_updated_at AS bin_updated_at,
@@ -81,11 +82,12 @@ SELECT
     sbm.max_weight_in_kg AS max_weight_in_kg,
     sbm.pallet_capacity AS pallet_capacity,
     
-    -- SKU enrichment with overrides
+    -- SKU enrichment with overrides logic (override > master)
     sm.code AS sku_code,
     if(so.name != '', so.name, sm.name) AS sku_name,
     if(so.short_description != '', so.short_description, sm.short_description) AS sku_short_description,
     if(so.description != '', so.description, sm.description) AS sku_description,
+    -- Product hierarchy always from master (never overridden)
     sm.category AS sku_category,
     sm.category_group AS sku_category_group,
     sm.product AS sku_product,
@@ -162,9 +164,13 @@ SELECT
         if(so.combined_classification = '', '{}', so.combined_classification)
     )) AS sku_combined_classification
 FROM wms_workstation_events_staging we
+-- Handling Unit enrichment
 LEFT JOIN wms_handling_units hu ON we.hu_id = hu.id
+-- Storage Bin Master enrichment (using bin_id directly)
 LEFT JOIN wms_storage_bin_master sbm ON we.bin_id = sbm.bin_id
+-- SKU Master data
 LEFT JOIN encarta_skus_master sm ON we.sku_id = sm.id
+-- SKU Overrides for specific warehouse (wh_id as node_id)
 LEFT JOIN encarta_skus_overrides so ON we.sku_id = so.sku_id AND we.wh_id = so.node_id AND so.active = true
 -- Uncomment and modify date range as needed:
 -- WHERE we.event_timestamp >= '2024-01-01' AND we.event_timestamp < '2025-01-01'
