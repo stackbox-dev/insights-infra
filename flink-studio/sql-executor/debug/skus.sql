@@ -1,3 +1,47 @@
+CREATE TABLE products (
+    id STRING NOT NULL,
+    principal_id BIGINT NOT NULL,
+    code STRING NOT NULL,
+    name STRING,
+    description STRING,
+    sub_category_id STRING NOT NULL,
+    sub_brand_id STRING NOT NULL,
+    dangerous BOOLEAN,
+    spillable BOOLEAN,
+    fragile BOOLEAN,
+    flammable BOOLEAN,
+    alcohol BOOLEAN,
+    temperature_controlled BOOLEAN,
+    temp_min DOUBLE,
+    temp_max DOUBLE,
+    cold_chain BOOLEAN,
+    shelf_life INT,
+    invoice_life INT,
+    product_classifications STRING,
+    active BOOLEAN,
+    created_at TIMESTAMP(3),
+    updated_at TIMESTAMP(3),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.encarta.public.products',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-512',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'properties.ssl.truststore.location' = '/etc/kafka/secrets/kafka.truststore.jks',
+    'properties.ssl.truststore.password' = '${TRUSTSTORE_PASSWORD}',
+    'properties.ssl.endpoint.identification.algorithm' = 'https',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'key.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'key.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
+    'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
+);
+-- categories source table
 CREATE TABLE uoms (
     id STRING NOT NULL,
     principal_id BIGINT NOT NULL,
@@ -191,7 +235,11 @@ CREATE TABLE skus_master (
     'value.avro-confluent.basic-auth.credentials-source' = 'USER_INFO',
     'value.avro-confluent.basic-auth.user-info' = '${KAFKA_USERNAME}:${KAFKA_PASSWORD}'
 );
+-- select *
+-- from skus_master
+-- where id = '10770541-b834-4337-834f-a25a25fb0ccf'
+-- limit 10;
 select *
-from skus_master
-where id='1939fca7-cf9b-4815-a5c3-d6ba1692d435'
+from products
+WHERE id = 'dfd2dfe1-a482-4626-9a0f-65859d925e34'
 limit 10;
