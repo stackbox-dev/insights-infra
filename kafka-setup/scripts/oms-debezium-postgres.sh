@@ -13,7 +13,7 @@ usage() {
     cat << EOF
 Usage: $0 --env <environment-file> [OPTIONS]
 
-Deploy/Update Backbone Debezium PostgreSQL connector
+Deploy/Update OMS Debezium PostgreSQL connector
 
 REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
@@ -68,9 +68,9 @@ if ! fetch_kubernetes_credentials; then
     exit 1
 fi
 
-# Get Backbone database password
-print_info "Fetching Backbone database credentials..."
-BACKBONE_DB_PASSWORD=$(fetch_db_password "$BACKBONE_DB_PASSWORD_SECRET")
+# Get OMS database password
+print_info "Fetching OMS database credentials..."
+OMS_DB_PASSWORD=$(fetch_db_password "$OMS_DB_PASSWORD_SECRET")
 if [ $? -ne 0 ]; then
     exit 1
 fi
@@ -98,8 +98,16 @@ setup_signal_handlers cleanup_function
 
 # Define table list for easier maintenance
 TABLE_LIST=$(cat <<EOF
-public.node,
-public.node_closure
+public.ord,
+public.line,
+public.ord_state,
+public.line_state,
+public.allocation_line,
+public.inv,
+public.inv_line,
+public.shipment_input,
+public.shipment_output,
+public.wms_dock_line
 EOF
 )
 
@@ -110,20 +118,20 @@ TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
 CONNECTOR_CONFIG=$(cat <<EOF
 {
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-      "database.hostname": "${BACKBONE_DB_HOSTNAME}",
-      "database.port": "${BACKBONE_DB_PORT}",
-      "database.user": "${BACKBONE_DB_USER}",
-      "database.password": "${BACKBONE_DB_PASSWORD}",
-      "database.dbname": "${BACKBONE_DB_NAME}",
-      "database.server.name": "${BACKBONE_DB_NAME}",
+      "database.hostname": "${OMS_DB_HOSTNAME}",
+      "database.port": "${OMS_DB_PORT}",
+      "database.user": "${OMS_DB_USER}",
+      "database.password": "${OMS_DB_PASSWORD}",
+      "database.dbname": "${OMS_DB_NAME}",
+      "database.server.name": "${OMS_DB_NAME}",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}", 
-      "database.history.kafka.topic": "debezium_schemas.backbone",
-      "publication.name": "${BACKBONE_PUBLICATION_NAME}",
-      "slot.name": "${BACKBONE_SLOT_NAME}",
+      "database.history.kafka.topic": "debezium_schemas.oms",
+      "publication.name": "${OMS_PUBLICATION_NAME}",
+      "slot.name": "${OMS_SLOT_NAME}",
 
       "database.history.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "topic.prefix": "${BACKBONE_TOPIC_PREFIX}",
+      "topic.prefix": "${OMS_TOPIC_PREFIX}",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
@@ -134,10 +142,10 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "incremental.snapshot.enabled": "true",
       "incremental.snapshot.chunk.size": "10000",
       "snapshot.locking.mode": "shared",
-      "signal.kafka.topic": "${BACKBONE_SIGNAL_TOPIC}",
+      "signal.kafka.topic": "${OMS_SIGNAL_TOPIC}",
       "signal.enabled.channels": "source,kafka",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.consumer.group.id": "${BACKBONE_SIGNAL_CONSUMER_GROUP}",
+      "signal.consumer.group.id": "${OMS_SIGNAL_CONSUMER_GROUP}",
       
       "decimal.handling.mode": "precise",
       "time.precision.mode": "adaptive_time_microseconds",
@@ -204,10 +212,10 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 # Deploy/Update the connector
-print_info "Deploying/Updating Backbone Debezium connector: ${BACKBONE_CONNECTOR_NAME}"
+print_info "Deploying/Updating OMS Debezium connector: ${OMS_CONNECTOR_NAME}"
 
 response=$(curl -s -w "\n%{http_code}" -X PUT \
-    "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/config" \
+    "${CONNECT_REST_URL}/connectors/${OMS_CONNECTOR_NAME}/config" \
     -H "Content-Type: application/json" \
     -d "$CONNECTOR_CONFIG")
 
@@ -221,7 +229,7 @@ if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_info "Checking connector status..."
     sleep 2
     
-    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status")
+    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${OMS_CONNECTOR_NAME}/status")
     connector_state=$(echo "$status_response" | jq -r '.connector.state' 2>/dev/null)
     
     if [ "$connector_state" = "RUNNING" ]; then
@@ -239,13 +247,13 @@ fi
 
 print_info "\nUseful commands:"
 echo "  # Check connector status"
-echo "  curl -s ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status | jq ."
+echo "  curl -s ${CONNECT_REST_URL}/connectors/${OMS_CONNECTOR_NAME}/status | jq ."
 echo ""
 echo "  # Restart connector"
-echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/restart"
+echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${OMS_CONNECTOR_NAME}/restart"
 echo ""
 echo "  # Delete connector"
-echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}"
+echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${OMS_CONNECTOR_NAME}"
 echo ""
 echo "  # Trigger snapshot"
-echo "  ./trigger-snapshots.sh --env $ENV_FILE -c backbone -t \"public.node\""
+echo "  ./trigger-snapshots.sh --env $ENV_FILE -c oms -t \"public.ord\""

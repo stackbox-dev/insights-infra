@@ -130,7 +130,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "tombstones.on.delete": false,
       "provide.transaction.metadata": false,
       "binary.handling.mode": "base64",
-      "snapshot.mode": "initial",
+      "snapshot.mode": "when_needed",
       "incremental.snapshot.enabled": "true",
       "incremental.snapshot.chunk.size": "10000",
       "snapshot.locking.mode": "shared",
