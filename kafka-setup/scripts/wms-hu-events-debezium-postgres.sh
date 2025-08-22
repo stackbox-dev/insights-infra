@@ -118,11 +118,9 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.server.name": "${WMS_DB_NAME}",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}", 
-      "database.history.kafka.topic": "debezium_schemas.wms_hu_events",
       "publication.name": "${WMS_HU_EVENTS_PUBLICATION_NAME}",
       "slot.name": "${WMS_HU_EVENTS_SLOT_NAME}",
 
-      "database.history.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
       "topic.prefix": "${WMS_TOPIC_PREFIX}",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
@@ -134,10 +132,6 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "incremental.snapshot.enabled": "true",
       "incremental.snapshot.chunk.size": "10000",
       "snapshot.locking.mode": "shared",
-      "signal.kafka.topic": "${WMS_HU_EVENTS_SIGNAL_TOPIC}",
-      "signal.enabled.channels": "source,kafka",
-      "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.consumer.group.id": "${WMS_HU_EVENTS_SIGNAL_CONSUMER_GROUP}",
       
       "decimal.handling.mode": "precise",
       "time.precision.mode": "adaptive_time_microseconds",
@@ -156,6 +150,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "transforms.filter.language": "jsr223.groovy",
       "transforms.filter.condition": "value.op != 'd'",
       "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch",
+
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "key.converter.schema.registry.url": "${SCHEMA_REGISTRY_URL}",
@@ -170,6 +165,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "value.converter.use.latest.version": "true",
       "key.converter.schema.compatibility": "BACKWARD",
       "value.converter.schema.compatibility": "BACKWARD",
+
       "topic.creation.enable": "true",
       "topic.creation.default.replication.factor": 3,
       "topic.creation.default.partitions": 1,
@@ -179,20 +175,27 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "topic.creation.default.retention.bytes": "-1",
       "topic.creation.default.include": ".*",
       "skipped.operations": "t",
+
       "producer.security.protocol": "SASL_SSL",
-      "producer.sasl.mechanism": "PLAIN",
-      "producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
+      "producer.sasl.mechanism": "SCRAM-SHA-512",
+      "producer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
+      "producer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
+      "producer.ssl.truststore.password": "secret",
+      "producer.ssl.endpoint.identification.algorithm": "",
       "producer.max.request.size": "1048576",
       "producer.buffer.memory": "33554432",
-      "database.history.producer.security.protocol": "SASL_SSL",
-      "database.history.producer.sasl.mechanism": "PLAIN",
-      "database.history.producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
-      "database.history.consumer.security.protocol": "SASL_SSL",
-      "database.history.consumer.sasl.mechanism": "PLAIN",
-      "database.history.consumer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
-      "signal.kafka.consumer.security.protocol": "SASL_SSL",
-      "signal.kafka.consumer.sasl.mechanism": "PLAIN",
-      "signal.kafka.consumer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";"
+
+
+      "signal.enabled.channels": "kafka",
+      "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
+      "signal.kafka.group.id": "${WMS_HU_EVENTS_SIGNAL_CONSUMER_GROUP}",
+      "signal.kafka.topic": "${WMS_HU_EVENTS_SIGNAL_TOPIC}",
+      "signal.consumer.security.protocol": "SASL_SSL",
+      "signal.consumer.sasl.mechanism": "SCRAM-SHA-512",
+      "signal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
+      "signal.consumer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
+      "signal.consumer.ssl.truststore.password": "secret",
+      "signal.consumer.ssl.endpoint.identification.algorithm": ""
 }
 EOF
 )

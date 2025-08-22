@@ -225,9 +225,9 @@ start_port_forward() {
 stop_port_forward() {
     local pid=$1
     
-    if [ -n "$pid" ] && ps -p $pid > /dev/null; then
+    if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
         print_info "Stopping port forwarding (PID: $pid)"
-        kill $pid 2>/dev/null || true
+        kill "$pid" 2>/dev/null || true
     fi
 }
 
@@ -326,6 +326,75 @@ EOF
 }
 
 # ====================
+# Signal Topic Functions
+# ====================
+check_topic_exists() {
+    local pod_name=$1
+    local topic_name=$2
+    
+    # Check if topic exists by listing topics and checking for exact match
+    local topic_list
+    topic_list=$(execute_kafka_command "$pod_name" "kafka-topics --list" 2>/dev/null)
+    
+    if echo "$topic_list" | grep -q "^${topic_name}$"; then
+        return 0  # Topic exists
+    else
+        return 1  # Topic does not exist
+    fi
+}
+
+create_signal_topic() {
+    local pod_name=$1
+    local topic_name=$2
+    local dry_run=${3:-false}
+    
+    print_info "Checking if signal topic exists: $topic_name"
+    
+    if check_topic_exists "$pod_name" "$topic_name"; then
+        print_success "Signal topic already exists: $topic_name"
+        return 0
+    fi
+    
+    print_warning "Signal topic does not exist: $topic_name"
+    
+    if [ "$dry_run" = true ]; then
+        print_color $YELLOW "[DRY RUN] Would create signal topic: $topic_name"
+        print_color $YELLOW "  - Partitions: 1"
+        print_color $YELLOW "  - Replication Factor: 3"
+        print_color $YELLOW "  - Retention: Infinite"
+        print_color $YELLOW "  - Compression: lz4"
+        print_color $YELLOW "  - Min In-Sync Replicas: 2"
+        return 0
+    fi
+    
+    print_color $YELLOW "Creating signal topic: $topic_name"
+    print_info "Do you want to create this signal topic? (y/n)"
+    read -p "> " confirm
+    
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        print_error "Signal topic creation cancelled by user"
+        return 1
+    fi
+    
+    # Create the topic using kafka-topics command
+    create_cmd="kafka-topics --create \
+        --topic ${topic_name} \
+        --partitions 1 \
+        --replication-factor 3 \
+        --config retention.ms=-1 \
+        --config compression.type=lz4 \
+        --config min.insync.replicas=2"
+    
+    if execute_kafka_command "$pod_name" "$create_cmd"; then
+        print_success "Signal topic created successfully: $topic_name"
+        return 0
+    else
+        print_error "Failed to create signal topic: $topic_name"
+        return 1
+    fi
+}
+
+# ====================
 # HTTP Request Functions
 # ====================
 execute_curl_in_pod() {
@@ -353,7 +422,7 @@ execute_curl_in_pod() {
 # ====================
 validate_connector_name() {
     local connector=$1
-    local valid_connectors=("wms" "encarta" "backbone")
+    local valid_connectors=("wms" "encarta" "backbone" "oms")
     
     for valid in "${valid_connectors[@]}"; do
         if [ "$connector" = "$valid" ]; then
@@ -373,4 +442,5 @@ export -f get_connect_pod fetch_kubernetes_credentials fetch_db_password
 export -f start_port_forward stop_port_forward
 export -f common_setup cleanup setup_signal_handlers
 export -f execute_kafka_command execute_curl_in_pod
+export -f check_topic_exists create_signal_topic
 export -f validate_connector_name

@@ -19,18 +19,22 @@ REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
 
 OPTIONS:
-    -c, --connector    Connector name (wms, encarta, backbone) - if not provided, will prompt
+    -c, --connector    Full connector name (e.g., source-sbx-uat-wms, source-samadhan-prod-backbone) - if not provided, will prompt
     -t, --tables       Comma-separated list of tables - if not provided, will prompt
     -f, --filter       Optional filter conditions for snapshot (e.g., "id > 1000")
     -d, --dry-run      Show what would be done without actually triggering snapshots
     -l, --list-only    Only list available connectors and their tables
+    --create-topics-only Create signal topics only, don't trigger snapshots
     -h, --help         Show this help message
 
 EXAMPLES:
-    $0 --env .sbx-uat.env -c wms -t "public.inventory,public.task"
-    $0 --env .sbx-uat.env -c encarta -t "public.skus" -f "updated_at > '2024-01-01'"
+    $0 --env .sbx-uat.env -c source-sbx-uat-wms -t "public.inventory,public.task"
+    $0 --env .sbx-uat.env -c source-sbx-uat-encarta -t "public.skus" -f "updated_at > '2024-01-01'"
+    $0 --env .sbx-uat.env -c source-sbx-uat-oms -t "public.po_oms_allocation"
+    $0 --env .sbx-uat.env -c source-samadhan-prod-backbone -t "public.users"
     $0 --env .sbx-uat.env --list-only
-    $0 --env .sbx-uat.env --dry-run -c wms -t "public.inventory"
+    $0 --env .sbx-uat.env --dry-run -c source-sbx-uat-wms -t "public.inventory"
+    $0 --env .sbx-uat.env -c source-sbx-uat-wms --create-topics-only
 
 EOF
 }
@@ -42,6 +46,7 @@ TABLES=""
 FILTER=""
 DRY_RUN=false
 LIST_ONLY=false
+CREATE_TOPICS_ONLY=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -67,6 +72,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -l|--list-only)
             LIST_ONLY=true
+            shift
+            ;;
+        --create-topics-only)
+            CREATE_TOPICS_ONLY=true
             shift
             ;;
         -h|--help)
@@ -171,7 +180,8 @@ for conn in $AVAILABLE_CONNECTORS; do
     # Check if it's one of our configured connectors
     if [[ "$conn" == "$WMS_CONNECTOR_NAME" ]] || \
        [[ "$conn" == "$ENCARTA_CONNECTOR_NAME" ]] || \
-       [[ "$conn" == "$BACKBONE_CONNECTOR_NAME" ]]; then
+       [[ "$conn" == "$BACKBONE_CONNECTOR_NAME" ]] || \
+       [[ "$conn" == "$OMS_CONNECTOR_NAME" ]]; then
         print_success "  - $conn"
         DEBEZIUM_CONNECTORS="$DEBEZIUM_CONNECTORS $conn"
     fi
@@ -218,27 +228,8 @@ if [ -z "$CONNECTOR" ]; then
     
     FULL_CONNECTOR_NAME="${CONNECTOR_ARRAY[$((CONNECTOR_CHOICE-1))]}"
 else
-    # Map short name to full connector name
-    case "$CONNECTOR" in
-        wms)
-            FULL_CONNECTOR_NAME="$WMS_CONNECTOR_NAME"
-            SIGNAL_TOPIC="$WMS_SIGNAL_TOPIC"
-            TOPIC_PREFIX="$WMS_TOPIC_PREFIX"
-            ;;
-        encarta)
-            FULL_CONNECTOR_NAME="$ENCARTA_CONNECTOR_NAME"
-            SIGNAL_TOPIC="$ENCARTA_SIGNAL_TOPIC"
-            TOPIC_PREFIX="$ENCARTA_TOPIC_PREFIX"
-            ;;
-        backbone)
-            FULL_CONNECTOR_NAME="$BACKBONE_CONNECTOR_NAME"
-            SIGNAL_TOPIC="$BACKBONE_SIGNAL_TOPIC"
-            TOPIC_PREFIX="$BACKBONE_TOPIC_PREFIX"
-            ;;
-        *)
-            FULL_CONNECTOR_NAME="$CONNECTOR"
-            ;;
-    esac
+    # Use the provided connector name directly
+    FULL_CONNECTOR_NAME="$CONNECTOR"
 fi
 
 print_success "Selected connector: $FULL_CONNECTOR_NAME"
@@ -254,9 +245,14 @@ fi
 
 # Check if incremental snapshots are enabled
 INCREMENTAL_ENABLED=$(echo "$CONNECTOR_CONFIG" | jq -r '.["incremental.snapshot.enabled"] // "false"' 2>/dev/null)
+
 if [ "$INCREMENTAL_ENABLED" != "true" ]; then
     print_warning "Warning: incremental.snapshot.enabled is not set to true for this connector"
     print_warning "Incremental snapshots may not work properly"
+    print_info "To enable incremental snapshots, update the connector configuration with:"
+    print_info '  "incremental.snapshot.enabled": "true"'
+else
+    print_success "Incremental snapshots are enabled for this connector"
 fi
 
 # Get signal topic configuration
@@ -277,6 +273,22 @@ else
 fi
 
 print_success "Signal topic: $SIGNAL_TOPIC"
+
+# Check if signal topic exists and create if needed
+print_info "Verifying signal topic exists..."
+if ! create_signal_topic "$POD_NAME" "$SIGNAL_TOPIC" "$DRY_RUN"; then
+    print_error "Failed to create signal topic. Cannot proceed with snapshot trigger."
+    exit 1
+fi
+
+# If only creating topics, exit here
+if [ "$CREATE_TOPICS_ONLY" = true ]; then
+    print_success "\n✓ Signal topic setup completed!"
+    print_info "Signal topic '$SIGNAL_TOPIC' is ready for use."
+    print_color $YELLOW "\nYou can now trigger snapshots using:"
+    echo "  $0 --env $ENV_FILE -c ${CONNECTOR:-<full-connector-name>} -t <tables>"
+    exit 0
+fi
 
 # Get topic prefix if not already set
 if [ -z "$TOPIC_PREFIX" ]; then
@@ -342,19 +354,21 @@ fi
 # Build data-collections array
 DATA_COLLECTIONS=$(printf '"%s",' "${VALID_TABLES[@]}" | sed 's/,$//')
 
-# Hardcoded snapshot overrides for special tables
-declare -A SNAPSHOT_OVERRIDES
-SNAPSHOT_OVERRIDES["public.inventory"]="ORDER BY fcm_id"
-SNAPSHOT_OVERRIDES["public.task"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.pd_pick_item"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.pd_drop_item"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.pd_pick_drop_mapping"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.ob_load_item"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.inb_receive_item"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.inb_qc_item_v2"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.inb_palletization_item"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.inb_serialization_item"]="ORDER BY id DESC"
-SNAPSHOT_OVERRIDES["public.ob_qa_lineitem"]="ORDER BY id DESC"
+# Function to get snapshot override for a table
+get_snapshot_override() {
+    local table=$1
+    case "$table" in
+        "public.inventory")
+            echo "ORDER BY fcm_id"
+            ;;
+        "public.task"|"public.pd_pick_item"|"public.pd_drop_item"|"public.pd_pick_drop_mapping"|"public.ob_load_item"|"public.inb_receive_item"|"public.inb_qc_item_v2"|"public.inb_palletization_item"|"public.inb_serialization_item"|"public.ob_qa_lineitem")
+            echo "ORDER BY id DESC"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
 
 # Build additional conditions with snapshot overrides
 ADDITIONAL_CONDITIONS=""
@@ -364,15 +378,16 @@ for table in "${VALID_TABLES[@]}"; do
     fi
     
     # Check if table has a snapshot override
-    if [ -n "${SNAPSHOT_OVERRIDES[$table]}" ]; then
+    SNAPSHOT_OVERRIDE=$(get_snapshot_override "$table")
+    if [ -n "$SNAPSHOT_OVERRIDE" ]; then
         if [ -n "$FILTER" ]; then
             # Combine filter with override
-            ADDITIONAL_CONDITIONS="$ADDITIONAL_CONDITIONS{\"data-collection\":\"$table\",\"filter\":\"$FILTER ${SNAPSHOT_OVERRIDES[$table]}\"}"
+            ADDITIONAL_CONDITIONS="$ADDITIONAL_CONDITIONS{\"data-collection\":\"$table\",\"filter\":\"$FILTER ${SNAPSHOT_OVERRIDE}\"}"
         else
             # Use override only
-            ADDITIONAL_CONDITIONS="$ADDITIONAL_CONDITIONS{\"data-collection\":\"$table\",\"filter\":\"${SNAPSHOT_OVERRIDES[$table]}\"}"
+            ADDITIONAL_CONDITIONS="$ADDITIONAL_CONDITIONS{\"data-collection\":\"$table\",\"filter\":\"${SNAPSHOT_OVERRIDE}\"}"
         fi
-        print_info "Using snapshot override for $table: ${SNAPSHOT_OVERRIDES[$table]}"
+        print_info "Using snapshot override for $table: ${SNAPSHOT_OVERRIDE}"
     elif [ -n "$FILTER" ]; then
         # Use filter only
         ADDITIONAL_CONDITIONS="$ADDITIONAL_CONDITIONS{\"data-collection\":\"$table\",\"filter\":\"$FILTER\"}"
@@ -410,21 +425,25 @@ fi
 print_success "Signal message:"
 echo "$SIGNAL_MESSAGE" | jq .
 
-# Generate unique signal ID (using timestamp)
-SIGNAL_ID=$(date +%s%N)
+# For Kafka signals, no ID field is needed (IDs are only for database signaling tables)
 
 # Send signal to Kafka topic
 if [ "$DRY_RUN" = true ]; then
     print_color $YELLOW "\n[DRY RUN] Would send signal to Kafka topic: $SIGNAL_TOPIC"
-    print_color $YELLOW "Key: $TOPIC_PREFIX"
-    print_color $YELLOW "Value: (see above)"
+    print_color $YELLOW "Key: $FULL_CONNECTOR_NAME (connector name)"
+    print_color $YELLOW "Value:"
+    echo "$SIGNAL_MESSAGE" | jq .
 else
     print_info "Sending signal to Kafka topic: $SIGNAL_TOPIC"
+    print_info "Message key (connector name): $FULL_CONNECTOR_NAME"
+    print_success "Final signal message:"
+    echo "$SIGNAL_MESSAGE" | jq .
     
     # Prepare the message payload for Aiven Kafka REST API
+    # Key must match the connector name
     MESSAGE_PAYLOAD=$(jq -n \
-        --arg key "$TOPIC_PREFIX" \
-        --arg value "$SIGNAL_MESSAGE" \
+        --arg key "$FULL_CONNECTOR_NAME" \
+        --argjson value "$SIGNAL_MESSAGE" \
         '{
             records: [{
                 key: $key,
@@ -478,9 +497,8 @@ else
         
         print_color $YELLOW "\n2. Monitor Kafka topics for snapshot data:"
         for table in "${VALID_TABLES[@]}"; do
-            # Convert table name to topic name (replace . with -)
-            topic_suffix=$(echo "$table" | sed 's/\./-/g')
-            echo "   - ${TOPIC_PREFIX}.${topic_suffix}"
+            # Topic name preserves dots in table names
+            echo "   - ${TOPIC_PREFIX}.${table}"
         done
         
         print_color $YELLOW "\n3. Check connector logs for snapshot progress:"
