@@ -208,7 +208,12 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "signal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
       "signal.consumer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
       "signal.consumer.ssl.truststore.password": "secret",
-      "signal.consumer.ssl.endpoint.identification.algorithm": ""
+      "signal.consumer.ssl.endpoint.identification.algorithm": "",
+      "signal.consumer.socket.connection.setup.timeout.ms": "30000",
+      "signal.consumer.socket.connection.setup.timeout.max.ms": "60000",
+      "signal.consumer.session.timeout.ms": "60000",
+      "signal.consumer.request.timeout.ms": "40000",
+      "signal.consumer.connections.max.idle.ms": "540000"
 }
 EOF
 )
