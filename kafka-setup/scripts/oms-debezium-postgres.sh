@@ -192,9 +192,10 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "producer.max.request.size": "1048576",
       "producer.buffer.memory": "33554432",
 
+      "read.only": true,
       "signal.enabled.channels": "kafka",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.kafka.group.id": "${OMS_SIGNAL_CONSUMER_GROUP}",
+      "signal.kafka.groupId": "${OMS_SIGNAL_CONSUMER_GROUP}",
       "signal.kafka.topic": "${OMS_SIGNAL_TOPIC}",
       "signal.consumer.security.protocol": "SASL_SSL",
       "signal.consumer.sasl.mechanism": "SCRAM-SHA-512",

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: cp-connect
-          image: asia-docker.pkg.dev/sbx-ci-cd/private/devops-kafka-connect:4fa55cfcf54e052a505656c43ce0fb89a44cf557
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-kafka-connect:bf7085eff8b4ba2647aeea342371e77962975bde
           imagePullPolicy: Always
           ports:
             - containerPort: 8083

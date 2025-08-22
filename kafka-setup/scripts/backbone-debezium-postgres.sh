@@ -149,6 +149,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "transforms.filter.language": "jsr223.groovy",
       "transforms.filter.condition": "value.op != 'd'",
       "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch",
+
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "key.converter.schema.registry.url": "${SCHEMA_REGISTRY_URL}",
@@ -163,7 +164,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "value.converter.use.latest.version": "true",
       "key.converter.schema.compatibility": "BACKWARD",
       "value.converter.schema.compatibility": "BACKWARD",
-      
+
       "topic.creation.enable": "true",
       "topic.creation.default.replication.factor": 3,
       "topic.creation.default.partitions": 1,
@@ -183,10 +184,11 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "producer.max.request.size": "1048576",
       "producer.buffer.memory": "33554432",
 
+      "read.only": true,
       "signal.enabled.channels": "kafka",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
       "signal.kafka.topic": "${BACKBONE_SIGNAL_TOPIC}",
-      "signal.kafka.group.id": "${BACKBONE_SIGNAL_CONSUMER_GROUP}",
+      "signal.kafka.groupId": "${BACKBONE_SIGNAL_CONSUMER_GROUP}",
       "signal.consumer.security.protocol": "SASL_SSL",
       "signal.consumer.sasl.mechanism": "SCRAM-SHA-512",
       "signal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",

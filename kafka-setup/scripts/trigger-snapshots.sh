@@ -19,7 +19,7 @@ REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
 
 OPTIONS:
-    -c, --connector    Full connector name (e.g., source-sbx-uat-wms, source-samadhan-prod-backbone) - if not provided, will prompt
+    -c, --connector    Connector shortname (WMS, ENCARTA, BACKBONE, OMS) - if not provided, will prompt
     -t, --tables       Comma-separated list of tables - if not provided, will prompt
     -f, --filter       Optional filter conditions for snapshot (e.g., "id > 1000")
     -d, --dry-run      Show what would be done without actually triggering snapshots
@@ -28,13 +28,13 @@ OPTIONS:
     -h, --help         Show this help message
 
 EXAMPLES:
-    $0 --env .sbx-uat.env -c source-sbx-uat-wms -t "public.inventory,public.task"
-    $0 --env .sbx-uat.env -c source-sbx-uat-encarta -t "public.skus" -f "updated_at > '2024-01-01'"
-    $0 --env .sbx-uat.env -c source-sbx-uat-oms -t "public.po_oms_allocation"
-    $0 --env .sbx-uat.env -c source-samadhan-prod-backbone -t "public.users"
+    $0 --env .sbx-uat.env -c WMS -t "public.inventory,public.task"
+    $0 --env .sbx-uat.env -c ENCARTA -t "public.skus" -f "updated_at > '2024-01-01'"
+    $0 --env .sbx-uat.env -c OMS -t "public.po_oms_allocation"
+    $0 --env .samadhan-prod.env -c BACKBONE -t "public.node"
     $0 --env .sbx-uat.env --list-only
-    $0 --env .sbx-uat.env --dry-run -c source-sbx-uat-wms -t "public.inventory"
-    $0 --env .sbx-uat.env -c source-sbx-uat-wms --create-topics-only
+    $0 --env .sbx-uat.env --dry-run -c WMS -t "public.inventory"
+    $0 --env .sbx-uat.env -c WMS --create-topics-only
 
 EOF
 }
@@ -228,8 +228,34 @@ if [ -z "$CONNECTOR" ]; then
     
     FULL_CONNECTOR_NAME="${CONNECTOR_ARRAY[$((CONNECTOR_CHOICE-1))]}"
 else
-    # Use the provided connector name directly
-    FULL_CONNECTOR_NAME="$CONNECTOR"
+    # Map shortname to full connector name and topic prefix
+    case "$CONNECTOR" in
+        WMS|wms)
+            FULL_CONNECTOR_NAME="$WMS_CONNECTOR_NAME"
+            SIGNAL_TOPIC="$WMS_SIGNAL_TOPIC"
+            TOPIC_PREFIX="$WMS_TOPIC_PREFIX"
+            ;;
+        ENCARTA|encarta)
+            FULL_CONNECTOR_NAME="$ENCARTA_CONNECTOR_NAME"
+            SIGNAL_TOPIC="$ENCARTA_SIGNAL_TOPIC"
+            TOPIC_PREFIX="$ENCARTA_TOPIC_PREFIX"
+            ;;
+        BACKBONE|backbone)
+            FULL_CONNECTOR_NAME="$BACKBONE_CONNECTOR_NAME"
+            SIGNAL_TOPIC="$BACKBONE_SIGNAL_TOPIC"
+            TOPIC_PREFIX="$BACKBONE_TOPIC_PREFIX"
+            ;;
+        OMS|oms)
+            FULL_CONNECTOR_NAME="$OMS_CONNECTOR_NAME"
+            SIGNAL_TOPIC="$OMS_SIGNAL_TOPIC"
+            TOPIC_PREFIX="$OMS_TOPIC_PREFIX"
+            ;;
+        *)
+            print_error "Unknown connector shortname: $CONNECTOR"
+            print_info "Valid options: WMS, ENCARTA, BACKBONE, OMS"
+            exit 1
+            ;;
+    esac
 fi
 
 print_success "Selected connector: $FULL_CONNECTOR_NAME"
@@ -286,7 +312,7 @@ if [ "$CREATE_TOPICS_ONLY" = true ]; then
     print_success "\n✓ Signal topic setup completed!"
     print_info "Signal topic '$SIGNAL_TOPIC' is ready for use."
     print_color $YELLOW "\nYou can now trigger snapshots using:"
-    echo "  $0 --env $ENV_FILE -c ${CONNECTOR:-<full-connector-name>} -t <tables>"
+    echo "  $0 --env $ENV_FILE -c ${CONNECTOR:-<connector-shortname>} -t <tables>"
     exit 0
 fi
 
@@ -430,60 +456,52 @@ echo "$SIGNAL_MESSAGE" | jq .
 # Send signal to Kafka topic
 if [ "$DRY_RUN" = true ]; then
     print_color $YELLOW "\n[DRY RUN] Would send signal to Kafka topic: $SIGNAL_TOPIC"
-    print_color $YELLOW "Key: $FULL_CONNECTOR_NAME (connector name)"
+    print_color $YELLOW "Key: $TOPIC_PREFIX (topic.prefix from connector config)"
     print_color $YELLOW "Value:"
     echo "$SIGNAL_MESSAGE" | jq .
 else
     print_info "Sending signal to Kafka topic: $SIGNAL_TOPIC"
-    print_info "Message key (connector name): $FULL_CONNECTOR_NAME"
+    print_info "Message key (topic.prefix): $TOPIC_PREFIX"
     print_success "Final signal message:"
     echo "$SIGNAL_MESSAGE" | jq .
     
     # Prepare the message payload for Aiven Kafka REST API
-    # Key must match the connector name
+    # Use binary format to send raw string key and JSON value
     MESSAGE_PAYLOAD=$(jq -n \
-        --arg key "$FULL_CONNECTOR_NAME" \
-        --argjson value "$SIGNAL_MESSAGE" \
+        --arg key "$TOPIC_PREFIX" \
+        --arg value_str "$SIGNAL_MESSAGE" \
         '{
             records: [{
                 key: $key,
-                value: $value
+                value: $value_str
             }]
         }')
     
-    # Send message using Aiven Kafka REST API from inside the pod
-    response=$(execute_curl_in_pod "$POD_NAME" "POST" \
-        "${KAFKA_REST_URL}/topics/${SIGNAL_TOPIC}" \
-        "$MESSAGE_PAYLOAD" \
-        "-H 'Content-Type: application/vnd.kafka.json.v2+json' -H 'Accept: application/vnd.kafka.v2+json'")
+    # Send message using kafka-console-producer to avoid REST API key formatting issues
+    print_info "Sending signal using kafka-console-producer..."
     
-    # Handle both macOS and Linux versions of head/tail
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS doesn't support negative line counts in head
-        total_lines=$(echo "$response" | wc -l)
-        body_lines=$((total_lines - 1))
-        if [ $body_lines -gt 0 ]; then
-            body=$(echo "$response" | head -n $body_lines)
-        else
-            body=""
-        fi
-        status=$(echo "$response" | tail -n1)
-    else
-        body=$(echo "$response" | sed '$d')
-        status=$(echo "$response" | tail -n1)
-    fi
+    # Compact the JSON to a single line to avoid newline issues with key parsing
+    COMPACT_SIGNAL_MESSAGE=$(echo "$SIGNAL_MESSAGE" | jq -c .)
     
-    if [ "$status" = "200" ] || [ "$status" = "201" ] || [ "$status" = "204" ]; then
-        print_success "Message sent successfully!"
-        
-        # Parse response if available
-        if [ -n "$body" ]; then
-            offset=$(echo "$body" | jq -r '.offsets[0].offset // ""' 2>/dev/null)
-            partition=$(echo "$body" | jq -r '.offsets[0].partition // ""' 2>/dev/null)
-            if [ -n "$offset" ]; then
-                print_info "Message written to partition $partition at offset $offset"
-            fi
-        fi
+    # Send using kafka-console-producer with explicit key
+    echo "${TOPIC_PREFIX}:${COMPACT_SIGNAL_MESSAGE}" | kubectl exec -i -n "$K8S_NAMESPACE" "$POD_NAME" -- \
+        kafka-console-producer \
+            --bootstrap-server "${KAFKA_BOOTSTRAP_SERVERS}" \
+            --topic "${SIGNAL_TOPIC}" \
+            --property "key.separator=:" \
+            --property "parse.key=true" \
+            --producer-property "security.protocol=SASL_SSL" \
+            --producer-property "sasl.mechanism=SCRAM-SHA-512" \
+            --producer-property "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";" \
+            --producer-property "ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.jks" \
+            --producer-property "ssl.truststore.password=secret"
+    
+    response_code=$?
+    
+    # Check if message was sent successfully
+    if [ $response_code -eq 0 ]; then
+        print_success "Message sent successfully using kafka-console-producer!"
+        print_info "Signal sent with key: $TOPIC_PREFIX"
         
         print_success "\n✓ Incremental snapshot signal sent successfully!"
         print_color $YELLOW "\nSnapshot has been triggered for the following tables:"
