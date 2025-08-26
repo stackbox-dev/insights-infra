@@ -1,0 +1,36 @@
+CREATE TABLE IF NOT EXISTS oms_inv_line (
+    id String DEFAULT '',
+    inv_id String DEFAULT '',
+    sku String DEFAULT '',
+    uom String DEFAULT '',
+    warehouse String DEFAULT '',
+    location String DEFAULT '',
+    batch String DEFAULT '',
+    requested_qty Int32 DEFAULT 0,
+    delivery_qty Int32 DEFAULT 0,
+    invoice_qty Int32 DEFAULT 0,
+    delivery_drop_reason String DEFAULT '',
+    invoice_drop_reason String DEFAULT '',
+    material_type String DEFAULT '',
+    material_group String DEFAULT '',
+    header_material String DEFAULT '',
+    line_no String DEFAULT '',
+    erp_line_no String DEFAULT '',
+    sales_order_no String DEFAULT '',
+    delivery_no String DEFAULT '',
+    invoice_no String DEFAULT '',
+    party_packing_no String DEFAULT '',
+    priority Int32 DEFAULT 0,
+    priority_data String DEFAULT '',
+    created_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    active Bool DEFAULT true,
+    updated_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    allocation_line_ids String DEFAULT '',
+    party_packing_created_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    data String DEFAULT '',
+    node_id String DEFAULT ''
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (id)
+PARTITION BY toYYYYMM(created_at)
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop';
