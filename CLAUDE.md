@@ -126,10 +126,10 @@ kubectl get pods -n flink-studio | grep flink-session-cluster | grep -v taskmana
 kubectl exec -n flink-studio <pod-name> -- bash -c '
   KAFKA_USERNAME=$(cat /etc/kafka/secrets/username)
   KAFKA_PASSWORD=$(cat /etc/kafka/secrets/password)
-  SCHEMA_REGISTRY_URL="https://sbx-stag-kafka-stackbox.e.aivencloud.com:22159"
+  SCHEMA_REGISTRY_URL="<use the schema registry defined in env file>"
   
   curl -s -u "${KAFKA_USERNAME}:${KAFKA_PASSWORD}" \
-    "${SCHEMA_REGISTRY_URL}/subjects/sbx_uat.encarta.public.skus-value/versions/latest"
+    "${SCHEMA_REGISTRY_URL}/subjects/<topic_prefix>.encarta.public.skus-value/versions/latest"
 ' | jq -r '.schema' | jq '.'
 ```
 
