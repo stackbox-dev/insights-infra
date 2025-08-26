@@ -49,6 +49,10 @@
    - JSON: `JSONExtractRaw(JSONMergePatch(if(sm.field = '', '{}', sm.field), if(so.field = '', '{}', so.field)))` (handle empty strings)
    - SKU code: Always use `sm.code` (never overridden)
    - Add `AND so.active = true` to all LEFT JOIN with encarta_skus_overrides
+10. **Debezium Column Exclusions** - NEVER include Debezium operational columns in ClickHouse tables:
+   - Exclude `__op` (operation type)
+   - Exclude `__source_snapshot` (snapshot indicator)
+   - Only include `__source_ts_ms` for change tracking if needed
 
 ### Flink SQL Patterns
 1. **Use TTL not Interval Joins** for CDC data: `SET 'table.exec.state.ttl' = '43200000';`
