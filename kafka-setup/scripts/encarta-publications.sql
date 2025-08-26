@@ -27,4 +27,5 @@ public.product_node_override_classifications,
 public.category_groups,
 public.default_values,
 public.sub_brands,
-public.brands;
+public.brands,
+public.batches;
