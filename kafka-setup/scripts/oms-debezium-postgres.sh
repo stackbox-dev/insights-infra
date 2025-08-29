@@ -107,12 +107,25 @@ public.inv,
 public.inv_line,
 public.shipment_input,
 public.shipment_output,
-public.wms_dock_line
+public.wms_dock_line,
+public.allocation_run
 EOF
 )
 
 # Convert multiline to single line for JSON
 TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
+
+# Define column inclusions for specific tables
+COLUMN_INCLUDE_LIST=$(cat <<EOF
+public.allocation_run.id,
+public.allocation_run.created_at,
+public.allocation_run.active,
+public.allocation_run.node_id
+EOF
+)
+
+# Convert to compact format
+COLUMN_INCLUDE_LIST_COMPACT=$(echo "$COLUMN_INCLUDE_LIST" | tr -d '\n' | sed 's/,$$//')
 
 # Prepare connector configuration
 CONNECTOR_CONFIG=$(cat <<EOF
@@ -126,6 +139,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.server.name": "${OMS_DB_NAME}",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}", 
+      "column.include.list": "${COLUMN_INCLUDE_LIST_COMPACT}",
       "publication.name": "${OMS_PUBLICATION_NAME}",
       "slot.name": "${OMS_SLOT_NAME}",
 
