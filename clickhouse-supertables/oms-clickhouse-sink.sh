@@ -57,6 +57,7 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "ord", "table": "oms_ord"},
   {"namespace": "public", "topic": "line", "table": "oms_line"},
   {"namespace": "public", "topic": "allocation_line", "table": "oms_allocation_line"},
+  {"namespace": "public", "topic": "allocation_run", "table": "oms_allocation_run"},
   {"namespace": "public", "topic": "inv", "table": "oms_inv"},
   {"namespace": "public", "topic": "inv_line", "table": "oms_inv_line"},
   {"namespace": "public", "topic": "shipment_input", "table": "oms_shipment_input"},
