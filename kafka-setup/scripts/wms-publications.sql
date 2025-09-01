@@ -11,8 +11,8 @@ SELECT * FROM pg_replication_slots;
 SELECT * FROM pg_publication;
 
 CREATE PUBLICATION dbz_publication
-FOR TABLE 
-public.storage_dockdoor_position, 
+FOR TABLE
+public.storage_dockdoor_position,
 public.storage_bin_dockdoor,
 public.storage_dockdoor,
 public.storage_bin,
@@ -22,14 +22,12 @@ public.storage_area_sloc,
 public.storage_area,
 public.storage_position,
 public.storage_bin_fixed_mapping,
-public.pd_drop_item, 
+public.pd_drop_item,
 public.pd_pick_item,
 public.pd_pick_drop_mapping,
 public.task,
 public.session,
 public.worker,
-public.handling_unit,
-public.trip,
 public.trip_relation,
 public.inb_receive_item,
 public.ob_load_item,
@@ -41,4 +39,5 @@ public.ob_qa_lineitem,
 public.handling_unit_kind,
 public.po_oms_allocation,
 public.inb_asn_lineitem,
-public.inb_asn;
+public.inb_asn,
+public.inb_grn_line;

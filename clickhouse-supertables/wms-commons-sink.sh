@@ -58,7 +58,8 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "worker", "table": "wms_workers"},
   {"namespace": "public", "topic": "inb_asn", "table": "wms_inb_asn"},
   {"namespace": "public", "topic": "inb_asn_lineitem", "table": "wms_inb_asn_lineitem"},
-  {"namespace": "public", "topic": "po_oms_allocation", "table": "wms_po_oms_allocation"}
+  {"namespace": "public", "topic": "po_oms_allocation", "table": "wms_po_oms_allocation"},
+  {"namespace": "public", "topic": "inb_grn_line", "table": "wms_inb_grn_line"}
 ]'
 
 # Generate topics list using jq

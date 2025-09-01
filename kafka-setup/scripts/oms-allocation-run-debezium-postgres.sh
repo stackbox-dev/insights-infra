@@ -13,14 +13,13 @@ usage() {
     cat << EOF
 Usage: $0 --env <environment-file> [OPTIONS]
 
-Deploy/Update WMS Debezium PostgreSQL connector
+Deploy/Update OMS allocation_run Debezium PostgreSQL connector
 
 REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
 
 OPTIONS:
     --dry-run          Show configuration without deploying
-    --debug            Enable verbose debug output
     -h, --help         Show this help message
 
 EXAMPLES:
@@ -42,10 +41,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-run)
             DRY_RUN=true
-            shift
-            ;;
-        --debug)
-            export DEBUG=true
             shift
             ;;
         -h|--help)
@@ -73,20 +68,12 @@ if ! fetch_kubernetes_credentials; then
     exit 1
 fi
 
-# Get WMS database password
-print_info "Fetching WMS database credentials..."
-WMS_DB_PASSWORD=$(fetch_db_password "$WMS_DB_PASSWORD_SECRET")
+# Get OMS database password
+print_info "Fetching OMS database credentials..."
+OMS_DB_PASSWORD=$(fetch_db_password "$OMS_DB_PASSWORD_SECRET")
 if [ $? -ne 0 ]; then
     exit 1
 fi
-
-print_debug "Database connection details:"
-print_debug "  Hostname: ${WMS_DB_HOSTNAME}"
-print_debug "  Port: ${WMS_DB_PORT}"
-print_debug "  User: ${WMS_DB_USER}"
-print_debug "  Database: ${WMS_DB_NAME}"
-print_debug "  Publication: ${WMS_PUBLICATION_NAME}"
-print_debug "  Slot: ${WMS_SLOT_NAME}"
 
 # Find Kafka Connect pod
 print_info "Finding Kafka Connect pod..."
@@ -109,61 +96,41 @@ cleanup_function() {
 }
 setup_signal_handlers cleanup_function
 
-# Define table list for easier maintenance
-TABLE_LIST=$(cat <<EOF
-public.storage_dockdoor_position,
-public.storage_bin_dockdoor,
-public.storage_dockdoor,
-public.storage_bin,
-public.storage_bin_type,
-public.storage_zone,
-public.storage_area_sloc,
-public.storage_area,
-public.storage_position,
-public.storage_bin_fixed_mapping,
-public.pd_pick_item,
-public.pd_pick_drop_mapping,
-public.pd_drop_item,
-public.task,
-public.session,
-public.worker,
-public.handling_unit,
-public.trip_relation,
-public.trip,
-public.inb_receive_item,
-public.ob_load_item,
-public.inb_palletization_item,
-public.inb_serialization_item,
-public.inb_qc_item_v2,
-public.ira_bin_items,
-public.ob_qa_lineitem,
-public.handling_unit_kind,
-public.po_oms_allocation,
-public.inb_asn_lineitem,
-public.inb_asn,
-public.inb_grn_line
+# Table list - only allocation_run
+TABLE_LIST="public.allocation_run"
+
+# Define column inclusions for allocation_run
+COLUMN_INCLUDE_LIST=$(cat <<EOF
+public.allocation_run.id,
+public.allocation_run.created_at,
+public.allocation_run.active,
+public.allocation_run.node_id
 EOF
 )
 
-# Convert multiline to single line for JSON
-TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
+# Convert to compact format
+COLUMN_INCLUDE_LIST_COMPACT=$(echo "$COLUMN_INCLUDE_LIST" | tr -d '\n' | sed 's/,$$//')
+
+# Set connector name for allocation_run
+OMS_ALLOCATION_RUN_CONNECTOR_NAME="${OMS_CONNECTOR_NAME}-allocation-run"
 
 # Prepare connector configuration
 CONNECTOR_CONFIG=$(cat <<EOF
 {
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-      "database.hostname": "${WMS_DB_HOSTNAME}",
-      "database.port": "${WMS_DB_PORT}",
-      "database.user": "${WMS_DB_USER}",
-      "database.password": "${WMS_DB_PASSWORD}",
-      "database.dbname": "${WMS_DB_NAME}",
-      "database.server.name": "${WMS_DB_NAME}",
+      "database.hostname": "${OMS_DB_HOSTNAME}",
+      "database.port": "${OMS_DB_PORT}",
+      "database.user": "${OMS_DB_USER}",
+      "database.password": "${OMS_DB_PASSWORD}",
+      "database.dbname": "${OMS_DB_NAME}",
+      "database.server.name": "${OMS_DB_NAME}",
       "plugin.name": "pgoutput",
-      "table.include.list": "${TABLE_LIST_COMPACT}",
-      "publication.name": "${WMS_PUBLICATION_NAME}",
-      "slot.name": "${WMS_SLOT_NAME}",
+      "table.include.list": "${TABLE_LIST}",
+      "column.include.list": "${COLUMN_INCLUDE_LIST_COMPACT}",
+      "publication.name": "${OMS_PUBLICATION_NAME}_allocation_run",
+      "slot.name": "${OMS_SLOT_NAME}_allocation_run",
 
-      "topic.prefix": "${WMS_TOPIC_PREFIX}",
+      "topic.prefix": "${OMS_TOPIC_PREFIX}",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
@@ -191,6 +158,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "transforms.filter.language": "jsr223.groovy",
       "transforms.filter.condition": "value.op != 'd'",
       "transforms.ts2epoch.type": "xyz.stackbox.kafka.transforms.AllTimestamptzToEpoch",
+
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "key.converter.schema.registry.url": "${SCHEMA_REGISTRY_URL}",
@@ -227,9 +195,9 @@ CONNECTOR_CONFIG=$(cat <<EOF
 
       "read.only": true,
       "signal.enabled.channels": "kafka",
-      "signal.kafka.topic": "${WMS_SIGNAL_TOPIC}",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.kafka.groupId": "${WMS_SIGNAL_CONSUMER_GROUP}",
+      "signal.kafka.groupId": "${OMS_SIGNAL_CONSUMER_GROUP}-allocation-run",
+      "signal.kafka.topic": "${OMS_SIGNAL_TOPIC}",
       "signal.consumer.security.protocol": "SASL_SSL",
       "signal.consumer.sasl.mechanism": "SCRAM-SHA-512",
       "signal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
@@ -252,41 +220,15 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 # Deploy/Update the connector
-print_info "Deploying/Updating WMS Debezium connector: ${WMS_CONNECTOR_NAME}"
-
-print_debug "Connector configuration:"
-if [ "${DEBUG:-false}" = "true" ]; then
-    echo "$CONNECTOR_CONFIG" | jq .
-fi
-
-print_debug "Making PUT request to: ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/config"
-
-# Validate configuration first if debug is enabled
-if [ "${DEBUG:-false}" = "true" ]; then
-    print_debug "Validating connector configuration..."
-    validation_response=$(curl -s -w "\n%{http_code}" -X PUT \
-        "${CONNECT_REST_URL}/connector-plugins/io.debezium.connector.postgresql.PostgresConnector/config/validate" \
-        -H "Content-Type: application/json" \
-        -d "$CONNECTOR_CONFIG")
-
-    validation_status=$(echo "$validation_response" | tail -n1)
-    validation_body=$(echo "$validation_response" | sed '$d')
-
-    print_debug "Validation Status: $validation_status"
-    print_debug "Validation Response: $validation_body"
-    echo "$validation_body" | jq . 2>/dev/null || echo "$validation_body"
-fi
+print_info "Deploying/Updating OMS allocation_run Debezium connector: ${OMS_ALLOCATION_RUN_CONNECTOR_NAME}"
 
 response=$(curl -s -w "\n%{http_code}" -X PUT \
-    "${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/config" \
+    "${CONNECT_REST_URL}/connectors/${OMS_ALLOCATION_RUN_CONNECTOR_NAME}/config" \
     -H "Content-Type: application/json" \
     -d "$CONNECTOR_CONFIG")
 
 status_code=$(echo "$response" | tail -n1)
 body=$(echo "$response" | sed '$d')
-
-print_debug "HTTP Status Code: $status_code"
-print_debug "Response Body: $body"
 
 if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_success "✅ Connector deployed/updated successfully!"
@@ -295,7 +237,7 @@ if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_info "Checking connector status..."
     sleep 2
 
-    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/status")
+    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${OMS_ALLOCATION_RUN_CONNECTOR_NAME}/status")
     connector_state=$(echo "$status_response" | jq -r '.connector.state' 2>/dev/null)
 
     if [ "$connector_state" = "RUNNING" ]; then
@@ -313,13 +255,13 @@ fi
 
 print_info "\nUseful commands:"
 echo "  # Check connector status"
-echo "  curl -s ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/status | jq ."
+echo "  curl -s ${CONNECT_REST_URL}/connectors/${OMS_ALLOCATION_RUN_CONNECTOR_NAME}/status | jq ."
 echo ""
 echo "  # Restart connector"
-echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/restart"
+echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${OMS_ALLOCATION_RUN_CONNECTOR_NAME}/restart"
 echo ""
 echo "  # Delete connector"
-echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}"
+echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${OMS_ALLOCATION_RUN_CONNECTOR_NAME}"
 echo ""
 echo "  # Trigger snapshot"
-echo "  ./trigger-snapshots.sh --env $ENV_FILE -c wms -t \"public.task\""
+echo "  ./trigger-snapshots.sh --env $ENV_FILE -c oms-allocation-run -t \"public.allocation_run\""

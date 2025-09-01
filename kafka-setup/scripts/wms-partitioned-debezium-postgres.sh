@@ -13,7 +13,7 @@ usage() {
     cat << EOF
 Usage: $0 --env <environment-file> [OPTIONS]
 
-Deploy/Update WMS Debezium PostgreSQL connector
+Deploy/Update WMS Partitioned Tables Debezium PostgreSQL connector
 
 REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
@@ -85,8 +85,8 @@ print_debug "  Hostname: ${WMS_DB_HOSTNAME}"
 print_debug "  Port: ${WMS_DB_PORT}"
 print_debug "  User: ${WMS_DB_USER}"
 print_debug "  Database: ${WMS_DB_NAME}"
-print_debug "  Publication: ${WMS_PUBLICATION_NAME}"
-print_debug "  Slot: ${WMS_SLOT_NAME}"
+print_debug "  Publication: dbz_partitioned_publication"
+print_debug "  Slot: wms_partitioned_slot"
 
 # Find Kafka Connect pod
 print_info "Finding Kafka Connect pod..."
@@ -109,46 +109,19 @@ cleanup_function() {
 }
 setup_signal_handlers cleanup_function
 
-# Define table list for easier maintenance
+# Define table list for partitioned tables
 TABLE_LIST=$(cat <<EOF
-public.storage_dockdoor_position,
-public.storage_bin_dockdoor,
-public.storage_dockdoor,
-public.storage_bin,
-public.storage_bin_type,
-public.storage_zone,
-public.storage_area_sloc,
-public.storage_area,
-public.storage_position,
-public.storage_bin_fixed_mapping,
-public.pd_pick_item,
-public.pd_pick_drop_mapping,
-public.pd_drop_item,
-public.task,
-public.session,
-public.worker,
 public.handling_unit,
-public.trip_relation,
 public.trip,
-public.inb_receive_item,
-public.ob_load_item,
-public.inb_palletization_item,
-public.inb_serialization_item,
-public.inb_qc_item_v2,
-public.ira_bin_items,
-public.ob_qa_lineitem,
-public.handling_unit_kind,
-public.po_oms_allocation,
-public.inb_asn_lineitem,
-public.inb_asn,
-public.inb_grn_line
+public.invoice,
+public.invoice_line
 EOF
 )
 
 # Convert multiline to single line for JSON
-TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
+TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$//')
 
-# Prepare connector configuration
+# Prepare connector configuration for partitioned tables
 CONNECTOR_CONFIG=$(cat <<EOF
 {
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
@@ -160,8 +133,8 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.server.name": "${WMS_DB_NAME}",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}",
-      "publication.name": "${WMS_PUBLICATION_NAME}",
-      "slot.name": "${WMS_SLOT_NAME}",
+      "publication.name": "dbz_partitioned_publication",
+      "slot.name": "wms_partitioned_slot",
 
       "topic.prefix": "${WMS_TOPIC_PREFIX}",
       "slot.drop.on.stop": false,
@@ -229,7 +202,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "signal.enabled.channels": "kafka",
       "signal.kafka.topic": "${WMS_SIGNAL_TOPIC}",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.kafka.groupId": "${WMS_SIGNAL_CONSUMER_GROUP}",
+      "signal.kafka.groupId": "wms_partitioned_signal_group",
       "signal.consumer.security.protocol": "SASL_SSL",
       "signal.consumer.sasl.mechanism": "SCRAM-SHA-512",
       "signal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
@@ -252,14 +225,15 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 # Deploy/Update the connector
-print_info "Deploying/Updating WMS Debezium connector: ${WMS_CONNECTOR_NAME}"
+CONNECTOR_NAME="wms-partitioned-postgres"
+print_info "Deploying/Updating WMS Partitioned Tables Debezium connector: ${CONNECTOR_NAME}"
 
 print_debug "Connector configuration:"
 if [ "${DEBUG:-false}" = "true" ]; then
     echo "$CONNECTOR_CONFIG" | jq .
 fi
 
-print_debug "Making PUT request to: ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/config"
+print_debug "Making PUT request to: ${CONNECT_REST_URL}/connectors/${CONNECTOR_NAME}/config"
 
 # Validate configuration first if debug is enabled
 if [ "${DEBUG:-false}" = "true" ]; then
@@ -278,7 +252,7 @@ if [ "${DEBUG:-false}" = "true" ]; then
 fi
 
 response=$(curl -s -w "\n%{http_code}" -X PUT \
-    "${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/config" \
+    "${CONNECT_REST_URL}/connectors/${CONNECTOR_NAME}/config" \
     -H "Content-Type: application/json" \
     -d "$CONNECTOR_CONFIG")
 
@@ -295,7 +269,7 @@ if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_info "Checking connector status..."
     sleep 2
 
-    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/status")
+    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${CONNECTOR_NAME}/status")
     connector_state=$(echo "$status_response" | jq -r '.connector.state' 2>/dev/null)
 
     if [ "$connector_state" = "RUNNING" ]; then
@@ -313,13 +287,13 @@ fi
 
 print_info "\nUseful commands:"
 echo "  # Check connector status"
-echo "  curl -s ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/status | jq ."
+echo "  curl -s ${CONNECT_REST_URL}/connectors/${CONNECTOR_NAME}/status | jq ."
 echo ""
 echo "  # Restart connector"
-echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}/restart"
+echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${CONNECTOR_NAME}/restart"
 echo ""
 echo "  # Delete connector"
-echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${WMS_CONNECTOR_NAME}"
+echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${CONNECTOR_NAME}"
 echo ""
 echo "  # Trigger snapshot"
-echo "  ./trigger-snapshots.sh --env $ENV_FILE -c wms -t \"public.task\""
+echo "  ./trigger-snapshots.sh --env $ENV_FILE -c wms -t \"public.handling_unit\""

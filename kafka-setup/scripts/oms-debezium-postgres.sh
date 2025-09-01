@@ -96,7 +96,7 @@ cleanup_function() {
 }
 setup_signal_handlers cleanup_function
 
-# Define table list for easier maintenance
+# Define table list for easier maintenance (excluding allocation_run - handled by separate connector)
 TABLE_LIST=$(cat <<EOF
 public.ord,
 public.line,
@@ -107,25 +107,14 @@ public.inv,
 public.inv_line,
 public.shipment_input,
 public.shipment_output,
-public.wms_dock_line,
-public.allocation_run
+public.wms_dock_line
 EOF
 )
 
 # Convert multiline to single line for JSON
 TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
 
-# Define column inclusions for specific tables
-COLUMN_INCLUDE_LIST=$(cat <<EOF
-public.allocation_run.id,
-public.allocation_run.created_at,
-public.allocation_run.active,
-public.allocation_run.node_id
-EOF
-)
-
-# Convert to compact format
-COLUMN_INCLUDE_LIST_COMPACT=$(echo "$COLUMN_INCLUDE_LIST" | tr -d '\n' | sed 's/,$$//')
+# Column filtering removed - allocation_run is handled by separate connector
 
 # Prepare connector configuration
 CONNECTOR_CONFIG=$(cat <<EOF
@@ -138,8 +127,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.dbname": "${OMS_DB_NAME}",
       "database.server.name": "${OMS_DB_NAME}",
       "plugin.name": "pgoutput",
-      "table.include.list": "${TABLE_LIST_COMPACT}", 
-      "column.include.list": "${COLUMN_INCLUDE_LIST_COMPACT}",
+      "table.include.list": "${TABLE_LIST_COMPACT}",
       "publication.name": "${OMS_PUBLICATION_NAME}",
       "slot.name": "${OMS_SLOT_NAME}",
 
@@ -156,7 +144,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "snapshot.locking.mode": "shared",
       
       "decimal.handling.mode": "precise",
-      "time.precision.mode": "adaptive_time_microseconds",
+      "time.precision.mode": "connect",
       
       "errors.max.retries": "3",
       "errors.retry.delay.initial.ms": "1000",

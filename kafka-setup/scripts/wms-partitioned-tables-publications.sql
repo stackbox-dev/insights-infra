@@ -10,15 +10,10 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO debezium;
 SELECT * FROM pg_replication_slots;
 SELECT * FROM pg_publication;
 
-CREATE PUBLICATION dbz_publication
+CREATE PUBLICATION dbz_partitioned_publication
 FOR TABLE
-public.ord,
-public.line,
-public.ord_state,
-public.line_state,
-public.allocation_line,
-public.inv,
-public.inv_line,
-public.shipment_input,
-public.shipment_output,
-public.wms_dock_line;
+public.handling_unit,
+public.trip,
+public.invoice,
+public.invoice_line
+WITH (publish_via_partition_root = true);
