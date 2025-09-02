@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS wms_inb_asn_lineitem
     asnNo String DEFAULT '',
     vehicleNo String DEFAULT '',
     poNo String DEFAULT '',
-    shipmentDate Int32 DEFAULT 0,  -- Days since Unix epoch from Debezium
-    shipmentDateActual Date ALIAS toDate('1970-01-01') + shipmentDate,  -- Computed actual date
+    shipmentDate Date DEFAULT toDate('1970-01-01'),
     skuId String,
     uom String DEFAULT '',
     batch String DEFAULT '',
