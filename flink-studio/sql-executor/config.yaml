@@ -5,7 +5,8 @@
 
 sql_gateway:
   # Flink SQL Gateway URL - adjust for your deployment
-  url: "http://flink-sql-gateway.flink-studio.api.staging.stackbox.internal"
+  # url: "http://flink-sql-gateway.flink-studio.api.staging.stackbox.internal"
+  url: "http://flink-sql-gateway.flink-studio.api.prod.unilever"
 
   # Session timeout in seconds
   session_timeout: 300
