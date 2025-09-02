@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS oms_line (
     tag_3 String DEFAULT '',
     tag_4 String DEFAULT '',
     sku String DEFAULT '',
-    created_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     node_id String DEFAULT ''
 ) ENGINE = ReplacingMergeTree(created_at)
 ORDER BY (id)

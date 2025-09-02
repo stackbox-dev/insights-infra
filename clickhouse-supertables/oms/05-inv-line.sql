@@ -22,11 +22,11 @@ CREATE TABLE IF NOT EXISTS oms_inv_line (
     party_packing_no String DEFAULT '',
     priority Int32 DEFAULT 0,
     priority_data String DEFAULT '',
-    created_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     active Bool DEFAULT true,
-    updated_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    updated_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     allocation_line_ids String DEFAULT '',
-    party_packing_created_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    party_packing_created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     data String DEFAULT '',
     node_id String DEFAULT ''
 ) ENGINE = ReplacingMergeTree(updated_at)

@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS oms_shipment_output (
     plan_code String DEFAULT '',
     payment_type String DEFAULT '',
     active Bool DEFAULT true,
-    created_at DateTime64(6) DEFAULT toDateTime64(0, 6),
-    last_updated_at DateTime64(6) DEFAULT toDateTime64(0, 6)
+    created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
+    last_updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
 ) ENGINE = ReplacingMergeTree(last_updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)

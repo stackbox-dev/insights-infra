@@ -27,11 +27,11 @@ CREATE TABLE IF NOT EXISTS oms_allocation_line (
     header_cbu String DEFAULT '',
     promo_cbu_type String DEFAULT '',
     line_id String DEFAULT '',
-    created_at DateTime64(6) DEFAULT toDateTime64(0, 6),
+    created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     active Bool DEFAULT true,
     promo_ratio Int32 DEFAULT 0,
     node_id String DEFAULT '',
-    last_updated_at DateTime64(6) DEFAULT toDateTime64(0, 6)
+    last_updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
 ) ENGINE = ReplacingMergeTree(last_updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)
