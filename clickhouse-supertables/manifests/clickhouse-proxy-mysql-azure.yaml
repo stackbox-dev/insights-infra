@@ -44,8 +44,8 @@ data:
     mysql_servers:
     (
       {
-        address="sbx-stag-clickhouse-stackbox.h.aivencloud.com"      # ClickHouse IP/hostname
-        port=22156                                              # ClickHouse MySQL protocol port
+        address="samadhan-clickhouse-hul-samadhan.f.aivencloud.com"      # ClickHouse IP/hostname
+        port=25652                                             # ClickHouse MySQL protocol port
         hostgroup_id=0
         max_connections=200
         weight=1000
@@ -62,7 +62,7 @@ data:
       {
         username="readonly"
         password="${CLICKHOUSE_PASSWORD}"   # Will be replaced with environment variable
-        database="sbx_uat"
+        database="prod"
         active=1
         default_hostgroup=0
         max_connections=200
@@ -163,7 +163,7 @@ metadata:
   labels:
     app: proxysql
   annotations:
-    networking.gke.io/load-balancer-type: "Internal"
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
 spec:
   type: LoadBalancer
   ports:
