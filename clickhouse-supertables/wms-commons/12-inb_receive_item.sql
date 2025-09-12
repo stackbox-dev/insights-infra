@@ -1,5 +1,5 @@
 -- ClickHouse table for WMS Inbound Receive Item
--- Dimension table for INB   line information
+-- Dimension table for INB line item information
 -- Source: samadhan_prod.wms.public.inb_receive_item
 
 CREATE TABLE IF NOT EXISTS wms_inb_receive_item
