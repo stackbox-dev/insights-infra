@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS wms_invoice_line
     originalQty Int32 DEFAULT 0,
     parentLineId String DEFAULT 0
 )
-ENGINE = ReplacingMergeTree(createdAt)
+ENGINE = ReplacingMergeTree(sessionCreatedAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

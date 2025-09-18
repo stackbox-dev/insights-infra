@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS wms_ob_load_item
     retailerId String DEFAULT '',
     retailerCode String DEFAULT ''
 )
-ENGINE = ReplacingMergeTree(createdAt)
+ENGINE = ReplacingMergeTree(loadedAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;
