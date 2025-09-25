@@ -65,7 +65,18 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "inb_palletization_item", "table": "wms_inb_palletization_item"},
   {"namespace": "public", "topic": "inb_qc_item_v2", "table": "wms_inb_qc_item_v2"},
   {"namespace": "public", "topic": "ob_load_item", "table": "wms_ob_load_item"},
-  {"namespace": "public", "topic": "inb_serialization_item", "table": "wms_inb_serialization_item"}
+  {"namespace": "public", "topic": "inb_serialization_item", "table": "wms_inb_serialization_item"},
+  {"namespace": "public", "topic": "sbl_demand_packed", "table": "wms_sbl_demand_packed"},
+  {"namespace": "public", "topic": "sbl_demand", "table": "wms_sbl_demand"},
+  {"namespace": "public", "topic": "bbulk_ptl_demand_packed", "table": "wms_bbulk_ptl_demand_packed"},
+  {"namespace": "public", "topic": "ob_qc_chu", "table": "wms_ob_qc_chu"},
+  {"namespace": "public", "topic": "wave_olg_invoice_line", "table": "wms_wave_olg_invoice_line"},
+  {"namespace": "public", "topic": "vehicle_event", "table": "wms_vehicle_event"},
+  {"namespace": "public", "topic": "ob_chu", "table": "wms_ob_chu"},
+  {"namespace": "public", "topic": "ob_chu_line", "table": "wms_ob_chu_line"},
+  {"namespace": "public", "topic": "seg_item", "table": "wms_seg_item"},
+  {"namespace": "public", "topic": "seg_group", "table": "wms_seg_group"},
+  {"namespace": "public", "topic": "seg_container", "table": "wms_seg_container"}
 ]'
 
 # Generate topics list using jq

@@ -202,9 +202,7 @@ Trigger incremental snapshots for specific tables.
 
 # Trigger snapshots for multiple tables
 ./scripts/trigger-snapshots.sh --env .sbx-uat.env --connector wms \
-  --table public.inventory \
-  --table public.task \
-  --table public.order
+  --tables "public.inventory,public.task,public.order"
 
 # Use from file
 ./scripts/trigger-snapshots.sh --env .sbx-uat.env --connector wms --from-file tables.txt

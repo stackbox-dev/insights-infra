@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS wms_inb_receive_item
     receivedHuWeight Float64 DEFAULT 0,
     subReason String DEFAULT '',
 ) 
-ENGINE = ReplacingMergeTree(createdAt)
+ENGINE = ReplacingMergeTree(receivedAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;
