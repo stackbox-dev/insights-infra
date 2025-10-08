@@ -30,6 +30,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Array of scripts to run
 declare -a SCRIPTS=(
     "encarta-clickhouse-sink.sh"
+    "oms-clickhouse-sink.sh"
     "wms-commons-sink.sh"
     "wms-storage-sink.sh"
     "wms-inventory-sink.sh"
