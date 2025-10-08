@@ -173,7 +173,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
       "exactlyOnce": "false",
       "topic2TableMap": "'"$TOPIC_TABLE_MAP"'",
       "clickhouseSettings": "date_time_input_format=best_effort,max_insert_block_size=100000",
-      "bufferFlushTime": "10000",
+      "bufferFlushTime": "30000",
       "bufferSize": "100000",
       
       "key.converter": "io.confluent.connect.avro.AvroConverter",
