@@ -124,6 +124,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.password": "${OMS_DB_PASSWORD}",
       "database.dbname": "${OMS_DB_NAME}",
       "database.server.name": "${OMS_DB_NAME}",
+      "database.sslmode": "require",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST}",
       "column.include.list": "${COLUMN_INCLUDE_LIST_COMPACT}",

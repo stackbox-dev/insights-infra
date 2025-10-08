@@ -131,6 +131,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.password": "${ENCARTA_DB_PASSWORD}",
       "database.dbname": "${ENCARTA_DB_NAME}",
       "database.server.name": "${ENCARTA_DB_NAME}",
+      "database.sslmode": "require",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}", 
       "publication.name": "${ENCARTA_PUBLICATION_NAME}",
@@ -149,7 +150,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "snapshot.locking.mode": "shared",
       
       "decimal.handling.mode": "precise",
-      "time.precision.mode": "adaptive_time_microseconds",
+      "time.precision.mode": "connect",
       
       "errors.max.retries": "3",
       "errors.retry.delay.initial.ms": "1000",

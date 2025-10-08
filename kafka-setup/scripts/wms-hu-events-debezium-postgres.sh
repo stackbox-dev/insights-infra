@@ -116,6 +116,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.password": "${WMS_DB_PASSWORD}",
       "database.dbname": "${WMS_DB_NAME}",
       "database.server.name": "${WMS_DB_NAME}",
+      "database.sslmode": "require",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}", 
       "publication.name": "${WMS_HU_EVENTS_PUBLICATION_NAME}",
@@ -134,7 +135,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "snapshot.locking.mode": "shared",
       
       "decimal.handling.mode": "precise",
-      "time.precision.mode": "adaptive_time_microseconds",
+      "time.precision.mode": "connect",
       
       "errors.max.retries": "3",
       "errors.retry.delay.initial.ms": "1000",

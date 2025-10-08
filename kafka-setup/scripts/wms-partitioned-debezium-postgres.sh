@@ -131,6 +131,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.password": "${WMS_DB_PASSWORD}",
       "database.dbname": "${WMS_DB_NAME}",
       "database.server.name": "${WMS_DB_NAME}",
+      "database.sslmode": "require",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}",
       "publication.name": "dbz_partitioned_publication",
