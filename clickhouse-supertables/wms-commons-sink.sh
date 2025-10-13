@@ -76,7 +76,32 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "ob_chu_line", "table": "wms_ob_chu_line"},
   {"namespace": "public", "topic": "seg_item", "table": "wms_seg_item"},
   {"namespace": "public", "topic": "seg_group", "table": "wms_seg_group"},
-  {"namespace": "public", "topic": "seg_container", "table": "wms_seg_container"}
+  {"namespace": "public", "topic": "seg_container", "table": "wms_seg_container"},
+  {"namespace": "public", "topic": "yms_trip", "table": "wms_yms_trip"},
+  {"namespace": "public", "topic": "exception_bin", "table": "wms_exception_bin"},
+  {"namespace": "public", "topic": "exception_hu", "table": "wms_exception_hu"},
+  {"namespace": "public", "topic": "exception_manual_assignment", "table": "wms_exception_manual_assignment"},
+  {"namespace": "public", "topic": "ira_approval", "table": "wms_ira_approval"},
+  {"namespace": "public", "topic": "ira_bin_items_scanned_hu", "table": "wms_ira_bin_items_scanned_hu"},
+  {"namespace": "public", "topic": "ira_discrepancies_config", "table": "wms_ira_discrepancies_config"},
+  {"namespace": "public", "topic": "ira_manual_update","table": "wms_ira_manual_update"},
+  {"namespace": "public", "topic": "ira_record","table": "wms_ira_record"},
+  {"namespace": "public", "topic": "ira_session_progress","table": "wms_ira_session_progress"},
+  {"namespace": "public", "topic": "ira_session_sku", "table": "wms_ira_session_sku"},
+  {"namespace": "public", "topic": "ira_session_summary", "table": "wms_ira_session_summary"},
+  {"namespace": "public", "topic": "ira_task_bin", "table": "wms_ira_task_bin"},
+  {"namespace": "public", "topic": "ira_worker_update", "table": "wms_ira_worker_update"},
+  {"namespace": "public", "topic": "pl_inv_cnt_plan", "table": "wms_pl_inv_cnt_plan"},
+  {"namespace": "public", "topic": "pl_inv_cnt_plan_cycle", "table": "wms_pl_inv_cnt_plan_cycle"},
+  {"namespace": "public", "topic": "pl_inv_cnt_plan_seq", "table": "wms_pl_inv_cnt_plan_seq"},
+  {"namespace": "public", "topic": "pln_ira_cycle_plan", "table": "wms_pln_ira_cycle_plan"},
+  {"namespace": "public", "topic": "pln_ira_cycle_step", "table": "wms_pln_ira_cycle_step"},
+  {"namespace": "public", "topic": "pln_ira_cycle_step_bin", "table": "wms_pln_ira_cycle_step_bin"},
+  {"namespace": "public", "topic": "vehicle_event_trip", "table": "wms_vehicle_event_trip"},
+  {"namespace": "public", "topic": "mhe", "table": "wms_mhe"},
+  {"namespace": "public", "topic": "mhe_kind", "table": "wms_mhe_kind"},
+  {"namespace": "public", "topic": "inb_grn", "table": "wms_inb_grn"},
+  {"namespace": "public", "topic": "ira_bin_items", "table": "wms_ira_bin_items"}
 ]'
 
 # Generate topics list using jq

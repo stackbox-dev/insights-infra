@@ -1,8 +1,8 @@
--- ClickHouse table for WMS Exception Hu
--- Dimension table for Exception HU information
--- Source: samadhan_prod.wms.public.exception_hu
+-- ClickHouse table for WMS Exception Manual Assignment
+-- Dimension table for Exception Manual Assignment information
+-- Source: samadhan_prod.wms.public.exception_manual_assignment
 
-CREATE TABLE IF NOT EXISTS wms_exception_hu
+CREATE TABLE IF NOT EXISTS wms_exception_manual_assignment
 (
     whId Int64 DEFAULT 0,
     id String DEFAULT '',
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS wms_exception_hu
     bucket String DEFAULT '',
     updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     iraSessionId String DEFAULT '',
-    deletedForIRAAt DateTime64(3),
+    deletedForIRAAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     reason String DEFAULT '',
     kind String DEFAULT '',
     level String DEFAULT '',

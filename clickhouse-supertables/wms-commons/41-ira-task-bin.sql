@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS wms_ira_task_bin
     pickLockReleasedTaskIds String DEFAULT '[]',
     attrs String DEFAULT '{}',
     pickLockReleasedMovementDemandIds String DEFAULT '[]',
-    recordNo Int64 DEFAULT 1,
+    recordNo Int32 DEFAULT 0,
     approvalState String DEFAULT '',
     recordedBy String DEFAULT '',
     recordedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),

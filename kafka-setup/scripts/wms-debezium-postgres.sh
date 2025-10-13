@@ -172,7 +172,11 @@ public.pl_inv_cnt_plan_cycle,
 public.pl_inv_cnt_plan_seq,
 public.pln_ira_cycle_plan,
 public.pln_ira_cycle_step,
-public.pln_ira_cycle_step_bin
+public.pln_ira_cycle_step_bin,
+public.vehicle_event_trip,
+public.mhe,
+public.mhe_kind,
+public.inb_grn
 EOF
 )
 
