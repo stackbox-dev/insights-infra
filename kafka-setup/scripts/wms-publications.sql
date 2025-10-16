@@ -77,6 +77,7 @@ public.mhe,
 public.mhe_kind,
 public.inb_grn,
 public.vehicle_parking,
-public.pd_provisional_item
-public.worker_active_time
-public.worker_productivity;
+public.pd_provisional_item,
+public.worker_active_time,
+public.worker_productivity,
+public.ob_gin;

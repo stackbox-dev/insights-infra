@@ -105,7 +105,8 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "vehicle_parking", "table": "wms_vehicle_parking"},
   {"namespace": "public", "topic": "pd_provisional_item", "table": "wms_pd_provisional_item"},
   {"namespace": "public", "topic": "worker_active_time", "table": "wms_worker_active_time"},
-  {"namespace": "public", "topic": "worker_productivity", "table": "wms_worker_productivity"}
+  {"namespace": "public", "topic": "worker_productivity", "table": "wms_worker_productivity"},
+  {"namespace": "public", "topic": "ob_gin", "table": "wms_ob_gin"}
 ]'
 
 # Generate topics list using jq
