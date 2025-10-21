@@ -106,7 +106,10 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "pd_provisional_item", "table": "wms_pd_provisional_item"},
   {"namespace": "public", "topic": "worker_active_time", "table": "wms_worker_active_time"},
   {"namespace": "public", "topic": "worker_productivity", "table": "wms_worker_productivity"},
-  {"namespace": "public", "topic": "ob_gin", "table": "wms_ob_gin"}
+  {"namespace": "public", "topic": "ob_gin", "table": "wms_ob_gin"},
+  { "namespace": "public", "topic": "worker_mhe_mapping", "table": "wms_worker_mhe_mapping" },
+  { "namespace": "public", "topic": "worker_device_session", "table": "wms_worker_device_session" },
+  { "namespace": "public", "topic": "task_worker_assignment", "table": "wms_task_worker_assignment" }
 ]'
 
 # Generate topics list using jq

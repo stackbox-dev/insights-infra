@@ -15,3 +15,4 @@ config.json
 sql-queries1
 ca.pem
 *.jks
+readme.md

@@ -80,4 +80,7 @@ public.vehicle_parking,
 public.pd_provisional_item,
 public.worker_active_time,
 public.worker_productivity,
-public.ob_gin;
+public.ob_gin,
+public.worker_mhe_mapping,
+public.worker_device_session,
+public.task_worker_assignment;
