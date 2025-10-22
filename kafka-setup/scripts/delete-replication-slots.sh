@@ -255,6 +255,22 @@ for env_file in "${ENV_FILES[@]}"; do
     else
         echo -e "${YELLOW}ENCARTA database configuration not found, skipping...${NC}"
     fi
+
+    # Tms Database
+    if [[ -n "$TMS_DB_HOSTNAME" && -n "$TMS_DB_NAME" && -n "$TMS_DB_USER" && -n "$TMS_DB_PASSWORD_SECRET" ]]; then
+        echo -e "\n${GREEN}Fetching TMS database password from Kubernetes secret...${NC}"
+        TMS_PASSWORD=$(fetch_password_from_secret "$TMS_DB_PASSWORD_SECRET")
+        if [[ -n "$TMS_PASSWORD" ]]; then
+            delete_slots "$TMS_DB_HOSTNAME" "${TMS_DB_PORT:-5432}" "$TMS_DB_NAME" "$TMS_DB_USER" "$TMS_PASSWORD" "TMS"
+        else
+            echo -e "${RED}Failed to fetch TMS database password from secret${NC}"
+        fi
+    else
+        echo -e "${YELLOW}TMS database configuration not found, skipping...${NC}"
+    fi
+
+
+   
 done
 
 echo -e "\n${GREEN}=== Script completed ===${NC}"

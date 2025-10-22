@@ -19,7 +19,7 @@ REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
 
 OPTIONS:
-    -c, --connector    Connector shortname (WMS, ENCARTA, BACKBONE, OMS) - if not provided, will prompt
+    -c, --connector    Connector shortname (WMS, ENCARTA, BACKBONE, OMS,TMS) - if not provided, will prompt
     -t, --tables       Comma-separated list of tables - if not provided, will prompt
     -f, --filter       Optional filter conditions for snapshot (e.g., "id > 1000")
     -d, --dry-run      Show what would be done without actually triggering snapshots
@@ -32,6 +32,7 @@ EXAMPLES:
     $0 --env .sbx-uat.env -c ENCARTA -t "public.skus" -f "updated_at > '2024-01-01'"
     $0 --env .sbx-uat.env -c OMS -t "public.po_oms_allocation"
     $0 --env .samadhan-prod.env -c BACKBONE -t "public.node"
+    $0 --env .sbx-prod.env -c TMS -t "public.node"
     $0 --env .sbx-uat.env --list-only
     $0 --env .sbx-uat.env --dry-run -c WMS -t "public.inventory"
     $0 --env .sbx-uat.env -c WMS --create-topics-only
@@ -181,7 +182,8 @@ for conn in $AVAILABLE_CONNECTORS; do
     if [[ "$conn" == "$WMS_CONNECTOR_NAME" ]] || \
        [[ "$conn" == "$ENCARTA_CONNECTOR_NAME" ]] || \
        [[ "$conn" == "$BACKBONE_CONNECTOR_NAME" ]] || \
-       [[ "$conn" == "$OMS_CONNECTOR_NAME" ]]; then
+       [[ "$conn" == "$OMS_CONNECTOR_NAME" ]]
+       [[ "$conn" == "$TMS_CONNECTOR_NAME" ]]; then
         print_success "  - $conn"
         DEBEZIUM_CONNECTORS="$DEBEZIUM_CONNECTORS $conn"
     fi
@@ -250,9 +252,14 @@ else
             SIGNAL_TOPIC="$OMS_SIGNAL_TOPIC"
             TOPIC_PREFIX="$OMS_TOPIC_PREFIX"
             ;;
+        TMS|tms)
+            FULL_CONNECTOR_NAME="$TMS_CONNECTOR_NAME"
+            SIGNAL_TOPIC="$TMS_SIGNAL_TOPIC"
+            TOPIC_PREFIX="$TMS_TOPIC_PREFIX"
+            ;;
         *)
             print_error "Unknown connector shortname: $CONNECTOR"
-            print_info "Valid options: WMS, ENCARTA, BACKBONE, OMS"
+            print_info "Valid options: WMS, ENCARTA, BACKBONE, OMS, TMS"
             exit 1
             ;;
     esac

@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-haproxy-config
+  namespace: kafka
+data:
+  haproxy.cfg: |
+    defaults
+      mode tcp
+      timeout connect 5s
+      timeout client  1m
+      timeout server  1m
+
+    frontend clickhouse_front
+      bind *:9000
+      default_backend clickhouse_backend
+
+    backend clickhouse_backend
+      server clickhouse sbx-prod-clickhouse-stackbox.h.aivencloud.com:22154 check
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickhouse-tcp-proxy
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse-tcp-proxy
+  template:
+    metadata:
+      labels:
+        app: clickhouse-tcp-proxy
+    spec:
+      containers:
+        - name: haproxy
+          image: haproxy:latest
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/etc/haproxy/haproxy.cfg
+              subPath: haproxy.cfg
+      volumes:
+        - name: config
+          configMap:
+            name: clickhouse-haproxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-proxy-svc
+  namespace: kafka
+  annotations:
+    networking.gke.io/load-balancer-type: "Internal"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+      name: clickhouse
+  selector:
+    app: clickhouse-tcp-proxy

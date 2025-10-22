@@ -13,7 +13,7 @@ usage() {
     cat << EOF
 Usage: $0 --env <environment-file> [OPTIONS]
 
-Deploy/Update Backbone Debezium PostgreSQL connector
+Deploy/Update TMS Debezium PostgreSQL connector
 
 REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
@@ -53,6 +53,7 @@ while [[ $# -gt 0 ]]; do
             exit 1
             ;;
     esac
+
 done
 
 # Load environment and check Kubernetes context
@@ -68,9 +69,9 @@ if ! fetch_kubernetes_credentials; then
     exit 1
 fi
 
-# Get Backbone database password
-print_info "Fetching Backbone database credentials..."
-BACKBONE_DB_PASSWORD=$(fetch_db_password "$BACKBONE_DB_PASSWORD_SECRET")
+# Get TMS database password
+print_info "Fetching TMS database credentials..."
+TMS_DB_PASSWORD=$(fetch_db_password "$TMS_DB_PASSWORD_SECRET")
 if [ $? -ne 0 ]; then
     exit 1
 fi
@@ -98,11 +99,17 @@ setup_signal_handlers cleanup_function
 
 # Define table list for easier maintenance
 TABLE_LIST=$(cat <<EOF
-public.node,
-public.node_closure,
-public.retailer,
-public.skuMaster,
-public.picklistRetailer
+public.invoice,
+public.invoice_state,
+public.invoice_line,
+public.load,
+public.load_line,
+public.ord,
+public.ord_state,
+public.line,
+public.line_state,
+public.contract,
+public.contract_line
 EOF
 )
 
@@ -113,19 +120,19 @@ TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
 CONNECTOR_CONFIG=$(cat <<EOF
 {
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-      "database.hostname": "${BACKBONE_DB_HOSTNAME}",
-      "database.port": "${BACKBONE_DB_PORT}",
-      "database.user": "${BACKBONE_DB_USER}",
-      "database.password": "${BACKBONE_DB_PASSWORD}",
-      "database.dbname": "${BACKBONE_DB_NAME}",
-      "database.server.name": "${BACKBONE_DB_NAME}",
+      "database.hostname": "${TMS_DB_HOSTNAME}",
+      "database.port": "${TMS_DB_PORT}",
+      "database.user": "${TMS_DB_USER}",
+      "database.password": "${TMS_DB_PASSWORD}",
+      "database.dbname": "${TMS_DB_NAME}",
+      "database.server.name": "${TMS_DB_NAME}",
       "database.sslmode": "require",
       "plugin.name": "pgoutput",
-      "table.include.list": "${TABLE_LIST_COMPACT}", 
-      "publication.name": "${BACKBONE_PUBLICATION_NAME}",
-      "slot.name": "${BACKBONE_SLOT_NAME}",
+      "table.include.list": "${TABLE_LIST_COMPACT}",
+      "publication.name": "${TMS_PUBLICATION_NAME}",
+      "slot.name": "${TMS_SLOT_NAME}",
 
-      "topic.prefix": "${BACKBONE_TOPIC_PREFIX}",
+      "topic.prefix": "${TMS_TOPIC_PREFIX}",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
@@ -191,8 +198,8 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "read.only": true,
       "signal.enabled.channels": "kafka",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.kafka.topic": "${BACKBONE_SIGNAL_TOPIC}",
-      "signal.kafka.groupId": "${BACKBONE_SIGNAL_CONSUMER_GROUP}",
+      "signal.kafka.topic": "${TMS_SIGNAL_TOPIC}",
+      "signal.kafka.groupId": "${TMS_SIGNAL_CONSUMER_GROUP}",
       "signal.consumer.security.protocol": "SASL_SSL",
       "signal.consumer.sasl.mechanism": "SCRAM-SHA-512",
       "signal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
@@ -215,10 +222,10 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 # Deploy/Update the connector
-print_info "Deploying/Updating Backbone Debezium connector: ${BACKBONE_CONNECTOR_NAME}"
+print_info "Deploying/Updating TMS Debezium connector: ${TMS_CONNECTOR_NAME}"
 
 response=$(curl -s -w "\n%{http_code}" -X PUT \
-    "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/config" \
+    "${CONNECT_REST_URL}/connectors/${TMS_CONNECTOR_NAME}/config" \
     -H "Content-Type: application/json" \
     -d "$CONNECTOR_CONFIG")
 
@@ -232,7 +239,7 @@ if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_info "Checking connector status..."
     sleep 2
     
-    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status")
+    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${TMS_CONNECTOR_NAME}/status")
     connector_state=$(echo "$status_response" | jq -r '.connector.state' 2>/dev/null)
     
     if [ "$connector_state" = "RUNNING" ]; then
@@ -250,13 +257,13 @@ fi
 
 print_info "\nUseful commands:"
 echo "  # Check connector status"
-echo "  curl -s ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status | jq ."
+echo "  curl -s ${CONNECT_REST_URL}/connectors/${TMS_CONNECTOR_NAME}/status | jq ."
 echo ""
 echo "  # Restart connector"
-echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/restart"
+echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${TMS_CONNECTOR_NAME}/restart"
 echo ""
 echo "  # Delete connector"
-echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}"
+echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${TMS_CONNECTOR_NAME}"
 echo ""
 echo "  # Trigger snapshot"
-echo "  ./trigger-snapshots.sh --env $ENV_FILE -c backbone -t \"public.node\""
+echo "  ./trigger-snapshots.sh --env $ENV_FILE -c tms -t \"public.invoice\""

@@ -12,8 +12,14 @@ SELECT * FROM pg_publication;
 
 CREATE PUBLICATION dbz_publication
 FOR TABLE 
-public.node, 
-public.node_closure,
-public.retailer,
-public.skuMaster,
-public.picklistRetailer;
+public.invoice,
+public.invoice_state,
+public.invoice_line,
+public.load,
+public.load_line,
+public.ord,
+public.ord_state,
+public.line,
+public.line_state,
+public.contract,
+public.contract_line;

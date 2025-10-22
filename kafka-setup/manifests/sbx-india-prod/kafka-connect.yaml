@@ -1,0 +1,236 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cp-connect
+  namespace: kafka
+  labels:
+    app: cp-connect
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cp-connect
+  template:
+    metadata:
+      labels:
+        app: cp-connect
+    spec:
+      containers:
+        - name: cp-connect
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-kafka-connect:bf7085eff8b4ba2647aeea342371e77962975bde
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8083
+          resources:
+            limits:
+              cpu: 3000m
+              memory: 3Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          env:
+            - name: CONNECT_BOOTSTRAP_SERVERS
+              value: "sbx-prod-kafka-stackbox.l.aivencloud.com:22167"
+            - name: CONNECT_REST_PORT
+              value: "8083"
+            - name: CONNECT_GROUP_ID
+              value: "connect-cluster"
+            - name: CONNECT_PRODUCER_CLIENT_ID
+              value: "connect-worker-producer"
+            - name: CONNECT_PRODUCER_ENABLE_IDEMPOTENCE
+              value: "true"
+            - name: CONNECT_CONFIG_STORAGE_TOPIC
+              value: "connect-configs"
+            - name: CONNECT_OFFSET_STORAGE_TOPIC
+              value: "connect-offsets"
+            - name: CONNECT_STATUS_STORAGE_TOPIC
+              value: "connect-status"
+            - name: CONNECT_REST_ADVERTISED_HOST_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: KAFKA_JVM_PERFORMANCE_OPTS
+              value: "-server -XX:+UseG1GC -XX:GCTimeRatio=1
+                -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20
+                -XX:MaxGCPauseMillis=10000 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent
+                -XX:MaxInlineLevel=15 -Djava.awt.headless=true -Duser.timezone=UTC"
+            - name: CONNECT_KEY_CONVERTER
+              value: "io.confluent.connect.avro.AvroConverter"
+            - name: CONNECT_VALUE_CONVERTER
+              value: "io.confluent.connect.avro.AvroConverter"
+            - name: CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY
+              value: "All"
+            - name: CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL
+              value: "https://sbx-prod-kafka-stackbox.l.aivencloud.com:22159"
+            - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL
+              value: "https://sbx-prod-kafka-stackbox.l.aivencloud.com:22159"
+            - name: CONNECT_VALUE_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE
+              value: "USER_INFO"
+            - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO
+              valueFrom:
+                secretKeyRef:
+                  name: aiven-credentials
+                  key: userinfo
+            - name: SCHEMAREGISTRYAUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: aiven-credentials
+                  key: username
+            - name: SCHEMAREGISTRYAUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aiven-credentials
+                  key: password
+            - name: CLUSTER_USER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: aiven-credentials
+                  key: username
+            - name: CLUSTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aiven-credentials
+                  key: password
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: debezium-pg-pass
+                  key: password
+
+            # RBAC
+            - name: CONNECT_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_SASL_MECHANISM
+              value: "SCRAM-SHA-512"
+            - name: CONNECT_SASL_JAAS_CONFIG
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
+            - name: CONNECT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: ""
+            - name: CONNECT_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
+
+            # For consumers
+            - name: CONNECT_CONSUMER_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_CONSUMER_SASL_MECHANISM
+              value: "SCRAM-SHA-512"
+            - name: CONNECT_CONSUMER_SASL_JAAS_CONFIG
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
+            - name: CONNECT_CONSUMER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: ""
+            - name: CONNECT_CONSUMER_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_CONSUMER_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
+
+            # For producers
+            - name: CONNECT_PRODUCER_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_PRODUCER_SASL_MECHANISM
+              value: "SCRAM-SHA-512"
+            - name: CONNECT_PRODUCER_SASL_JAAS_CONFIG
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
+            - name: CONNECT_PRODUCER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: ""
+            - name: CONNECT_PRODUCER_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_PRODUCER_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
+
+            # For admin
+            - name: CONNECT_ADMIN_SECURITY_PROTOCOL
+              value: "SASL_SSL"
+            - name: CONNECT_ADMIN_SASL_MECHANISM
+              value: "SCRAM-SHA-512"
+            - name: CONNECT_ADMIN_SASL_JAAS_CONFIG
+              value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(CLUSTER_USER_NAME)" password="$(CLUSTER_PASSWORD)";'
+            - name: CONNECT_ADMIN_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+              value: ""
+            - name: CONNECT_ADMIN_SSL_TRUSTSTORE_LOCATION
+              value: "/etc/kafka/secrets/kafka.truststore.jks"
+            - name: CONNECT_ADMIN_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-truststore-secret
+                  key: truststore-password
+
+            # - name: KAFKA_OPTS
+            #   value: "-Djavax.net.debug=ssl:handshake,trustmanager"
+          volumeMounts:
+            - name: truststore-volume
+              mountPath: /etc/kafka/secrets
+              readOnly: true
+      volumes:
+        - name: truststore-volume
+          secret:
+            secretName: kafka-truststore-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cp-connect
+  namespace: kafka
+spec:
+  selector:
+    app: cp-connect
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8083
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cp-connect-ui
+  namespace: kafka
+  labels:
+    app: cp-connect-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cp-connect-ui
+  template:
+    metadata:
+      labels:
+        app: cp-connect-ui
+    spec:
+      containers:
+        - name: cp-connect-ui
+          image: landoop/kafka-connect-ui:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: 3000m
+              memory: 3Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          env:
+            - name: CONNECT_URL
+              value: "http://cp-connect.kafka"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cp-connect-ui
+  namespace: kafka
+spec:
+  selector:
+    app: cp-connect-ui
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
