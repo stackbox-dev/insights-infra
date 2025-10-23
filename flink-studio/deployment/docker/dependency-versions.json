@@ -270,6 +270,12 @@
         "groupId": "com.fasterxml.woodstox",
         "version": "6.6.2"
       },
+      "stax2-api": {
+        "artifactId": "stax2-api",
+        "description": "StAX2 API (required by Woodstox)",
+        "groupId": "org.codehaus.woodstox",
+        "version": "4.2.2"
+      },
       "hadoop-shaded-guava": {
         "artifactId": "hadoop-shaded-guava",
         "description": "Hadoop Shaded Guava",
