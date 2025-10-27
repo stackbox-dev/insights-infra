@@ -422,7 +422,7 @@ execute_curl_in_pod() {
 # ====================
 validate_connector_name() {
     local connector=$1
-    local valid_connectors=("wms" "encarta" "backbone" "oms" "tms")
+    local valid_connectors=("wms" "encarta" "backbone" "oms" "tms" "razum")
     
     for valid in "${valid_connectors[@]}"; do
         if [ "$connector" = "$valid" ]; then

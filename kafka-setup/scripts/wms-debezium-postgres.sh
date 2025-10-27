@@ -184,7 +184,9 @@ public.worker_productivity,
 public.ob_gin,
 public.worker_mhe_mapping,
 public.worker_device_session,
-public.task_worker_assignment
+public.task_worker_assignment,
+public.vehicle_event,
+public.vehicle_event_trip
 EOF
 )
 

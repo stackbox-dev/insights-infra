@@ -3,7 +3,7 @@
 # Check if env file parameter is provided
 if [ -z "$1" ]; then
     echo "Usage: $0 <env-file>"
-    echo "Example: $0 .sbx-uat.env"
+    echo "Example: $0 .sbx-prod.env"
     exit 1
 fi
 
@@ -47,78 +47,18 @@ fi
 echo "Using TOPIC_PREFIX: $TOPIC_PREFIX"
 
 # Define topic to table mappings as JSON
-# WMS Commons dimension tables (all from Debezium public topics)
 TOPIC_MAPPINGS='[
-  {"namespace": "public", "topic": "handling_unit_kind", "table": "wms_handling_unit_kinds"},
-  {"namespace": "public", "topic": "handling_unit", "table": "wms_handling_units"},
-  {"namespace": "public", "topic": "session", "table": "wms_sessions"},
-  {"namespace": "public", "topic": "task", "table": "wms_tasks"},
-  {"namespace": "public", "topic": "trip", "table": "wms_trips"},
-  {"namespace": "public", "topic": "trip_relation", "table": "wms_trip_relations"},
-  {"namespace": "public", "topic": "worker", "table": "wms_workers"},
-  {"namespace": "public", "topic": "inb_asn", "table": "wms_inb_asn"},
-  {"namespace": "public", "topic": "inb_asn_lineitem", "table": "wms_inb_asn_lineitem"},
-  {"namespace": "public", "topic": "po_oms_allocation", "table": "wms_po_oms_allocation"},
-  {"namespace": "public", "topic": "inb_grn_line", "table": "wms_inb_grn_line"},
-  {"namespace": "public", "topic": "inb_receive_item", "table": "wms_inb_receive_item"},
-  {"namespace": "public", "topic": "invoice_line", "table": "wms_invoice_line"},
-  {"namespace": "public", "topic": "inb_palletization_item", "table": "wms_inb_palletization_item"},
-  {"namespace": "public", "topic": "inb_qc_item_v2", "table": "wms_inb_qc_item_v2"},
-  {"namespace": "public", "topic": "ob_load_item", "table": "wms_ob_load_item"},
-  {"namespace": "public", "topic": "inb_serialization_item", "table": "wms_inb_serialization_item"},
-  {"namespace": "public", "topic": "sbl_demand_packed", "table": "wms_sbl_demand_packed"},
-  {"namespace": "public", "topic": "sbl_demand", "table": "wms_sbl_demand"},
-  {"namespace": "public", "topic": "bbulk_ptl_demand_packed", "table": "wms_bbulk_ptl_demand_packed"},
-  {"namespace": "public", "topic": "ob_qc_chu", "table": "wms_ob_qc_chu"},
-  {"namespace": "public", "topic": "wave_olg_invoice_line", "table": "wms_wave_olg_invoice_line"},
-  {"namespace": "public", "topic": "vehicle_event", "table": "wms_vehicle_event"},
-  {"namespace": "public", "topic": "ob_chu", "table": "wms_ob_chu"},
-  {"namespace": "public", "topic": "ob_chu_line", "table": "wms_ob_chu_line"},
-  {"namespace": "public", "topic": "seg_item", "table": "wms_seg_item"},
-  {"namespace": "public", "topic": "seg_group", "table": "wms_seg_group"},
-  {"namespace": "public", "topic": "seg_container", "table": "wms_seg_container"},
-  {"namespace": "public", "topic": "yms_trip", "table": "wms_yms_trip"},
-  {"namespace": "public", "topic": "exception_bin", "table": "wms_exception_bin"},
-  {"namespace": "public", "topic": "exception_hu", "table": "wms_exception_hu"},
-  {"namespace": "public", "topic": "exception_manual_assignment", "table": "wms_exception_manual_assignment"},
-  {"namespace": "public", "topic": "ira_approval", "table": "wms_ira_approval"},
-  {"namespace": "public", "topic": "ira_bin_items_scanned_hu", "table": "wms_ira_bin_items_scanned_hu"},
-  {"namespace": "public", "topic": "ira_discrepancies_config", "table": "wms_ira_discrepancies_config"},
-  {"namespace": "public", "topic": "ira_manual_update","table": "wms_ira_manual_update"},
-  {"namespace": "public", "topic": "ira_record","table": "wms_ira_record"},
-  {"namespace": "public", "topic": "ira_session_progress","table": "wms_ira_session_progress"},
-  {"namespace": "public", "topic": "ira_session_sku", "table": "wms_ira_session_sku"},
-  {"namespace": "public", "topic": "ira_session_summary", "table": "wms_ira_session_summary"},
-  {"namespace": "public", "topic": "ira_task_bin", "table": "wms_ira_task_bin"},
-  {"namespace": "public", "topic": "ira_worker_update", "table": "wms_ira_worker_update"},
-  {"namespace": "public", "topic": "pl_inv_cnt_plan", "table": "wms_pl_inv_cnt_plan"},
-  {"namespace": "public", "topic": "pl_inv_cnt_plan_cycle", "table": "wms_pl_inv_cnt_plan_cycle"},
-  {"namespace": "public", "topic": "pl_inv_cnt_plan_seq", "table": "wms_pl_inv_cnt_plan_seq"},
-  {"namespace": "public", "topic": "pln_ira_cycle_plan", "table": "wms_pln_ira_cycle_plan"},
-  {"namespace": "public", "topic": "pln_ira_cycle_step", "table": "wms_pln_ira_cycle_step"},
-  {"namespace": "public", "topic": "pln_ira_cycle_step_bin", "table": "wms_pln_ira_cycle_step_bin"},
-  {"namespace": "public", "topic": "vehicle_event_trip", "table": "wms_vehicle_event_trip"},
-  {"namespace": "public", "topic": "mhe", "table": "wms_mhe"},
-  {"namespace": "public", "topic": "mhe_kind", "table": "wms_mhe_kind"},
-  {"namespace": "public", "topic": "inb_grn", "table": "wms_inb_grn"},
-  {"namespace": "public", "topic": "ira_bin_items", "table": "wms_ira_bin_items"},
-  {"namespace": "public", "topic": "vehicle_parking", "table": "wms_vehicle_parking"},
-  {"namespace": "public", "topic": "pd_provisional_item", "table": "wms_pd_provisional_item"},
-  {"namespace": "public", "topic": "worker_active_time", "table": "wms_worker_active_time"},
-  {"namespace": "public", "topic": "worker_productivity", "table": "wms_worker_productivity"},
-  {"namespace": "public", "topic": "ob_gin", "table": "wms_ob_gin"},
-  { "namespace": "public", "topic": "worker_mhe_mapping", "table": "wms_worker_mhe_mapping" },
-  { "namespace": "public", "topic": "worker_device_session", "table": "wms_worker_device_session" },
-  { "namespace": "public", "topic": "task_worker_assignment", "table": "wms_task_worker_assignment" }
+  {"namespace": "public", "topic": "market_activity", "table": "razum_market_activity"},
+  {"namespace": "public", "topic": "retailer_activity", "table": "razum_retailer_activity"}
 ]'
 
 # Generate topics list using jq
 TOPICS=$(echo "$TOPIC_MAPPINGS" | jq -r --arg prefix "$TOPIC_PREFIX" \
-  '[.[] | "\($prefix).wms.\(.namespace).\(.topic)"] | join(",")')
+  '[.[] | "\($prefix).razum.\(.namespace).\(.topic)"] | join(",")')
 
 # Generate topic2TableMap using jq
 TOPIC_TABLE_MAP=$(echo "$TOPIC_MAPPINGS" | jq -r --arg prefix "$TOPIC_PREFIX" \
-  '[.[] | "\($prefix).wms.\(.namespace).\(.topic)=\(.table)"] | join(",")')
+  '[.[] | "\($prefix).razum.\(.namespace).\(.topic)=\(.table)"] | join(",")')
 
 echo "Generated topics: $TOPICS"
 echo "Generated topic2TableMap: $TOPIC_TABLE_MAP"
@@ -212,19 +152,19 @@ fi
 # Additionally, ensure Kafka Connect workers run with -Duser.timezone=UTC to prevent
 # locale-specific date formatting issues.
 
-curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-wms-commons/config \
+curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-razum/config \
 -H "Content-Type: application/json" \
 -d  '{
       "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
       "tasks.max": "2",
       "topics": "'"$TOPICS"'",
-      
+
       "transforms": "dropNull",
       "transforms.dropNull.type": "org.apache.kafka.connect.transforms.Filter",
       "transforms.dropNull.predicate": "isNullRecord",
       "predicates": "isNullRecord",
       "predicates.isNullRecord.type": "org.apache.kafka.connect.transforms.predicates.RecordIsTombstone",
-      
+
       "hostname": "'"$CLICKHOUSE_HOSTNAME"'",
       "port": "'"$CLICKHOUSE_PORT"'",
       "ssl": "true",
@@ -236,7 +176,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
       "clickhouseSettings": "date_time_input_format=best_effort,max_insert_block_size=100000",
       "bufferFlushTime": "30000",
       "bufferSize": "100000",
-      
+
       "key.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter.schemas.enable": "true",
@@ -251,7 +191,7 @@ curl -X PUT http://localhost:8083/connectors/clickhouse-connect-${TOPIC_PREFIX}-
       "errors.tolerance": "none",
       "errors.log.enable": "true",
       "errors.log.include.messages": "true",
-      "errors.deadletterqueue.topic.name": "dlq-wms-clickhouse-commons",
+      "errors.deadletterqueue.topic.name": "dlq-razum-clickhouse",
       "errors.deadletterqueue.topic.replication.factor": "3",
 
       "consumer.override.max.poll.records": "50000",

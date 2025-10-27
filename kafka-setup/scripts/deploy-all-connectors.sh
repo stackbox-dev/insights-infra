@@ -21,7 +21,7 @@ REQUIRED:
 OPTIONS:
     --dry-run          Show configuration without deploying
     --skip <connector> Skip specific connector (can be used multiple times)
-                       Options: backbone, encarta, wms, tms
+                       Options: backbone, encarta, wms, tms, razum
     -h, --help         Show this help message
 
 EXAMPLES:
@@ -30,6 +30,7 @@ EXAMPLES:
     $0 --env .sbx-uat.env --skip encarta
     $0 --env .sbx-uat.env --skip backbone --skip wms
     $0 --env .sbx-prod.env --skip tms
+    $0 --env .sbx-prod.env --skip razum
 
 EOF
 }
@@ -102,7 +103,7 @@ print_info "========================================"
 echo
 
 # Array of connectors to deploy
-CONNECTORS=("backbone" "encarta" "wms" "tms")
+CONNECTORS=("backbone" "encarta" "wms" "tms" "razum")
 FAILED_CONNECTORS=()
 DEPLOYED_CONNECTORS=()
 

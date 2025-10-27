@@ -88,6 +88,7 @@ SIGNAL_TOPICS=(
     "$ENCARTA_SIGNAL_TOPIC"
     "$BACKBONE_SIGNAL_TOPIC"
     "$TMS_SIGNAL_TOPIC"
+    "$RAZUM_SIGNAL_TOPIC"
 )
 
 # Topic configuration
@@ -156,6 +157,7 @@ echo "   ./wms-debezium-postgres.sh --env $ENV_FILE"
 echo "   ./encarta-debezium-postgres.sh --env $ENV_FILE"
 echo "   ./backbone-debezium-postgres.sh --env $ENV_FILE"
 echo "   ./tms-debezium-postgres.sh --env $ENV_FILE"
+echo "   ./razum-debezium-postgres.sh --env $ENV_FILE"
 echo ""
 print_color $YELLOW "2. Once connectors are updated, trigger snapshots using:"
 echo "   ./trigger-snapshots.sh --env $ENV_FILE -c <connector> -t <tables>"
