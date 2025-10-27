@@ -50,7 +50,16 @@ echo "Using TOPIC_PREFIX: $TOPIC_PREFIX"
 TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "retailer", "table": "backbone_retailer"},
   {"namespace": "public", "topic": "skuMaster", "table": "backbone_skuMaster"},
-  {"namespace": "public", "topic": "picklistRetailer", "table": "backbone_picklistRetailer"}
+  {"namespace": "public", "topic": "picklistRetailer", "table": "backbone_picklistRetailer"},
+  {"namespace": "public", "topic": "trip_invoice", "table": "backbone_trip_invoice"},
+  {"namespace": "public", "topic": "picklist", "table": "backbone_picklist"},
+  {"namespace": "public", "topic": "plan", "table": "backbone_plan"},
+  {"namespace": "public", "topic": "picklistAssignment", "table": "backbone_picklistAssignment"},
+  {"namespace": "public", "topic": "vehicle", "table": "backbone_vehicle"},
+  {"namespace": "public", "topic": "vehicleType", "table": "backbone_vehicleType"},
+  {"namespace": "public", "topic": "invoice", "table": "backbone_invoice"},
+  {"namespace": "public", "topic": "invoiceState", "table": "backbone_invoiceState"},
+  {"namespace": "public", "topic": "lineItem", "table": "backbone_lineItem"}
 ]'
 
 # Generate topics list using jq

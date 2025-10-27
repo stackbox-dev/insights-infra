@@ -1,0 +1,153 @@
+-- ClickHouse table for Vehicle Event
+CREATE TABLE IF NOT EXISTS wms_vehicle_event
+(
+    whId UInt64 DEFAULT 0,
+    id String DEFAULT '',
+    vehicleId String DEFAULT '',
+    vehicleNo String DEFAULT '',
+    vehicleType String DEFAULT '',
+    gatingEnabled Bool DEFAULT false,
+    attrs String DEFAULT '{}',
+    status String DEFAULT '',
+    sessionId String DEFAULT '',
+    sessionKind String DEFAULT '',
+    gateReportedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    gateInAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    gateOutAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    dockdoorId String DEFAULT '',
+    dockdoorCode String DEFAULT '',
+    dockdoorQueue Int32 DEFAULT 0,
+    dockInAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    dockOutAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    active Bool DEFAULT true,
+    parkingSlotId String DEFAULT '',
+    parkingSlotAssignedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    gatePassCode String DEFAULT '',
+    undockedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    transporterCode String DEFAULT '',
+    originalVehicle String DEFAULT '',
+    shipmentTypes String DEFAULT '[]',
+    isSealCaptureSuccessful Bool DEFAULT false,
+    sealCapturedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    sealCaptureImages String DEFAULT '[]',
+    sealCaptureRemarks String DEFAULT '',
+    driverName String DEFAULT '',
+    driverNumber String DEFAULT '',
+    isDockingRejected Bool DEFAULT false,
+    dockingRejectedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    dockingRejectedBy String DEFAULT '',
+    dockingRejectionRemark String DEFAULT '',
+    dockingRejectionImages String DEFAULT '[]',
+    fleetType String DEFAULT '',
+    loadType String DEFAULT 'NON_PALLETIZED',
+    entryWeight Float64 DEFAULT 0.0,
+    exitWeight Float64 DEFAULT 0.0,
+    entryTemp Float64 DEFAULT 0.0,
+    exitTemp Float64 DEFAULT 0.0,
+    dockRejectedByApp String DEFAULT '',
+    oldDriverName String DEFAULT '',
+    oldDriverNumber String DEFAULT '',
+    commonQueue Int32 DEFAULT 0,
+    gatingQueue Int32 DEFAULT 0,
+    sealCapturedBy UInt64 DEFAULT 0,
+    sealCapturedByApp String DEFAULT '',
+    lrNumber String DEFAULT '',
+    certificateVerificationStatus String DEFAULT '',
+    certificateVerificationReason String DEFAULT '',
+    driverSafetyTestResultId String DEFAULT '',
+    documentCollectionMode String DEFAULT '',
+    documentCollectedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    processingStartedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    processingEndedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
+)
+ENGINE = ReplacingMergeTree(updatedAt)
+ORDER BY (id)
+PARTITION BY toYYYYMM(createdAt)
+SETTINGS index_granularity = 8192;
+
+
+
+
+
+
+
+
+
+
+
+-- Table Definition
+CREATE TABLE "public"."vehicle_event" (
+    "whId" int8 NOT NULL,
+    "id" uuid NOT NULL,
+    "vehicleId" text NOT NULL,
+    "vehicleNo" text NOT NULL,
+    "vehicleType" text,
+    "gatingEnabled" bool NOT NULL,
+    "attrs" jsonb NOT NULL,
+    "status" text NOT NULL,
+    "sessionId" uuid,
+    "sessionKind" text NOT NULL,
+    "gateReportedAt" timestamptz,
+    "gateInAt" timestamptz,
+    "gateOutAt" timestamptz,
+    "dockdoorId" uuid,
+    "dockdoorCode" text,
+    "dockdoorQueue" int4,
+    "dockInAt" timestamptz,
+    "dockOutAt" timestamptz,
+    "createdAt" timestamptz NOT NULL DEFAULT now(),
+    "updatedAt" timestamptz NOT NULL DEFAULT now(),
+    "active" bool NOT NULL DEFAULT true,
+    "parkingSlotId" uuid,
+    "parkingSlotAssignedAt" timestamptz,
+    "gatePassCode" text,
+    "undockedAt" timestamptz,
+    "transporterCode" text,
+    "originalVehicle" text,
+    "shipmentTypes" jsonb NOT NULL DEFAULT '[]'::jsonb,
+    "isSealCaptureSuccessful" bool,
+    "sealCapturedAt" timestamptz,
+    "sealCaptureImages" jsonb DEFAULT '[]'::jsonb,
+    "sealCaptureRemarks" text,
+    "driverName" text,
+    "driverNumber" text,
+    "isDockingRejected" bool NOT NULL DEFAULT false,
+    "dockingRejectedAt" timestamptz,
+    "dockingRejectedBy" int8,
+    "dockingRejectionRemark" text,
+    "dockingRejectionImages" jsonb NOT NULL DEFAULT '[]'::jsonb,
+    "fleetType" text,
+    "loadType" text NOT NULL DEFAULT 'NON_PALLETIZED'::text,
+    "entryWeight" float8,
+    "exitWeight" float8,
+    "entryTemp" float8,
+    "exitTemp" float8,
+    "dockRejectedByApp" text,
+    "oldDriverName" text,
+    "oldDriverNumber" text,
+    "commonQueue" int4,
+    "gatingQueue" int4,
+    "sealCapturedBy" int8,
+    "sealCapturedByApp" text,
+    "lrNumber" text,
+    "certificateVerificationStatus" text,
+    "certificateVerificationReason" text,
+    "driverSafetyTestResultId" uuid,
+    "documentCollectionMode" text,
+    "documentCollectedAt" timestamptz,
+    "processingStartedAt" timestamptz,
+    "processingEndedAt" timestamptz,
+    PRIMARY KEY ("id")
+);
+
+
+-- Indices
+CREATE UNIQUE INDEX vehicle_event_vehicle_idx2 ON public.vehicle_event USING btree ("vehicleId") WHERE (("gatingEnabled" = false) AND (status <> 'DOCK_OUT'::text) AND active);
+CREATE UNIQUE INDEX vehicle_event_dockdoor_dockin_idx ON public.vehicle_event USING btree ("dockdoorId") WHERE (("dockdoorId" IS NOT NULL) AND (status = 'DOCK_IN'::text) AND active);
+CREATE INDEX vehicle_event_dockdoor_open_idx1 ON public.vehicle_event USING btree ("dockdoorId") WHERE (("dockdoorId" IS NOT NULL) AND (status <> 'DOCK_OUT'::text) AND (status <> 'GATE_OUT'::text) AND active);
+CREATE INDEX vehicle_event_dockdoor_created_idx ON public.vehicle_event USING btree ("dockdoorId", "createdAt") WHERE (("dockdoorId" IS NOT NULL) AND active);
+CREATE INDEX vehicle_event_created_idx ON public.vehicle_event USING btree ("whId", "createdAt") WHERE active;
+CREATE UNIQUE INDEX vehicle_event_unq_parking_slot_idx ON public.vehicle_event USING btree ("whId", "parkingSlotId") WHERE (((attrs ->> 'parkingVersion'::text) <> 'v2'::text) AND (status = ANY (ARRAY['NONE'::text, 'GATE_REPORTED'::text, 'GATE_IN'::text])) AND active);
+CREATE UNIQUE INDEX vehicle_event_vehicle_idx1 ON public.vehicle_event USING btree ("vehicleId") WHERE ("gatingEnabled" AND (status <> ALL (ARRAY['NONE'::text, 'GATE_OUT'::text])) AND active);

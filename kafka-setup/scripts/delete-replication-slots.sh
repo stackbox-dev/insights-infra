@@ -269,7 +269,18 @@ for env_file in "${ENV_FILES[@]}"; do
         echo -e "${YELLOW}TMS database configuration not found, skipping...${NC}"
     fi
 
-
+    # Razum Database
+    if [[ -n "$RAZUM_DB_HOSTNAME" && -n "$RAZUM_DB_NAME" && -n "$RAZUM_DB_USER" && -n "$RAZUM_DB_PASSWORD_SECRET" ]]; then
+        echo -e "\n${GREEN}Fetching RAZUM database password from Kubernetes secret...${NC}"
+        RAZUM_PASSWORD=$(fetch_password_from_secret "$RAZUM_DB_PASSWORD_SECRET")
+        if [[ -n "$RAZUM_PASSWORD" ]]; then
+            delete_slots "$RAZUM_DB_HOSTNAME" "${RAZUM_DB_PORT:-5432}" "$RAZUM_DB_NAME" "$RAZUM_DB_USER" "$RAZUM_PASSWORD" "RAZUM"
+        else
+            echo -e "${RED}Failed to fetch RAZUM database password from secret${NC}"
+        fi
+    else
+        echo -e "${YELLOW}RAZUM database configuration not found, skipping...${NC}"
+    fi
    
 done
 

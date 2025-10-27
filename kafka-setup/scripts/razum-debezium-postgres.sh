@@ -13,7 +13,7 @@ usage() {
     cat << EOF
 Usage: $0 --env <environment-file> [OPTIONS]
 
-Deploy/Update Backbone Debezium PostgreSQL connector
+Deploy/Update Razum Debezium PostgreSQL connector
 
 REQUIRED:
     --env <file>       Environment configuration file (e.g., .sbx-uat.env)
@@ -53,7 +53,7 @@ while [[ $# -gt 0 ]]; do
             exit 1
             ;;
     esac
-done
+    done
 
 # Load environment and check Kubernetes context
 if ! load_env_file "$ENV_FILE"; then
@@ -68,9 +68,9 @@ if ! fetch_kubernetes_credentials; then
     exit 1
 fi
 
-# Get Backbone database password
-print_info "Fetching Backbone database credentials..."
-BACKBONE_DB_PASSWORD=$(fetch_db_password "$BACKBONE_DB_PASSWORD_SECRET")
+# Get Razum database password
+print_info "Fetching Razum database credentials..."
+RAZUM_DB_PASSWORD=$(fetch_db_password "$RAZUM_DB_PASSWORD_SECRET")
 if [ $? -ne 0 ]; then
     exit 1
 fi
@@ -96,22 +96,10 @@ cleanup_function() {
 }
 setup_signal_handlers cleanup_function
 
-# Define table list for easier maintenance
+# Define table list for Razum
 TABLE_LIST=$(cat <<EOF
-public.node,
-public.node_closure,
-public.retailer,
-public.skuMaster,
-public.picklistRetailer,
-public.trip_invoice,
-public.picklist,
-public.plan,
-public.picklistAssignment,
-public.vehicle,
-public.vehicleType,
-public.invoice,
-public.invoiceState,
-public.lineItem
+public.retailer_activity,
+public.market_activity
 EOF
 )
 
@@ -122,19 +110,19 @@ TABLE_LIST_COMPACT=$(echo "$TABLE_LIST" | tr -d '\n' | sed 's/,$$//')
 CONNECTOR_CONFIG=$(cat <<EOF
 {
       "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-      "database.hostname": "${BACKBONE_DB_HOSTNAME}",
-      "database.port": "${BACKBONE_DB_PORT}",
-      "database.user": "${BACKBONE_DB_USER}",
-      "database.password": "${BACKBONE_DB_PASSWORD}",
-      "database.dbname": "${BACKBONE_DB_NAME}",
-      "database.server.name": "${BACKBONE_DB_NAME}",
+      "database.hostname": "${RAZUM_DB_HOSTNAME}",
+      "database.port": "${RAZUM_DB_PORT}",
+      "database.user": "${RAZUM_DB_USER}",
+      "database.password": "${RAZUM_DB_PASSWORD}",
+      "database.dbname": "${RAZUM_DB_NAME}",
+      "database.server.name": "${RAZUM_DB_NAME}",
       "database.sslmode": "require",
       "plugin.name": "pgoutput",
-      "table.include.list": "${TABLE_LIST_COMPACT}", 
-      "publication.name": "${BACKBONE_PUBLICATION_NAME}",
-      "slot.name": "${BACKBONE_SLOT_NAME}",
+      "table.include.list": "${TABLE_LIST_COMPACT}",
+      "publication.name": "${RAZUM_PUBLICATION_NAME}",
+      "slot.name": "${RAZUM_SLOT_NAME}",
 
-      "topic.prefix": "${BACKBONE_TOPIC_PREFIX}",
+      "topic.prefix": "${RAZUM_TOPIC_PREFIX}",
       "slot.drop.on.stop": false,
       "schema.include.list": "public",
       "publication.autocreate.mode": "disabled",
@@ -200,8 +188,8 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "read.only": true,
       "signal.enabled.channels": "kafka",
       "signal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
-      "signal.kafka.topic": "${BACKBONE_SIGNAL_TOPIC}",
-      "signal.kafka.groupId": "${BACKBONE_SIGNAL_CONSUMER_GROUP}",
+      "signal.kafka.topic": "${RAZUM_SIGNAL_TOPIC}",
+      "signal.kafka.groupId": "${RAZUM_SIGNAL_CONSUMER_GROUP}",
       "signal.consumer.security.protocol": "SASL_SSL",
       "signal.consumer.sasl.mechanism": "SCRAM-SHA-512",
       "signal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CLUSTER_USER_NAME}\" password=\"${CLUSTER_PASSWORD}\";",
@@ -224,10 +212,10 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 # Deploy/Update the connector
-print_info "Deploying/Updating Backbone Debezium connector: ${BACKBONE_CONNECTOR_NAME}"
+print_info "Deploying/Updating Razum Debezium connector: ${RAZUM_CONNECTOR_NAME}"
 
 response=$(curl -s -w "\n%{http_code}" -X PUT \
-    "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/config" \
+    "${CONNECT_REST_URL}/connectors/${RAZUM_CONNECTOR_NAME}/config" \
     -H "Content-Type: application/json" \
     -d "$CONNECTOR_CONFIG")
 
@@ -241,7 +229,7 @@ if [ "$status_code" = "200" ] || [ "$status_code" = "201" ]; then
     print_info "Checking connector status..."
     sleep 2
     
-    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status")
+    status_response=$(curl -s "${CONNECT_REST_URL}/connectors/${RAZUM_CONNECTOR_NAME}/status")
     connector_state=$(echo "$status_response" | jq -r '.connector.state' 2>/dev/null)
     
     if [ "$connector_state" = "RUNNING" ]; then
@@ -259,13 +247,13 @@ fi
 
 print_info "\nUseful commands:"
 echo "  # Check connector status"
-echo "  curl -s ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/status | jq ."
+echo "  curl -s ${CONNECT_REST_URL}/connectors/${RAZUM_CONNECTOR_NAME}/status | jq ."
 echo ""
 echo "  # Restart connector"
-echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}/restart"
+echo "  curl -X POST ${CONNECT_REST_URL}/connectors/${RAZUM_CONNECTOR_NAME}/restart"
 echo ""
 echo "  # Delete connector"
-echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${BACKBONE_CONNECTOR_NAME}"
+echo "  curl -X DELETE ${CONNECT_REST_URL}/connectors/${RAZUM_CONNECTOR_NAME}"
 echo ""
 echo "  # Trigger snapshot"
-echo "  ./trigger-snapshots.sh --env $ENV_FILE -c backbone -t \"public.node\""
+echo "  ./trigger-snapshots.sh --env $ENV_FILE -c razum -t \"public.retailer_activity,public.market_activity\""
