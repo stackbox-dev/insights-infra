@@ -98,8 +98,6 @@ setup_signal_handlers cleanup_function
 
 # Define table list for easier maintenance
 TABLE_LIST=$(cat <<EOF
-public.node,
-public.node_closure,
 public.retailer,
 public.skuMaster,
 public.picklistRetailer,
@@ -111,7 +109,9 @@ public.vehicle,
 public.vehicleType,
 public.invoice,
 public.invoiceState,
-public.lineItem
+public.lineItem,
+public.node,
+public.node_closure
 EOF
 )
 

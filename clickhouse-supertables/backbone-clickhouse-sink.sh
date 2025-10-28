@@ -59,7 +59,9 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "vehicleType", "table": "backbone_vehicleType"},
   {"namespace": "public", "topic": "invoice", "table": "backbone_invoice"},
   {"namespace": "public", "topic": "invoiceState", "table": "backbone_invoiceState"},
-  {"namespace": "public", "topic": "lineItem", "table": "backbone_lineItem"}
+  {"namespace": "public", "topic": "lineItem", "table": "backbone_lineItem"},
+  {"namespace": "public", "topic": "node", "table": "backbone_node"},
+  {"namespace": "public", "topic": "node_closure", "table": "backbone_node_closure"}
 ]'
 
 # Generate topics list using jq
