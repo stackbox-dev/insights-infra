@@ -59,7 +59,14 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "vehicleType", "table": "backbone_vehicleType"},
   {"namespace": "public", "topic": "invoice", "table": "backbone_invoice"},
   {"namespace": "public", "topic": "invoiceState", "table": "backbone_invoiceState"},
-  {"namespace": "public", "topic": "lineItem", "table": "backbone_lineItem"}
+  {"namespace": "public", "topic": "lineItem", "table": "backbone_lineItem"},
+  {"namespace": "public", "topic": "node", "table": "backbone_node"},
+  {"namespace": "public", "topic": "node_closure", "table": "backbone_node_closure"},
+  {"namespace": "public", "topic": "planProfile", "table": "backbone_planProfile"},
+  {"namespace": "public", "topic": "orderUpload", "table": "backbone_orderUpload"},
+  {"namespace": "public", "topic": "invoiceExtras", "table": "backbone_invoiceExtras"},
+  {"namespace": "public", "topic": "line_item_state", "table": "backbone_line_item_state"},
+  {"namespace": "public", "topic": "odometer", "table": "backbone_odometer"}
 ]'
 
 # Generate topics list using jq

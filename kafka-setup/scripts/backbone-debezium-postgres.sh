@@ -98,8 +98,6 @@ setup_signal_handlers cleanup_function
 
 # Define table list for easier maintenance
 TABLE_LIST=$(cat <<EOF
-public.node,
-public.node_closure,
 public.retailer,
 public.skuMaster,
 public.picklistRetailer,
@@ -111,7 +109,14 @@ public.vehicle,
 public.vehicleType,
 public.invoice,
 public.invoiceState,
-public.lineItem
+public.lineItem,
+public.node,
+public.node_closure,
+public.planProfile,
+public.orderUpload,
+public.invoiceExtras,
+public.line_item_state,
+public.odometer
 EOF
 )
 
@@ -194,7 +199,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "producer.ssl.truststore.location": "/etc/kafka/secrets/kafka.truststore.jks",
       "producer.ssl.truststore.password": "secret",
       "producer.ssl.endpoint.identification.algorithm": "",
-      "producer.max.request.size": "1048576",
+      "producer.max.request.size": "3000000",
       "producer.buffer.memory": "33554432",
 
       "read.only": true,
