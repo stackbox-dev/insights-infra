@@ -99,7 +99,8 @@ setup_signal_handlers cleanup_function
 # Define table list for Razum
 TABLE_LIST=$(cat <<EOF
 public.retailer_activity,
-public.market_activity
+public.market_activity,
+public.metrics
 EOF
 )
 

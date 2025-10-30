@@ -49,7 +49,8 @@ echo "Using TOPIC_PREFIX: $TOPIC_PREFIX"
 # Define topic to table mappings as JSON
 TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "market_activity", "table": "razum_market_activity"},
-  {"namespace": "public", "topic": "retailer_activity", "table": "razum_retailer_activity"}
+  {"namespace": "public", "topic": "retailer_activity", "table": "razum_retailer_activity"},
+  {"namespace": "public", "topic": "metrics", "table": "razum_metrics"}
 ]'
 
 # Generate topics list using jq

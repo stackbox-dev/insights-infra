@@ -13,4 +13,5 @@ SELECT * FROM pg_publication;
 CREATE PUBLICATION razum_publication
 FOR TABLE 
 public.retailer_activity,
-public.market_activity;
+public.market_activity,
+public.metrics;
