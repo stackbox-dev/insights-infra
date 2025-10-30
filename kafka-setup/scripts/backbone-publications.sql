@@ -25,4 +25,9 @@ public.invoice,
 public.invoiceState,
 public.lineItem,
 public.node,
-public.node_closure;
+public.node_closure,
+public.planProfile,
+public.orderUpload,
+public.invoiceExtras,
+public.line_item_state,
+public.odometer;
