@@ -7,32 +7,10 @@ CREATE TABLE IF NOT EXISTS backbone_invoiceExtras
     state String DEFAULT '',
     stateId Int32 DEFAULT 0,
     plannedDate String DEFAULT '',
-    nodeId Int64 DEFAULT 0
+    nodeId Int64 DEFAULT 0,
+    dbUpdatedAt DateTime64(3) DEFAULT now()
 )
-ENGINE = ReplacingMergeTree()
-PARTITION BY toYYYYMM(now())
+ENGINE = ReplacingMergeTree(dbUpdatedAt)
+PARTITION BY toYYYYMM(dbUpdatedAt)
 ORDER BY (invoiceId, nodeId)
 SETTINGS index_granularity = 8192;
-
-
-
-
-
-
-
-
--- Table Definition
-CREATE TABLE "public"."invoiceExtras" (
-    "invoiceId" int4 NOT NULL,
-    "state" text,
-    "stateId" int4,
-    "plannedDate" text,
-    "nodeId" int8,
-    CONSTRAINT "invoiceextras_invoiceid_foreign" FOREIGN KEY ("invoiceId") REFERENCES "public"."invoice"("id")
-);
-
-
--- Indices
-CREATE INDEX idx_invoiceextras_planneddate ON public."invoiceExtras" USING btree ("plannedDate");
-CREATE UNIQUE INDEX con_invoiceextras_invoice_node ON public."invoiceExtras" USING btree ("invoiceId", "nodeId");
-CREATE INDEX idx_invoiceextras_nodeid_state ON public."invoiceExtras" USING btree ("nodeId", state) WHERE ((state = 'HOLD'::text) OR (state = 'RETRY'::text));

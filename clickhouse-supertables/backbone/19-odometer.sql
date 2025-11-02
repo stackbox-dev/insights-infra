@@ -22,31 +22,3 @@ ENGINE = ReplacingMergeTree(dbUpdatedAt)
 PARTITION BY toYYYYMM(createdAt)
 ORDER BY (assignmentId, state)
 SETTINGS index_granularity = 8192;
-
-
-
-
-
-
-
--- Table Definition
-CREATE TABLE "public"."odometer" (
-    "id" uuid NOT NULL,
-    "assignmentId" int4 NOT NULL,
-    "state" text NOT NULL,
-    "reading" int4 NOT NULL,
-    "image" text NOT NULL,
-    "latitude" float8,
-    "longitude" float8,
-    "geoAccuracy" float8,
-    "editedBy" int8 NOT NULL,
-    "active" bool NOT NULL DEFAULT true,
-    "createdAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "detectedReading" int4,
-    PRIMARY KEY ("id")
-);
-
-
--- Indices
-CREATE UNIQUE INDEX odometer_assignmentid_state ON public.odometer USING btree ("assignmentId", state) WHERE (active = true);
