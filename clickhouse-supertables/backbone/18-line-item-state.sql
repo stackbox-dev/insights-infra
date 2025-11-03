@@ -21,30 +21,3 @@ ENGINE = ReplacingMergeTree(dbUpdatedAt)
 PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;
-
-
-
-
-
-
-
--- Table Definition
-CREATE TABLE "public"."line_item_state" (
-    "id" uuid NOT NULL,
-    "lineItemId" int4 NOT NULL,
-    "stateId" int4 NOT NULL,
-    "invoiceId" int4 NOT NULL,
-    "deliveredQuantity" int4 NOT NULL,
-    "deliveredValue" float8,
-    "failReasons" _text NOT NULL DEFAULT '{}'::text[],
-    "images" _text NOT NULL DEFAULT '{}'::text[],
-    "active" bool NOT NULL DEFAULT true,
-    "createdAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "deliveredWeight" float8,
-    PRIMARY KEY ("id")
-);
-
-
--- Indices
-CREATE INDEX idx_lineitemstate_stateid ON public.line_item_state USING btree ("stateId");

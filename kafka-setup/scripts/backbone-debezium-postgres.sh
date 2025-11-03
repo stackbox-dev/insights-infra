@@ -116,7 +116,8 @@ public.planProfile,
 public.orderUpload,
 public.invoiceExtras,
 public.line_item_state,
-public.odometer
+public.odometer,
+public.invoice_tray
 EOF
 )
 
