@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS wms_trips
     vehicleId String DEFAULT '',
     vehicleNo String DEFAULT '',
     vehicleType String DEFAULT '',
-    deliveryDate Date DEFAULT toDate('1970-01-01'),
+    deliveryDate Nullable(Date32) DEFAULT NULL,
     
     -- Indexes for common query patterns
     INDEX idx_whId whId TYPE minmax GRANULARITY 1,

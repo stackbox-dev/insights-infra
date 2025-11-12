@@ -1,0 +1,82 @@
+CREATE TABLE IF NOT EXISTS wms_ob_order
+(
+    id String DEFAULT '',
+    whId Int64 DEFAULT 0,
+    tripCode String DEFAULT '',
+    code String DEFAULT '',
+    retailerId Int32 DEFAULT 0,
+    retailerCode String DEFAULT '',
+    retailerChannel String DEFAULT '',
+    retailerName String DEFAULT '',
+    tripDate DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    deliveryDate DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    priority Int32 DEFAULT 0,
+    sessionId String DEFAULT '',
+    active Bool DEFAULT true,
+    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    sessionCreatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    salesmanCode String DEFAULT '',
+    ginStatus String DEFAULT 'PENDING',
+    ginTriggeredAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    cancelledAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    tripPriority Int32 DEFAULT 0,
+    truckType String DEFAULT '',
+    transporterCode String DEFAULT '',
+    advanceReplenSessionId String DEFAULT '',
+    orderType String DEFAULT '',
+    loadingSeq Int32 DEFAULT 0,
+    latestPickDate Date DEFAULT toDate('1970-01-01'),
+    earliestPickDate Date DEFAULT toDate('1970-01-01'),
+    documentType String DEFAULT 'DELIVERY_ORDER',
+    orderReferenceId String DEFAULT '',
+    orderReferenceCode String DEFAULT '',
+    erpChannel String DEFAULT '',
+    delinkedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    relinkedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
+)
+ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
+ORDER BY (id)
+SETTINGS index_granularity = 8192;
+
+
+
+CREATE TABLE IF NOT EXISTS wms_ob_order
+(
+    id String DEFAULT '',
+    whId Int64 DEFAULT 0,
+    tripCode String DEFAULT '',
+    code String DEFAULT '',
+    retailerId Int32 DEFAULT 0,
+    retailerCode String DEFAULT '',
+    retailerChannel String DEFAULT '',
+    retailerName String DEFAULT '',
+    tripDate DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    deliveryDate DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    priority Int32 DEFAULT 0,
+    sessionId String DEFAULT '',
+    active Bool DEFAULT true,
+    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    sessionCreatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    salesmanCode String DEFAULT '',
+    ginStatus String DEFAULT 'PENDING',
+    ginTriggeredAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    cancelledAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    tripPriority Int32 DEFAULT 0,
+    truckType String DEFAULT '',
+    transporterCode String DEFAULT '',
+    advanceReplenSessionId String DEFAULT '',
+    orderType String DEFAULT '',
+    loadingSeq Int32 DEFAULT 0,
+    latestPickDate Date DEFAULT toDate('1970-01-01'),
+    earliestPickDate Date DEFAULT toDate('1970-01-01'),
+    documentType String DEFAULT 'DELIVERY_ORDER',
+    orderReferenceId String DEFAULT '',
+    orderReferenceCode String DEFAULT '',
+    erpChannel String DEFAULT '',
+    delinkedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    relinkedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
+)
+ENGINE = ReplacingMergeTree(createdAt)
+ORDER BY (whId, id)
+SETTINGS index_granularity = 8192;
