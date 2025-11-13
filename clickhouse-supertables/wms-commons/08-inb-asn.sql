@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS wms_inb_asn
     active Bool DEFAULT true,
     createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     sessionCreatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    shipmentDate Nullable(Date32) DEFAULT NULL,
+    shipmentDate Date DEFAULT toDate('1970-01-01'),
     deliveryNo String DEFAULT '',
     priority Int32 DEFAULT 0,
     asnType String DEFAULT ''

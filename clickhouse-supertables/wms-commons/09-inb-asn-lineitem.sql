@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS wms_inb_asn_lineitem
     asnNo String DEFAULT '',
     vehicleNo String DEFAULT '',
     poNo String DEFAULT '',
-    shipmentDate Nullable(Date32) DEFAULT NULL,
+    shipmentDate Date DEFAULT toDate('1970-01-01'),
     skuId String,
     uom String DEFAULT '',
     batch String DEFAULT '',
