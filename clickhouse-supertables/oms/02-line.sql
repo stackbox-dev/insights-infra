@@ -15,8 +15,9 @@ CREATE TABLE IF NOT EXISTS oms_line (
     tag_4 String DEFAULT '',
     sku String DEFAULT '',
     created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
-    node_id String DEFAULT ''
-) ENGINE = ReplacingMergeTree(created_at)
+    node_id String DEFAULT '',
+    updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
+) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)
 SETTINGS index_granularity = 8192,

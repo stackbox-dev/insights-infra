@@ -14,12 +14,13 @@ CREATE TABLE IF NOT EXISTS oms_inv (
     vehicle String DEFAULT '',
     active Bool DEFAULT true,
     created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
-    last_updated_at DateTime64(3) DEFAULT toDateTime64(0, 3),
+    updated_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     cancellation_requested_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     vehicle_type String DEFAULT '',
     transporter_code String DEFAULT '',
-    transporter_name String DEFAULT ''
-) ENGINE = ReplacingMergeTree(last_updated_at)
+    transporter_name String DEFAULT '',
+    status String DEFAULT ''
+) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)
 SETTINGS index_granularity = 8192,

@@ -26,8 +26,9 @@ CREATE TABLE IF NOT EXISTS oms_wms_dock_line (
     active Bool DEFAULT true,
     vehicle_type String DEFAULT '',
     transporter_code String DEFAULT '',
-    transporter_name String DEFAULT ''
-) ENGINE = ReplacingMergeTree(created_at)
+    transporter_name String DEFAULT '',
+    updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
+) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)
 SETTINGS index_granularity = 8192,

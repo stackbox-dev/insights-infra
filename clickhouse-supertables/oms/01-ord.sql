@@ -18,13 +18,14 @@ CREATE TABLE IF NOT EXISTS oms_ord (
     source String DEFAULT '',
     priority Int32 DEFAULT 0,
     delivery_type String DEFAULT '',
-    payments String DEFAULT '',
+    payments String DEFAULT '{}',
     requested_mode_of_payment String DEFAULT '',
-    tags String DEFAULT '',
+    tags String DEFAULT '{}',
     net_value Float64 DEFAULT 0.0,
     node_id String DEFAULT '',
-    is_abnormal Bool DEFAULT false
-) ENGINE = ReplacingMergeTree(created_at)
+    is_abnormal Bool DEFAULT false,
+    updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
+) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)
 SETTINGS index_granularity = 8192,

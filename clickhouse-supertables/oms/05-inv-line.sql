@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS oms_inv_line (
     allocation_line_ids String DEFAULT '',
     party_packing_created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
     data String DEFAULT '',
-    node_id String DEFAULT ''
+    node_id String DEFAULT '',
+    processing Bool DEFAULT false
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)

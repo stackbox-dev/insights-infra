@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS oms_allocation_line (
     active Bool DEFAULT true,
     promo_ratio Int32 DEFAULT 0,
     node_id String DEFAULT '',
-    last_updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
-) ENGINE = ReplacingMergeTree(last_updated_at)
+    updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
+) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)
 SETTINGS index_granularity = 8192,

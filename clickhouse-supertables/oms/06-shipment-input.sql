@@ -25,8 +25,9 @@ CREATE TABLE IF NOT EXISTS oms_shipment_input (
     allocation_line_id String DEFAULT '',
     active Bool DEFAULT true,
     created_at DateTime64(3) DEFAULT toDateTime64(0, 3),
-    last_updated_at DateTime64(3) DEFAULT toDateTime64(0, 3)
-) ENGINE = ReplacingMergeTree(last_updated_at)
+    updated_at DateTime64(3) DEFAULT toDateTime64(0, 3),
+    processing Bool DEFAULT false
+) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (id)
 PARTITION BY toYYYYMM(created_at)
 SETTINGS index_granularity = 8192,
