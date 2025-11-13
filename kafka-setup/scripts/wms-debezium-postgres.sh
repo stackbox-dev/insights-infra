@@ -186,7 +186,11 @@ public.worker_mhe_mapping,
 public.worker_device_session,
 public.task_worker_assignment,
 public.vehicle_event,
-public.vehicle_event_trip
+public.vehicle_event_trip,
+public.ob_order,
+public.ob_order_progress,
+public.ob_order_lineitem,
+public.ob_load_unpick_item
 EOF
 )
 

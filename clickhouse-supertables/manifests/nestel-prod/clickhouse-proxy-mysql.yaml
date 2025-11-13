@@ -66,6 +66,7 @@ data:
         active=1
         default_hostgroup=0
         max_connections=200
+        client_host="10.188.0.0/16"
       }
     )
 
