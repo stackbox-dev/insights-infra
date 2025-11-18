@@ -117,7 +117,8 @@ public.orderUpload,
 public.invoiceExtras,
 public.line_item_state,
 public.odometer,
-public.invoice_tray
+public.invoice_tray,
+public.extvehicleevents
 EOF
 )
 
