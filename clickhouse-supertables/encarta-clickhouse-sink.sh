@@ -51,7 +51,8 @@ TOPIC_MAPPINGS='[
   {"namespace": "flink", "topic": "skus_master", "table": "encarta_skus_master"},
   {"namespace": "flink", "topic": "skus_overrides", "table": "encarta_skus_overrides"},
   {"namespace": "public", "topic": "batches", "table": "encarta_batches"},
-  {"namespace": "public", "topic": "products", "table": "encarta_products"}
+  {"namespace": "public", "topic": "products", "table": "encarta_products"},
+  {"namespace": "public", "topic": "uoms", "table": "encarta_uoms"}
 ]'
 
 # Generate topics list using jq
