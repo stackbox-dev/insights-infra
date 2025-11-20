@@ -102,6 +102,7 @@ TOPIC_MAPPINGS='[
   {"namespace": "public", "topic": "mhe_kind", "table": "wms_mhe_kind"},
   {"namespace": "public", "topic": "inb_grn", "table": "wms_inb_grn"},
   {"namespace": "public", "topic": "ira_bin_items", "table": "wms_ira_bin_items"},
+  {"namespace": "public", "topic": "vehicle_event", "table": "wms_vehicle_event"},
   {"namespace": "public", "topic": "vehicle_parking", "table": "wms_vehicle_parking"},
   {"namespace": "public", "topic": "pd_provisional_item", "table": "wms_pd_provisional_item"},
   {"namespace": "public", "topic": "worker_active_time", "table": "wms_worker_active_time"},

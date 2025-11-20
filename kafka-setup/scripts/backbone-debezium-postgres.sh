@@ -117,7 +117,8 @@ public.orderUpload,
 public.invoiceExtras,
 public.line_item_state,
 public.odometer,
-public.invoice_tray
+public.invoice_tray,
+public.extvehicleevents
 EOF
 )
 
@@ -137,6 +138,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "database.sslmode": "require",
       "plugin.name": "pgoutput",
       "table.include.list": "${TABLE_LIST_COMPACT}", 
+      "column.exclude.list": "public.picklistRetailer.node_retailer",
       "publication.name": "${BACKBONE_PUBLICATION_NAME}",
       "slot.name": "${BACKBONE_SLOT_NAME}",
 
