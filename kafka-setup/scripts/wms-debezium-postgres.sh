@@ -258,7 +258,7 @@ CONNECTOR_CONFIG=$(cat <<EOF
       "topic.creation.enable": "true",
       "topic.creation.default.replication.factor": 3,
       "topic.creation.default.partitions": 1,
-      "topic.creation.default.cleanup.policy": "compact,delete",
+      "topic.creation.default.cleanup.policy": "compact",
       "topic.creation.default.retention.ms": -1,
       "topic.creation.default.compression.type": "lz4",
       "topic.creation.default.retention.bytes": "-1",
