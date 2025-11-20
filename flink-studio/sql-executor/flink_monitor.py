@@ -24,15 +24,21 @@ from tabulate import tabulate
 class FlinkMonitor:
     """Monitor Flink cluster and jobs"""
 
-    def __init__(self, config_file: str = "config.yaml"):
-        """Initialize monitor with configuration"""
-        self.config = self.load_config(config_file)
-        self.flink_url = self.config.get("flink_cluster", {}).get("url")
-        
+    def __init__(self, config_file: str = None):
+        """
+        Initialize monitor with configuration from environment variables.
+        The config_file parameter is deprecated and ignored.
+        """
+        if config_file and config_file != "config.yaml":
+            print(f"⚠️  Warning: config_file parameter is deprecated. Use environment variables instead.")
+
+        # Load Flink URL from environment variable
+        self.flink_url = os.environ.get("FLINK_REST_URL", "")
+
         if not self.flink_url:
             raise ValueError(
-                "Flink cluster URL not found in config. "
-                "Please configure flink_cluster.url in config.yaml"
+                "Flink REST API URL not found. "
+                "Please set FLINK_REST_URL environment variable or use --env-file option"
             )
         
         # Remove any trailing slash and port if incorrectly specified
@@ -43,21 +49,13 @@ class FlinkMonitor:
         self.session = requests.Session()
         self.session.headers.update({"Accept": "application/json"})
 
-    def load_config(self, config_file: str) -> Dict:
-        """Load configuration from YAML file"""
-        config_path = Path(config_file)
-        
-        if not config_path.exists():
-            print(f"Warning: Config file {config_path} not found, using defaults")
-            return {}
-        
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-                return config if config else {}
-        except Exception as e:
-            print(f"Warning: Could not load config file {config_path}: {e}")
-            return {}
+    def load_env_file(self, env_file_path: str) -> None:
+        """
+        Load environment variables from a .env file
+        (This method is kept for backward compatibility but delegates to the module-level function)
+        """
+        from flink_sql_executor import load_env_file as module_load_env_file
+        module_load_env_file(env_file_path)
 
     def get_jobs_overview(self) -> List[Dict]:
         """Get overview of all jobs"""
@@ -428,14 +426,30 @@ class FlinkMonitor:
 
 def main():
     """Main entry point"""
+    # First check for env file to load variables early
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--env-file", "-e", dest="env_file")
+    pre_args, _ = pre_parser.parse_known_args()
+
+    # Load environment variables if env file is specified
+    if pre_args.env_file:
+        from flink_sql_executor import load_env_file
+        load_env_file(pre_args.env_file)
+
     parser = argparse.ArgumentParser(
         description="Monitor Flink cluster and jobs for exceptions and health status"
     )
-    
+
+    parser.add_argument(
+        "--env-file",
+        "-e",
+        help="Path to environment file (.env) for configuration"
+    )
+
     parser.add_argument(
         "--config",
-        default="config.yaml",
-        help="Path to configuration file (default: config.yaml)"
+        default=None,
+        help="(Deprecated) Path to configuration file - use --env-file instead"
     )
     
     parser.add_argument(

@@ -7,13 +7,18 @@ This directory contains comprehensive tools for executing SQL files, managing Fl
 ```
 sql-executor/
 ├── README.md                    # This file
-├── config.yaml                  # Configuration file
+├── .sbx-uat.env                 # Environment configuration for SBX UAT
+├── .samadhan-prod.env           # Environment configuration for Samadhan Prod
+├── .huldc-prod.env              # Environment configuration for HULDC Prod
 ├── requirements.txt             # Python dependencies
 ├── flink_sql_executor.py        # Main Python executor script
+├── flink_monitor.py             # Flink cluster monitoring tool
 ├── flink_jobs.db                # SQLite database for operation tracking (auto-created)
 ├── run_sql_executor.sh          # Bash wrapper script
-└── sbx-uat/                     # Environment-specific SQL scripts
+└── pipelines/                   # SQL pipeline files
 ```
+
+**Note**: `config.yaml` has been removed. All configuration is now in environment-specific `.env` files.
 
 ## Features Overview
 
@@ -32,9 +37,91 @@ A comprehensive Python script with advanced SQL execution capabilities:
 - ✅ **Dry Run Support**: Preview what would be executed without running SQL or job operations
 - ✅ **Multiple Output Formats**: Table, simple, plain text, and JSON output formats
 - ✅ **Environment Variables**: Load and substitute variables from .env files with validation
-- ✅ **Flexible Configuration**: Command-line arguments and YAML config file support
+- ✅ **Flexible Configuration**: Command-line arguments and environment variable support
 - ✅ **Advanced Logging**: Configurable logging levels with optional file output and debug modes
 - ✅ **Timeout Handling**: Configurable timeouts for long-running operations with retry logic
+
+## Configuration
+
+All configuration is managed through **environment-specific `.env` files**. The `config.yaml` file has been removed.
+
+### Environment Files
+
+Create `.env` files for each environment with all necessary configuration:
+
+```bash
+# Example: .sbx-uat.env
+
+# Kafka Configuration
+KAFKA_ENV="sbx_uat"
+KAFKA_BOOTSTRAP_SERVERS="your-kafka-server:22167"
+SCHEMA_REGISTRY_URL="https://your-schema-registry:22159"
+KAFKA_USERNAME="your-username"
+KAFKA_PASSWORD="your-password"
+TRUSTSTORE_PASSWORD="secret"
+
+# ClickHouse Configuration
+CLICKHOUSE_HOSTNAME="your-clickhouse-server"
+CLICKHOUSE_PORT="22155"
+
+# Flink SQL Gateway Configuration
+SQL_GATEWAY_URL="http://flink-sql-gateway.flink-studio.svc.cluster.local"
+SQL_GATEWAY_SESSION_TIMEOUT="300"
+SQL_GATEWAY_POLL_INTERVAL="2"
+SQL_GATEWAY_MAX_WAIT_TIME="60"
+
+# Flink REST API Configuration
+FLINK_REST_URL="http://flink-session-cluster.flink-studio.svc.cluster.local"
+
+# Job Management Configuration
+JOB_MANAGEMENT_ENABLE_DATABASE="true"
+JOB_MANAGEMENT_DATABASE_PATH="flink_jobs.db"
+
+# Logging Configuration
+LOG_LEVEL="INFO"
+LOG_FORMAT="%(asctime)s - %(levelname)s - %(message)s"
+
+# Execution Configuration
+CONTINUE_ON_ERROR="false"
+
+# Connection Configuration
+CONNECTION_TIMEOUT="30"
+CONNECTION_RETRY_COUNT="3"
+CONNECTION_RETRY_DELAY="5"
+```
+
+### Using Environment Files
+
+Always specify the environment file when running commands:
+
+```bash
+# Execute SQL with environment configuration
+python flink_sql_executor.py --env-file .sbx-uat.env --sql-file pipelines/my-pipeline.sql
+
+# Monitor cluster with environment configuration
+python flink_monitor.py --env-file .samadhan-prod.env --health
+```
+
+### Environment Variable Substitution
+
+SQL files support variable substitution from environment files:
+
+```sql
+CREATE TABLE my_table (
+    id BIGINT,
+    data STRING
+) WITH (
+    'connector' = 'kafka',
+    'topic' = '${KAFKA_ENV}.my_topic',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = 'my-consumer-group',
+    'properties.security.protocol' = 'SASL_SSL',
+    'properties.sasl.mechanism' = 'SCRAM-SHA-256',
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";',
+    'scan.startup.mode' = 'earliest-offset',
+    'format' = 'json'
+);
+```
 
 ### Job Management System
 

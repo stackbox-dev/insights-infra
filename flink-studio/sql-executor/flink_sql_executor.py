@@ -41,7 +41,7 @@ from contextlib import contextmanager
 
 def load_env_file(env_file_path: str) -> Dict[str, str]:
     """
-    Load environment variables from a .env file
+    Load environment variables from a .env file and set them in os.environ
 
     Args:
         env_file_path: Path to the .env file
@@ -77,6 +77,8 @@ def load_env_file(env_file_path: str) -> Dict[str, str]:
                         value = value[1:-1]
 
                     env_vars[key] = value
+                    # Also set in os.environ for use by load_config()
+                    os.environ[key] = value
                 else:
                     print(
                         f"⚠️  Invalid format in {env_file_path} line {line_num}: {line}"
@@ -3087,44 +3089,62 @@ def setup_logging(log_level: str, log_file: Optional[str] = None):
         logger.addHandler(file_handler)
 
 
-def load_config(config_file: str = "config.yaml") -> Dict:
-    """Load configuration from YAML file"""
-    config_path = Path(config_file)
+def load_config(config_file: str = None) -> Dict:
+    """
+    Load configuration from environment variables.
+    The config_file parameter is deprecated and ignored.
+    All configuration is now loaded from .env files via environment variables.
+    """
+    if config_file and config_file != "config.yaml":
+        print(f"⚠️  Warning: config_file parameter is deprecated. Use environment variables instead.")
 
-    # Try to find config.yaml in the same directory as the script if not found
-    if not config_path.exists():
-        script_dir = Path(__file__).parent
-        config_path = script_dir / "config.yaml"
+    # Helper function to convert string to boolean
+    def str_to_bool(value: str) -> bool:
+        if isinstance(value, bool):
+            return value
+        return value.lower() in ('true', '1', 'yes', 'on')
 
-    # Return default config if file doesn't exist
-    if not config_path.exists():
-        return {
-            "sql_gateway": {
-                "url": "http://localhost:8083",
-                "session_timeout": 300,
-                "poll_interval": 2,
-                "max_wait_time": 60,
-                "max_fetch_attempts": 20,
-            },
-            "logging": {
-                "level": "INFO",
-                "format": "%(asctime)s - %(levelname)s - %(message)s",
-            },
-            "execution": {
-                "continue_on_error": False,
-                "operation_timeout": 60,
-                "fetch_attempts": 20,
-            },
-            "connection": {"timeout": 30, "retry_count": 3, "retry_delay": 5},
-        }
+    # Helper function to convert string to int with fallback
+    def str_to_int(value: str, default: int) -> int:
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
 
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            return config if config else {}
-    except Exception as e:
-        print(f"Warning: Could not load config file {config_path}: {e}")
-        return {}
+    # Load configuration from environment variables
+    config = {
+        "sql_gateway": {
+            "url": os.environ.get("SQL_GATEWAY_URL", "http://localhost:8083"),
+            "session_timeout": str_to_int(os.environ.get("SQL_GATEWAY_SESSION_TIMEOUT", "300"), 300),
+            "poll_interval": str_to_int(os.environ.get("SQL_GATEWAY_POLL_INTERVAL", "2"), 2),
+            "max_wait_time": str_to_int(os.environ.get("SQL_GATEWAY_MAX_WAIT_TIME", "60"), 60),
+            "max_fetch_attempts": 20,  # hardcoded default
+        },
+        "flink_cluster": {
+            "url": os.environ.get("FLINK_REST_URL", ""),
+        },
+        "job_management": {
+            "enable_database": str_to_bool(os.environ.get("JOB_MANAGEMENT_ENABLE_DATABASE", "true")),
+            "database_path": os.environ.get("JOB_MANAGEMENT_DATABASE_PATH", "flink_jobs.db"),
+        },
+        "logging": {
+            "level": os.environ.get("LOG_LEVEL", "INFO"),
+            "format": os.environ.get("LOG_FORMAT", "%(asctime)s - %(levelname)s - %(message)s"),
+            "file": os.environ.get("LOG_FILE", ""),  # empty string means no file logging
+        },
+        "execution": {
+            "continue_on_error": str_to_bool(os.environ.get("CONTINUE_ON_ERROR", "false")),
+            "operation_timeout": 60,  # hardcoded default
+            "fetch_attempts": 20,  # hardcoded default
+        },
+        "connection": {
+            "timeout": str_to_int(os.environ.get("CONNECTION_TIMEOUT", "30"), 30),
+            "retry_count": str_to_int(os.environ.get("CONNECTION_RETRY_COUNT", "3"), 3),
+            "retry_delay": str_to_int(os.environ.get("CONNECTION_RETRY_DELAY", "5"), 5),
+        },
+    }
+
+    return config
 
 
 def format_sql_error(error_message: str, debug_mode: bool = False) -> str:
@@ -3382,12 +3402,18 @@ def format_sql_error(error_message: str, debug_mode: bool = False) -> str:
 
 
 def main():
-    # First, create a parser to check if a custom config file is specified
+    # First, create a parser to check if an environment file is specified
+    # We need to load env vars early so they're available for load_config()
     pre_parser = argparse.ArgumentParser(add_help=False)
-    pre_parser.add_argument("--config", default="config.yaml")
+    pre_parser.add_argument("--env-file", "-e", dest="env_file")
+    pre_parser.add_argument("--config", default=None)  # deprecated, kept for compatibility
     pre_args, _ = pre_parser.parse_known_args()
 
-    # Load configuration using the specified config file
+    # Load environment variables if env file is specified
+    if pre_args.env_file:
+        load_env_file(pre_args.env_file)
+
+    # Load configuration from environment variables
     config = load_config(pre_args.config)
 
     # Extract default values from config
@@ -3811,7 +3837,7 @@ Dry Run Examples (preview actions without executing):
             ) and not args.flink_rest_url:
                 logger.error("Flink REST API URL is required for this operation")
                 logger.error(
-                    "Please specify --flink-rest-url or configure flink_cluster.url in config.yaml"
+                    "Please specify --flink-rest-url or set FLINK_REST_URL in your .env file"
                 )
                 sys.exit(1)
 
