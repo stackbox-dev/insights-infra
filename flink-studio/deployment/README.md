@@ -10,47 +10,43 @@ This repository contains the complete deployment manifests and instructions for 
 
 ## Architecture Overview
 
-The platform consists of three main components:
+The platform consists of four main components deployed across GCP (GKE) and Azure (AKS):
 
-1. **Flink Kubernetes Operator**: Manages Flink cluster lifecycle
-2. **Flink Session Cluster**: Long-running cluster for job execution with comprehensive connector support
-3. **Flink SQL Gateway**: REST API for SQL query submission
-4. **Custom SQL Executor**: Command-line tool for executing Flink SQL queries
+1. **Flink Kubernetes Operator (v1.12.1)**: Manages Flink cluster lifecycle via custom resources
+2. **Flink Session Cluster (v2.0.0)**: Production-grade, highly available cluster with:
+   - RocksDB state backend with cloud storage
+   - Kubernetes-native HA
+   - Pre-configured Aiven Kafka and Avro connectors
+   - Workload Identity authentication (GCP/Azure)
+3. **Flink SQL Gateway**: REST API for SQL query submission and job management
+4. **Custom SQL Executor (Python CLI)**: Environment-aware command-line tool with variable substitution
+
+### Multi-Cloud Support
+
+| Feature | GCP (GKE) | Azure (AKS) |
+|---------|-----------|-------------|
+| **Flink Image** | Custom image: `asia-docker.pkg.dev/sbx-ci-cd/public/flink:2.0.0` | Same custom image |
+| **Authentication** | GCP Workload Identity | Azure Workload Identity |
+| **Storage** | Google Cloud Storage (GCS) | Azure Blob Storage with Data Lake Gen2 |
+| **Kafka Integration** | Aiven Kafka (SASL/SSL) | Aiven Kafka (SASL/SSL) |
+| **Configuration** | Static manifest | Template-based with `.env` files |
 
 ### Supported Connectors & Libraries
 
-The Flink deployment includes the following pre-installed connectors and libraries:
+Pre-installed connectors baked into the custom Flink image:
 
-#### Core Connectors
+#### Kafka Integration
+- **Kafka Connector**: Full Apache Kafka integration with SASL/SSL support
+- **Aiven Kafka**: Pre-configured credentials mounted via Kubernetes secrets
+- **Authentication**: Username/password + JKS truststore for encrypted connections
 
-- **Kafka Connector** (`flink-sql-connector-kafka-4.0.0-2.0.jar`) - 9.7MB
-  - Full Apache Kafka integration for streaming data
-  - Supports SASL/SSL authentication for Kafka services
-  - Compatible with Confluent, Azure Event Hubs, and Aiven Kafka
+#### Data Formats
+- **Avro Format**: Native Avro schema support with schema registry integration
+- **JSON Format**: Built-in JSON serialization/deserialization
 
-#### Data Formats & Serialization
-
-- **Avro Connector** (`flink-sql-avro-2.0.0.jar`) - 4.3MB
-  - Native Avro schema support for structured data processing
-  - Schema registry integration capabilities
-  - Efficient binary serialization/deserialization
-
-#### Cloud Authentication
-
-- **Google Auth Library** (`google-auth-library-oauth2-http-1.19.0.jar`) - 247KB
-  - OAuth2 authentication for GCP services
-  - Required for GCP Workload Identity authentication
-- **Google Cloud Core** (`google-cloud-core-2.8.1.jar`) - 131KB
-  - Core GCP service integration libraries
-
-#### File System Connectors
-
-- **Google Cloud Storage (GCS)**: Native Hadoop filesystem support
-- **Amazon S3**: Both Hadoop and Presto filesystem implementations
-- **Azure Blob Storage**: Hadoop filesystem integration
-- **Alibaba OSS**: Object storage support
-
-All connectors are automatically downloaded and configured during deployment via init containers.
+#### Cloud Storage
+- **GCS (Google Cloud Storage)**: Native Hadoop filesystem with Workload Identity auth
+- **Azure Blob Storage**: Data Lake Gen2 support with Workload Identity auth
 
 ## Prerequisites
 
@@ -66,51 +62,54 @@ Before deploying the Flink platform, ensure you have:
 
 ### Cloud Storage Requirements
 
-This deployment uses cloud-native storage solutions for Flink state management:
+This deployment uses cloud-native storage solutions with **Workload Identity** (passwordless authentication):
 
 #### Google Cloud Platform (GKE)
 
 - **Required**: Google Cloud Storage (GCS) bucket
 - **Bucket**: `gs://sbx-stag-flink-storage/`
-- **Authentication**: GKE Workload Identity
-- **Setup**:
-
-  ```bash
-  # Create GCS bucket
-  gsutil mb gs://sbx-stag-flink-storage/
-
-  # Create Google Service Account
-  gcloud iam service-accounts create flink-gcs --project=sbx-stag
-
-  # Grant storage permissions
-  gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin \
-    gs://sbx-stag-flink-storage/
-  ```
+- **Authentication**: GCP Workload Identity (no service account keys stored)
+- **Setup**: Automated by `deploy.sh` script:
+  - Creates Google Service Account: `flink-gcs@sbx-stag.iam.gserviceaccount.com`
+  - Grants Storage Admin role to GCS bucket
+  - Binds Kubernetes ServiceAccount to Google Service Account
 
 #### Microsoft Azure (AKS)
 
 - **Required**: Azure Blob Storage with Data Lake Gen2
-- **Storage Account**: `sbxstagflinkstorage`
+- **Storage Account**: `sbxunileverflinkstorage1` (environment-specific)
 - **Container**: `flink`
-- **Authentication**: Storage Account Key
-- **Setup**:
+- **Authentication**: Azure Workload Identity (no storage account keys stored)
+- **Prerequisites** (manual setup required):
 
   ```bash
+  # Create Managed Identity
+  az identity create --name flink-identity --resource-group UnileverSBXWMS_2
+
   # Create storage account with hierarchical namespace
-  az storage account create --name sbxstagflinkstorage \
-    --resource-group YOUR_RG --location YOUR_LOCATION \
+  az storage account create --name sbxunileverflinkstorage1 \
+    --resource-group UnileverSBXWMS_2 --location centralindia \
     --sku Standard_LRS --kind StorageV2 --hns true
 
-  # Create container
-  az storage container create --name flink --account-name sbxstagflinkstorage
+  # Grant Storage Blob Data Contributor role to Managed Identity
+  az role assignment create \
+    --role "Storage Blob Data Contributor" \
+    --assignee-object-id $(az identity show --name flink-identity --resource-group UnileverSBXWMS_2 --query principalId -o tsv) \
+    --scope /subscriptions/<subscription-id>/resourceGroups/UnileverSBXWMS_2/providers/Microsoft.Storage/storageAccounts/sbxunileverflinkstorage1
   ```
+
+- **Setup**: `deploy.sh` script verifies and configures:
+  - Verifies Managed Identity exists
+  - Creates federated identity credential
+  - Verifies storage container access
 
 #### Storage Usage
 
-- **Checkpoints**: Stored directly in cloud storage (GCS/Azure Blob)
-- **Savepoints**: Stored directly in cloud storage (GCS/Azure Blob)
-- **High Availability**: Kubernetes-native HA with cloud storage backend
-- **Local Storage**: Not required for Custom SQL Executor (CLI tool)
+- **Checkpoints**: Stored in cloud storage with 5-minute interval
+- **Savepoints**: Stored in cloud storage (native format for performance)
+- **High Availability**: Kubernetes-native HA with cloud storage metadata
+- **Job Archives**: Historical job data stored in cloud storage
+- **Local Storage (Azure only)**: 50GB persistent volume per TaskManager for RocksDB local state
 
 ### Required Kubernetes Resources
 
@@ -154,27 +153,46 @@ This validation script will check:
 
 Before deployment, review and customize these files if needed:
 
-- `manifests/03-flink-session-cluster-gcp.yaml` or `manifests/03-flink-session-cluster-aks.yaml` - Flink cluster resources
-- `manifests/05-resource-quotas.yaml` - Resource limits
-- `manifests/08-hue.yaml` - Hue ingress hostname
+- **GCP**: `manifests/03-flink-session-cluster-gcp.yaml` - Static manifest with GCS configuration
+- **Azure**: `manifests/03-flink-session-cluster-aks.yaml.template` - Template file (populated from `.env`)
+- `manifests/05-resource-quotas.yaml` - Resource limits for cost control
 
-### 4. Deploy the Platform
+### 4. Set Up Aiven Kafka Credentials
+
+**IMPORTANT**: Before deploying, you must configure Aiven Kafka credentials:
+
+```bash
+# Run the credential setup script
+./scripts/create-aiven-secret.sh
+```
+
+The script will prompt you for:
+- Kafka username and password
+- Path to Kafka CA certificate (PEM file)
+- Truststore password (for JKS conversion)
+
+This creates the `aiven-credentials` Kubernetes secret required for Kafka connectivity.
+
+### 5. Deploy the Platform
 
 Run the automated deployment script:
 
 ```bash
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 The script will:
 
-1. Install the Flink Kubernetes Operator
-2. Create the platform namespace and RBAC
-3. Deploy persistent storage (minimal configuration)
-4. Deploy the Flink Session Cluster
-5. Deploy the Flink SQL Gateway
-6. Configure the Custom SQL Executor
-7. Apply security policies
+1. Prompt for cloud provider selection (GCP or Azure)
+2. **For Azure**: Prompt for environment selection (e.g., `sbx-uat`, `samadhan-prod`)
+3. Display current Kubernetes context and ask for confirmation
+4. Install the Flink Kubernetes Operator (v1.12.1)
+5. Create namespace, RBAC, and resource quotas
+6. Configure cloud authentication (Workload Identity setup)
+7. Verify Aiven credentials secret exists
+8. Deploy Flink Session Cluster with cloud-specific configuration
+9. Deploy Flink SQL Gateway
+10. Apply network policies
 
 **Note:** For any deployment issues, refer to [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
 
@@ -236,39 +254,11 @@ The `docker/` directory contains Docker-related files for building custom Flink 
 ./scripts/cleanup.sh
 ```
 
-### 5. Verify Deployment
+### 6. Verify Deployment
 
 #### Quick Health Check
 
-Use the comprehensive test script to validate the deployment:
-
-```bash
-# Quick validation of core components
-./test-deployment.sh --quick
-
-# Full comprehensive testing (recommended)
-./test-deployment.sh
-
-# Test only library presence
-./test-deployment.sh --libs-only
-
-# Test connectivity only
-./test-deployment.sh --connectivity-only
-```
-
-The test script validates:
-
-- ✅ **Deployment Status**: FlinkDeployment resource is STABLE
-- ✅ **Pod Health**: All pods running and ready (JobManager + TaskManagers)
-- ✅ **Init Containers**: Library downloads completed successfully
-- ✅ **Library Validation**: All required connectors present in all pods
-- ✅ **Flink UI**: Web interface accessible and responsive
-- ✅ **TaskManager Connectivity**: All TaskManagers registered with JobManager
-- ✅ **Avro Support**: Avro connector properly loaded
-
-#### Manual Verification
-
-Alternatively, check components manually:
+Check deployment status manually:
 
 ```bash
 # Check pod status
@@ -280,23 +270,48 @@ kubectl get pods -n flink-studio
 # flink-session-cluster-taskmanager-1-1    1/1     Running   0          5m
 # flink-session-cluster-taskmanager-1-2    1/1     Running   0          5m
 # flink-sql-gateway-xxxxx                  1/1     Running   0          5m
-# hue-xxxxx                                1/1     Running   0          5m
 
-# Check services and ingress
+# Check FlinkDeployment status
+kubectl get flinkdeployment -n flink-studio
+
+# Expected output:
+# NAME                    JOB STATUS   LIFECYCLE STATE
+# flink-session-cluster                STABLE
+
+# Check services
 kubectl get svc -n flink-studio
-kubectl get ingress -n flink-studio
 
-# Verify libraries are loaded (optional)
-kubectl exec -n flink-studio deployment/flink-session-cluster -- ls -la /opt/flink/lib/ | grep -E "(avro|kafka|google)"
+# Verify Aiven credentials secret
+kubectl get secret aiven-credentials -n flink-studio
 ```
 
-Expected library output:
+#### Test Cloud Storage Access
 
+**For GCP:**
+```bash
+# Verify Workload Identity is working
+kubectl exec -it deployment/flink-session-cluster -n flink-studio -- gcloud auth list
+
+# Test GCS access
+kubectl exec -it deployment/flink-session-cluster -n flink-studio -- gsutil ls gs://sbx-stag-flink-storage/
 ```
--rw-r--r-- 1 root root  4342426 Jul 25 07:28 flink-sql-avro-2.0.0.jar
--rw-r--r-- 1 root root  9765334 Jul 25 07:28 flink-sql-connector-kafka-2.0.0.jar
--rw-r--r-- 1 root root   247870 Jul 25 07:28 google-auth-library-oauth2-http-1.19.0.jar
--rw-r--r-- 1 root root   131444 Jul 25 07:28 google-cloud-core-2.8.1.jar
+
+**For Azure:**
+```bash
+# Verify Workload Identity environment variables
+kubectl exec -it deployment/flink-session-cluster -n flink-studio -- env | grep AZURE
+
+# Test storage container access
+kubectl exec -it deployment/flink-session-cluster -n flink-studio -- az storage container list --account-name sbxunileverflinkstorage1 --auth-mode login
+```
+
+#### Access Flink Web UI
+
+```bash
+# Port forward to Flink UI
+kubectl port-forward svc/flink-session-cluster 8081:80 -n flink-studio
+
+# Open in browser: http://localhost:8081
 ```
 
 ## Manual Deployment (Step-by-Step)
@@ -341,11 +356,28 @@ kubectl apply -f manifests/05-resource-quotas.yaml
 # For GCP deployment
 kubectl apply -f manifests/03-flink-session-cluster-gcp.yaml
 
-# For Azure deployment
+# For Azure deployment (requires environment configuration)
+# First, generate the manifest from template
+export AZURE_STORAGE_ACCOUNT_NAME="sbxunileverflinkstorage1"
+export AZURE_STORAGE_CONTAINER_NAME="flink"
+export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_CLIENT_ID="911d60a1-3770-40cb-978b-8b7342bf02b8"
+export K8S_NAMESPACE="flink-studio"
+export K8S_SERVICE_ACCOUNT="flink"
+
+envsubst < manifests/03-flink-session-cluster-aks.yaml.template > manifests/03-flink-session-cluster-aks.yaml
 kubectl apply -f manifests/03-flink-session-cluster-aks.yaml
 
-# Wait for cluster to be ready
-kubectl wait --for=condition=Ready flinkdeployment/flink-session-cluster -n flink-studio --timeout=600s
+# Wait for cluster to be ready (lifecycle state: STABLE or DEPLOYED)
+for i in {1..60}; do
+  STATUS=$(kubectl get flinkdeployment flink-session-cluster -n flink-studio -o jsonpath='{.status.lifecycleState}' 2>/dev/null || echo "UNKNOWN")
+  if [ "$STATUS" = "STABLE" ] || [ "$STATUS" = "DEPLOYED" ]; then
+    echo "Flink cluster is ready!"
+    break
+  fi
+  echo "Waiting for cluster... Status: $STATUS (attempt $i/60)"
+  sleep 10
+done
 ```
 
 ### Step 4: Deploy SQL Gateway
@@ -359,17 +391,28 @@ kubectl wait --for=condition=Available deployment/flink-sql-gateway -n flink-stu
 
 ### Step 5: Configure Custom SQL Executor
 
-The Custom SQL Executor is a CLI tool that communicates directly with the Flink SQL Gateway. No additional Kubernetes deployment is required.
+The Custom SQL Executor is a Python CLI tool in the `sql-executor` directory.
 
 ```bash
-# The SQL executor is available in the sql-executor directory
+# Navigate to sql-executor directory
 cd ../sql-executor
 
-# Install Python dependencies (if running locally)
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Configure the executor to connect to your Flink SQL Gateway
-# Edit config.yaml to set the SQL Gateway URL
+# Set up port forwarding to SQL Gateway
+kubectl port-forward svc/flink-sql-gateway 8083:80 -n flink-studio &
+
+# Test connectivity
+curl http://localhost:8083/v1/info
+
+# Execute SQL with environment configuration
+python flink_sql_executor.py \
+  --sql-file pipelines/your-pipeline.sql \
+  --env-file .sbx-uat.env
+
+# The executor supports variable substitution from .env files:
+# ${KAFKA_ENV}, ${KAFKA_USERNAME}, ${KAFKA_PASSWORD}, etc.
 ```
 
 ### Step 6: Apply Security Policies (Optional)

@@ -1,19 +1,20 @@
-# Flink SQL Studio on Kubernetes: Architecture & Deployment Plan
+# Flink SQL Studio on Kubernetes: Architecture & Implementation
 
-This document outlines the architecture and deployment plan for creating a robust, multi-user Flink SQL Studio on Kubernetes. The goal is to provide a seamless and interactive environment for users to run Flink SQL queries without needing deep Kubernetes or Flink expertise.
+This document outlines the architecture and implementation of a production-ready Flink SQL Studio on Kubernetes with multi-cloud support. The platform provides a seamless environment for executing Flink SQL queries with enterprise-grade security and scalability.
 
 ---
 
 ## 1. Solution Architecture
 
-The proposed platform is composed of three core, decoupled components that work together to provide a seamless SQL-on-Flink experience.
+The platform consists of four core components deployed across GCP (GKE) and Azure (AKS) environments.
 
 ```
 +---------------------+
 |                     |
 |  Custom SQL         |
 |  Executor (CLI)     |
-|                     |
+|  + Environment      |
+|    Configuration    |
 +---------------------+
            |
            | REST API
@@ -24,70 +25,205 @@ The proposed platform is composed of three core, decoupled components that work 
 |                                                                                 |
 |   +-------------------------+     +-------------------------------------+       |
 |   |                         |     |                                     |       |
-|   |   Flink SQL Gateway     |---->|        Flink Session Cluster       |       |
+|   |   Flink SQL Gateway     |---->|    Flink Session Cluster (HA)      |       |
 |   |    (REST API)           |     |                                     |       |
 |   |                         |     |  +---------------+ +-------------+  |       |
 |   +-------------------------+     |  | JobManager(HA)| | TaskManagers|  |       |
 |                                   |  +---------------+ +-------------+  |       |
+|                                   |        |                |           |       |
+|                                   |        v                v           |       |
+|                                   |  +---------------------------+      |       |
+|                                   |  | Cloud Storage (GCS/Azure) |      |       |
+|                                   |  | - Checkpoints             |      |       |
+|                                   |  | - Savepoints              |      |       |
+|                                   |  | - HA Metadata             |      |       |
+|                                   |  +---------------------------+      |       |
 |                                   |                                     |       |
 |                                   +-------------------------------------+       |
 |                                   (Managed by Flink Kubernetes Operator)       |
+|                                                                                 |
++---------------------------------------------------------------------------------+
+           |
+           v
++---------------------------------------------------------------------------------+
+|                              External Services                                  |
+|                                                                                 |
+|   +----------------------+              +---------------------------+           |
+|   |  Aiven Kafka         |              |  Cloud Authentication     |           |
+|   |  - SASL/SSL Auth     |              |  - GCP: Workload Identity |           |
+|   |  - Avro/JSON Format  |              |  - Azure: Workload Identity|          |
+|   +----------------------+              +---------------------------+           |
 |                                                                                 |
 +---------------------------------------------------------------------------------+
 ```
 
 ### Core Components:
 
-1.  **Flink Kubernetes Operator**: This is the foundation of the Flink environment. It automates the deployment, scaling, and management of Flink clusters on Kubernetes. We will use it to deploy and maintain a long-running Flink Session Cluster.
+1.  **Flink Kubernetes Operator (v1.12.1)**: Automates the deployment, scaling, and lifecycle management of Flink clusters on Kubernetes using custom resources (FlinkDeployment).
 
-2.  **Flink Session Cluster**: A pre-deployed, shared Flink cluster that is always available to accept jobs. This avoids the latency of spinning up a new Flink cluster for every SQL query, making the user experience much faster and more interactive.
+2.  **Flink Session Cluster (v2.0.0)**: A long-running, highly available Flink cluster with:
+    - RocksDB state backend with cloud storage for checkpoints/savepoints
+    - Kubernetes-native HA with cloud storage backend
+    - Pre-configured Kafka (Aiven) and Avro connectors
+    - Workload Identity authentication (no stored credentials)
+    - Optimized for medium-sized stateful jobs (8GB TaskManagers)
 
-3.  **Flink SQL Gateway**: This is the central API layer deployed in the same Kubernetes cluster and namespace as the Flink Session Cluster. It's a standalone service that receives SQL queries from clients via a REST API. It translates these queries into Flink jobs and submits them to the Flink Session Cluster for execution.
+3.  **Flink SQL Gateway**: REST API service for SQL query submission and management, configured to communicate with the session cluster JobManager.
 
-4.  **Custom SQL Executor**: A command-line tool that provides a streamlined interface for executing Flink SQL queries. It communicates directly with the Flink SQL Gateway REST API to submit SQL statements, monitor execution status, and retrieve results. This executor supports both single SQL statements and batch execution of multiple statements from files.
+4.  **Custom SQL Executor (Python CLI)**: Production-grade command-line tool that:
+    - Loads environment-specific configuration from `.env` files
+    - Supports variable substitution in SQL (e.g., `${KAFKA_ENV}`, `${KAFKA_USERNAME}`)
+    - Executes single or batch SQL statements
+    - Provides comprehensive error handling and logging
+    - Integrates with Aiven Kafka via encrypted credentials
 
 ---
 
-## 2. Deployment Plan
+## 2. Multi-Cloud Deployment Architecture
 
-The deployment will proceed in a layered approach, starting with the core Flink infrastructure and moving up to the SQL execution tools.
+The platform supports both **Google Cloud Platform (GKE)** and **Microsoft Azure (AKS)** with cloud-specific optimizations.
 
-### **Step 1: Deploy the Flink Kubernetes Operator**
+### **Cloud Provider Differences**
 
-The first step is to install the Flink Kubernetes Operator into the cluster using its official Helm chart. This operator will be responsible for managing the lifecycle of our Flink cluster.
+| Feature | GCP (GKE) | Azure (AKS) |
+|---------|-----------|-------------|
+| **Flink Image** | Custom image from Artifact Registry:<br/>`asia-docker.pkg.dev/sbx-ci-cd/public/flink:2.0.0` | Custom image from Artifact Registry:<br/>`asia-docker.pkg.dev/sbx-ci-cd/public/flink:2.0.0` |
+| **Authentication** | GCP Workload Identity | Azure Workload Identity |
+| **Storage** | Google Cloud Storage (GCS):<br/>`gs://sbx-stag-flink-storage/` | Azure Blob Storage with Data Lake Gen2:<br/>`abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/` |
+| **Service Account** | `flink-gcs@sbx-stag.iam.gserviceaccount.com` | Managed Identity: `flink-identity`<br/>Client ID: `911d60a1-3770-40cb-978b-8b7342bf02b8` |
+| **TaskManager Storage** | None (uses cloud storage directly) | 50GB persistent volume per TaskManager for RocksDB |
+| **Node Affinity** | Standard nodes | Spot instances (cost optimization) |
 
-### **Step 2: Establish the Platform Namespace**
+### **Security Model: Workload Identity**
 
-We will create a dedicated Kubernetes namespace (e.g., `flink-studio`) to house all the components of our SQL studio. This ensures logical separation and makes management and cleanup easier.
+Both cloud deployments use **Workload Identity** for passwordless authentication:
 
-### **Step 3: Deploy the Flink Session Cluster**
+#### GCP Workload Identity
+```yaml
+serviceAccount: flink
+annotations:
+  iam.gke.io/gcp-service-account: flink-gcs@sbx-stag.iam.gserviceaccount.com
+```
+- **No service account keys** stored in the cluster
+- Automatic credential rotation by GCP
+- IAM-based access control to GCS buckets
 
-Using a `FlinkDeployment` custom resource, we will instruct the Flink Operator to deploy a long-running session cluster into our dedicated namespace. This cluster will be configured with appropriate resources (memory, CPU) for the JobManager and TaskManagers.
+#### Azure Workload Identity
+```yaml
+serviceAccount: flink
+annotations:
+  azure.workload.identity/client-id: 911d60a1-3770-40cb-978b-8b7342bf02b8
+labels:
+  azure.workload.identity/use: "true"
+```
+- **No storage account keys** stored in the cluster
+- Federated identity credentials for seamless auth
+- Azure RBAC-based access control
 
-### **Step 4: Deploy the Flink SQL Gateway**
+---
 
-Next, we will deploy the Flink SQL Gateway as a standard Kubernetes Deployment and expose it internally with a ClusterIP Service. The gateway will be configured to communicate with the JobManager of the Flink Session Cluster deployed in the previous step.
+## 3. Deployment Steps
 
-### **Step 5: Configure and Deploy the Custom SQL Executor**
+The deployment is fully automated via `./scripts/deploy.sh` and follows this sequence:
 
-The custom SQL executor is deployed as a Python-based command-line tool that can be:
+### **Step 1: Install Flink Kubernetes Operator**
 
-- Run directly from development environments or CI/CD pipelines
-- Deployed as a Kubernetes Job for scheduled SQL executions
-- Used interactively for ad-hoc query execution and testing
+Installs the official Flink Kubernetes Operator (v1.12.1) into the `flink-system` namespace using Helm.
 
-The executor provides features such as:
+### **Step 2: Create Platform Infrastructure**
 
-- Execution of SQL files or inline queries
-- Support for multiple SQL statements in a single execution
-- Comprehensive error handling and status reporting
-- Configurable output formats (table, JSON, plain text)
-- Session management with the Flink SQL Gateway
+Creates:
+- `flink-studio` namespace
+- Cloud-specific RBAC (ServiceAccount with Workload Identity annotations)
+- Resource quotas for cost control
 
-### **Step 6: (Optional) Implement Security and Resource Governance**
+### **Step 3: Configure Cloud Authentication**
 
-For a production-ready, multi-tenant environment, we will implement additional controls:
+**For GCP:**
+- Creates Google Service Account: `flink-gcs@sbx-stag.iam.gserviceaccount.com`
+- Grants Storage Admin role to GCS bucket
+- Binds Kubernetes ServiceAccount to Google Service Account via Workload Identity
 
-- **Network Policies**: We will apply Kubernetes Network Policies to restrict traffic, ensuring that only authorized clients can communicate with the Flink SQL Gateway.
+**For Azure:**
+- Verifies Managed Identity `flink-identity` exists
+- Creates federated identity credential linking K8s ServiceAccount
+- Verifies storage container access
 
-- **Resource Quotas**: To ensure fair resource usage among different teams or users, we will define Kubernetes `ResourceQuota` objects on the namespaces where Flink jobs are executed. This will prevent any single user from consuming all available cluster resources.
+### **Step 4: Deploy Aiven Kafka Credentials**
+
+Deploys the `aiven-credentials` Kubernetes secret containing:
+- Kafka username/password
+- JKS truststore for SSL/TLS
+- Truststore password
+
+This secret is mounted into Flink pods for secure Kafka connectivity.
+
+### **Step 5: Deploy Flink Session Cluster**
+
+Deploys the `FlinkDeployment` custom resource with:
+- Cloud-specific storage configuration
+- RocksDB state backend optimized for persistent storage
+- Kubernetes-native HA with cloud storage backend
+- Pre-configured Kafka and Avro connectors
+- Environment-specific configuration (via templates for Azure)
+
+### **Step 6: Deploy Flink SQL Gateway**
+
+Deploys the SQL Gateway as a Kubernetes Deployment with ClusterIP service on port 8083.
+
+### **Step 7: Apply Network Policies**
+
+Applies Kubernetes NetworkPolicies to restrict traffic between components for security.
+
+---
+
+## 4. Environment Configuration (Azure-Specific)
+
+Azure deployments use **environment-specific configuration files** (`.env` files) with template-based manifest generation:
+
+### **Environment Files**
+```
+flink-studio/deployment/
+├── .samadhan-prod.env
+├── .sbx-uat.env
+└── manifests/
+    └── 03-flink-session-cluster-aks.yaml.template
+```
+
+### **Template Variables**
+- `${AZURE_STORAGE_ACCOUNT_NAME}` - Azure storage account name
+- `${AZURE_STORAGE_CONTAINER_NAME}` - Storage container name
+- `${AZURE_TENANT_ID}` - Azure AD tenant ID
+- `${AZURE_CLIENT_ID}` - Managed identity client ID
+- `${K8S_NAMESPACE}` - Kubernetes namespace
+- `${K8S_SERVICE_ACCOUNT}` - Kubernetes service account name
+
+The `deploy.sh` script prompts for environment selection and generates the final manifest using `envsubst`.
+
+---
+
+## 5. Production Features
+
+### **High Availability**
+- Kubernetes-native HA for JobManager with cloud storage backend
+- Automatic failover and recovery
+- Retained checkpoints on job cancellation
+
+### **State Management**
+- RocksDB state backend with incremental checkpointing
+- Checkpoints stored in cloud storage (GCS/Azure Blob)
+- Savepoints for manual job migration
+- Optimized for medium-sized jobs (8GB memory, 50GB storage on Azure)
+
+### **Security**
+- Workload Identity (no stored credentials)
+- Kubernetes NetworkPolicies for traffic isolation
+- Resource quotas for cost control
+- Encrypted Kafka communication via SSL/TLS
+- Kubernetes secrets for sensitive credentials
+
+### **Observability**
+- Job history archived to cloud storage
+- 50 historical jobs retained in Web UI
+- 100 checkpoint history entries
+- Comprehensive logging to stdout/stderr
