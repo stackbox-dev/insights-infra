@@ -27,35 +27,3 @@ ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (principal_id, sku_code, code)
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop';
-
-
-
-
-
-         -- Table Definition
-CREATE TABLE "public"."batches" (
-    "id" uuid NOT NULL,
-    "principal_id" int8 NOT NULL,
-    "sku_id" uuid,
-    "code" varchar NOT NULL,
-    "batch_name" varchar,
-    "batch_desc" varchar,
-    "source_factory" varchar,
-    "case_config" int4,
-    "packing_date" timestamptz,
-    "expiry_date" timestamptz,
-    "active" bool,
-    "price" float8,
-    "price_lot" varchar,
-    "identifier1" varchar,
-    "tag1" varchar,
-    "sku_code" varchar NOT NULL,
-    "created_at" timestamptz DEFAULT now(),
-    "updated_at" timestamptz DEFAULT now(),
-    CONSTRAINT "batches_sku_id_fkey" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id"),
-    PRIMARY KEY ("id")
-);
-
-
--- Indices
-CREATE UNIQUE INDEX uniq_batches ON public.batches USING btree (principal_id, sku_code, code);
