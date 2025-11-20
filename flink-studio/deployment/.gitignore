@@ -1,2 +1,9 @@
 *.pem
 *.jks
+
+# Environment-specific configuration files
+.*.env
+!.azure.env.template
+
+# Generated manifests from templates
+manifests/03-flink-session-cluster-aks.yaml

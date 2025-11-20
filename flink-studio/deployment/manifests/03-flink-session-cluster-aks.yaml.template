@@ -2,7 +2,7 @@ apiVersion: flink.apache.org/v1beta1
 kind: FlinkDeployment
 metadata:
   name: flink-session-cluster
-  namespace: flink-studio
+  namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: flink-session-cluster
     app.kubernetes.io/component: flink-cluster
@@ -39,15 +39,15 @@ spec:
     # Changelog disabled to fix checkpoint blocking issue
     # state.changelog.enabled: false
     # state.changelog.storage: filesystem
-    # state.changelog.dstl.dfs.base-path: abfss://flink@sbxstagflinkstorage.dfs.core.windows.net/changelog
+    # state.changelog.dstl.dfs.base-path: abfss://${AZURE_STORAGE_CONTAINER_NAME}@${AZURE_STORAGE_ACCOUNT_NAME}.dfs.core.windows.net/changelog
     # Force session cluster to start TaskManager pods immediately
     slotmanager.number-of-slots.min: "1"
     slotmanager.number-of-slots.max: "36"
     slotmanager.slot-request-timeout: "300000"
     # Azure Blob Storage paths for Flink state management - removed duplicate state.checkpoints.dir
-    state.savepoints.dir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/savepoints
+    state.savepoints.dir: abfss://${AZURE_STORAGE_CONTAINER_NAME}@${AZURE_STORAGE_ACCOUNT_NAME}.dfs.core.windows.net/savepoints
     high-availability.type: kubernetes
-    high-availability.storageDir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/ha
+    high-availability.storageDir: abfss://${AZURE_STORAGE_CONTAINER_NAME}@${AZURE_STORAGE_ACCOUNT_NAME}.dfs.core.windows.net/ha
     restart-strategy.type: failure-rate
     restart-strategy.failure-rate.max-failures-per-interval: "10"
     restart-strategy.failure-rate.failure-rate-interval: "10 min"
@@ -56,7 +56,7 @@ spec:
     execution.checkpointing.mode: EXACTLY_ONCE
     execution.checkpointing.timeout: "5 min"
     execution.checkpointing.incremental: true
-    execution.checkpointing.dir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/flink-checkpoints
+    execution.checkpointing.dir: abfss://${AZURE_STORAGE_CONTAINER_NAME}@${AZURE_STORAGE_ACCOUNT_NAME}.dfs.core.windows.net/flink-checkpoints
     execution.checkpointing.data-inline-threshold: "64 kb"
     # Additional checkpoint settings for maximum Azure Blob Storage usage
     execution.checkpointing.max-concurrent-checkpoints: 1
@@ -77,7 +77,7 @@ spec:
     table.exec.resource.default-parallelism: "2" # Match your slot count
     table.optimizer.join-reorder-enabled: true
     # Job History and Archive Settings
-    jobmanager.archive.fs.dir: abfss://flink@sbxunileverflinkstorage1.dfs.core.windows.net/archived-jobs
+    jobmanager.archive.fs.dir: abfss://${AZURE_STORAGE_CONTAINER_NAME}@${AZURE_STORAGE_ACCOUNT_NAME}.dfs.core.windows.net/archived-jobs
     web.history: 50
     web.checkpoints.history: 100
     web.exception-history-size: 50
@@ -86,8 +86,8 @@ spec:
     jobstore.max-capacity: 1000
     jobstore.type: File
     # Azure Storage Account Key Authentication
-    fs.azure.account.key.sbxunileverflinkstorage1.dfs.core.windows.net: ${env.AZURE_STORAGE_KEY}
-  serviceAccount: flink
+    fs.azure.account.key.${AZURE_STORAGE_ACCOUNT_NAME}.dfs.core.windows.net: ${env.AZURE_STORAGE_KEY}
+  serviceAccount: ${K8S_SERVICE_ACCOUNT}
   jobManager:
     resource:
       memory: "1536m"
@@ -98,14 +98,14 @@ spec:
         labels:
           azure.workload.identity/use: "true"
       spec:
-        serviceAccountName: flink
+        serviceAccountName: ${K8S_SERVICE_ACCOUNT}
         containers:
           - name: flink-main-container
             env:
               - name: AZURE_TENANT_ID
-                value: f66fae02-5d36-495b-bfe0-78a6ff9f8e6e
+                value: ${AZURE_TENANT_ID}
               - name: AZURE_CLIENT_ID
-                value: 911d60a1-3770-40cb-978b-8b7342bf02b8
+                value: ${AZURE_CLIENT_ID}
               - name: AZURE_FEDERATED_TOKEN_FILE
                 value: /var/run/secrets/azure/tokens/azure-identity-token
               - name: AZURE_STORAGE_KEY
@@ -131,7 +131,7 @@ spec:
         labels:
           azure.workload.identity/use: "true"
       spec:
-        serviceAccountName: flink
+        serviceAccountName: ${K8S_SERVICE_ACCOUNT}
         # Schedule TaskManager pods on AKS spot instances for cost optimization
         nodeSelector:
           kubernetes.azure.com/scalesetpriority: spot
@@ -162,9 +162,9 @@ spec:
                 memory: "8Gi"
             env:
               - name: AZURE_TENANT_ID
-                value: f66fae02-5d36-495b-bfe0-78a6ff9f8e6e
+                value: ${AZURE_TENANT_ID}
               - name: AZURE_CLIENT_ID
-                value: 911d60a1-3770-40cb-978b-8b7342bf02b8
+                value: ${AZURE_CLIENT_ID}
               - name: AZURE_FEDERATED_TOKEN_FILE
                 value: /var/run/secrets/azure/tokens/azure-identity-token
               - name: AZURE_STORAGE_KEY
@@ -191,7 +191,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: flink-session-cluster
-  namespace: flink-studio
+  namespace: ${K8S_NAMESPACE}
   labels:
     app.kubernetes.io/name: flink-session-cluster
     app.kubernetes.io/component: web-service

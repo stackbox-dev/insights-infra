@@ -57,6 +57,76 @@ case $cloud_choice in
         CLOUD_PROVIDER="azure"
         MANIFEST_SUFFIX="-aks"
         print_status "Selected: Microsoft Azure (AKS)"
+
+        # For Azure, prompt for environment-specific configuration
+        print_status "Loading Azure environment configuration..."
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+        DEPLOYMENT_DIR="$(dirname "$SCRIPT_DIR")"
+
+        # List available .env files
+        ENV_FILES=($(ls "$DEPLOYMENT_DIR"/.*.env 2>/dev/null | xargs -n1 basename))
+
+        if [ ${#ENV_FILES[@]} -eq 0 ]; then
+            print_error "No environment files found in $DEPLOYMENT_DIR"
+            print_error "Expected files like .samadhan-prod.env, .sbx-uat.env, etc."
+            exit 1
+        fi
+
+        echo ""
+        echo "Available environment configurations:"
+        for i in "${!ENV_FILES[@]}"; do
+            ENV_NAME=$(echo "${ENV_FILES[$i]}" | sed 's/^\.//' | sed 's/\.env$//')
+            echo "$((i+1))) $ENV_NAME"
+        done
+        echo ""
+        read -p "Select environment (1-${#ENV_FILES[@]}): " env_choice
+
+        if [ "$env_choice" -lt 1 ] || [ "$env_choice" -gt ${#ENV_FILES[@]} ]; then
+            print_error "Invalid choice. Please select a number between 1 and ${#ENV_FILES[@]}"
+            exit 1
+        fi
+
+        SELECTED_ENV_FILE="${ENV_FILES[$((env_choice-1))]}"
+        ENV_FILE_PATH="$DEPLOYMENT_DIR/$SELECTED_ENV_FILE"
+        ENV_NAME=$(echo "$SELECTED_ENV_FILE" | sed 's/^\.//' | sed 's/\.env$//')
+
+        print_status "Selected environment: $ENV_NAME"
+        print_status "Loading configuration from: $SELECTED_ENV_FILE"
+
+        # Load environment variables
+        set -a
+        source "$ENV_FILE_PATH"
+        set +a
+
+        # Validate required variables
+        REQUIRED_VARS=(
+            "AZURE_STORAGE_ACCOUNT_NAME"
+            "AZURE_STORAGE_CONTAINER_NAME"
+            "AZURE_TENANT_ID"
+            "AZURE_CLIENT_ID"
+            "K8S_NAMESPACE"
+            "K8S_SERVICE_ACCOUNT"
+        )
+
+        for var in "${REQUIRED_VARS[@]}"; do
+            if [ -z "${!var}" ]; then
+                print_error "Required variable $var is not set in $SELECTED_ENV_FILE"
+                exit 1
+            fi
+        done
+
+        # Generate manifest from template
+        TEMPLATE_FILE="$DEPLOYMENT_DIR/manifests/03-flink-session-cluster-aks.yaml.template"
+        GENERATED_MANIFEST="$DEPLOYMENT_DIR/manifests/03-flink-session-cluster-aks.yaml"
+
+        if [ ! -f "$TEMPLATE_FILE" ]; then
+            print_error "Template file not found: $TEMPLATE_FILE"
+            exit 1
+        fi
+
+        print_status "Generating manifest from template..."
+        envsubst < "$TEMPLATE_FILE" > "$GENERATED_MANIFEST"
+        print_status "Generated manifest: $GENERATED_MANIFEST"
         ;;
     *)
         print_error "Invalid choice. Please run the script again and select 1 or 2."
