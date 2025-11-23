@@ -219,20 +219,20 @@ const PipelineRow: React.FC<{ pipeline: PipelineInfo; index: number; isSelected:
       <Box width={4}>
         <Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>{index + 1}.</Text>
       </Box>
-      <Box width={43}>
+      <Box width={38}>
         <Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>
-          {pipelineName.substring(0, 41)}
+          {pipelineName.substring(0, 36)}
         </Text>
       </Box>
-      <Box width={18}>
+      <Box width={16}>
         <StatusBadge status={pipeline.status} />
       </Box>
-      <Box width={22}>
+      <Box width={24}>
         <Text dimColor={!isSelected} color={isSelected ? 'cyan' : undefined}>
           {startTime}
         </Text>
       </Box>
-      <Box width={12}>
+      <Box width={10}>
         <Text dimColor={!isSelected} color={isSelected ? 'cyan' : undefined}>
           {duration}
         </Text>
@@ -307,22 +307,22 @@ const MainDashboard: React.FC<{
             #
           </Text>
         </Box>
-        <Box width={43}>
+        <Box width={38}>
           <Text bold color="cyan">
             Pipeline Name
           </Text>
         </Box>
-        <Box width={18}>
+        <Box width={16}>
           <Text bold color="cyan">
             Status
           </Text>
         </Box>
-        <Box width={22}>
+        <Box width={24}>
           <Text bold color="cyan">
             Running Since
           </Text>
         </Box>
-        <Box width={12}>
+        <Box width={10}>
           <Text bold color="cyan">
             Duration
           </Text>
