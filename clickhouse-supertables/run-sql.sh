@@ -104,10 +104,13 @@ set +a
 # Use database override if provided, otherwise use env file value
 DATABASE="${DATABASE_OVERRIDE:-${CLICKHOUSE_DATABASE:-sbx_uat}}"
 
+# Support both CLICKHOUSE_NATIVE_PORT and CLICKHOUSE_PORT
+CLICKHOUSE_NATIVE_PORT="${CLICKHOUSE_NATIVE_PORT:-${CLICKHOUSE_PORT}}"
+
 # Validate required environment variables
 if [ -z "$CLICKHOUSE_HOSTNAME" ] || [ -z "$CLICKHOUSE_NATIVE_PORT" ] || [ -z "$CLICKHOUSE_USER" ]; then
     echo -e "${RED}Error: Missing required ClickHouse configuration in $ENV_FILE${NC}"
-    echo "Required variables: CLICKHOUSE_HOSTNAME, CLICKHOUSE_NATIVE_PORT, CLICKHOUSE_USER"
+    echo "Required variables: CLICKHOUSE_HOSTNAME, CLICKHOUSE_NATIVE_PORT (or CLICKHOUSE_PORT), CLICKHOUSE_USER"
     exit 1
 fi
 
@@ -250,7 +253,7 @@ execute_sql_file() {
 # Function to get SQL files based on pattern or mode
 get_sql_files() {
     local all_files=""
-    
+
     if [ -n "$SPECIFIC_FILE" ]; then
         # Specific file mode
         if [ -f "$BASE_DIR/$SPECIFIC_FILE" ]; then
@@ -265,26 +268,35 @@ get_sql_files() {
             return 1
         fi
     elif [ -n "$FILTER_PATTERN" ]; then
-        # Pattern mode - always exclude XX- files
-        case "$FILTER_PATTERN" in
-            */*)
-                # Directory-specific pattern like encarta/*.sql
-                local dir_pattern="${FILTER_PATTERN%%/*}"
-                local file_pattern="${FILTER_PATTERN##*/}"
-                if [ -d "$BASE_DIR/$dir_pattern" ]; then
-                    find "$BASE_DIR/$dir_pattern" -maxdepth 1 -type f -name "$file_pattern" ! -name "XX-*" | sort
+        # Pattern mode - use full glob support with globstar
+        # Enable globstar if available (bash 4+)
+        if [ -n "$BASH_VERSION" ]; then
+            shopt -s globstar nullglob 2>/dev/null || true
+        fi
+        local -a files=()
+
+        # Expand glob pattern relative to BASE_DIR
+        cd "$BASE_DIR"
+        for file in $FILTER_PATTERN; do
+            # Only include regular files
+            if [ -f "$file" ]; then
+                # Exclude XX- files unless force is enabled
+                if [[ "$(basename "$file")" != XX-* ]]; then
+                    files+=("$BASE_DIR/$file")
                 fi
-                ;;
-            **/*)
-                # Recursive pattern like **/01-*.sql
-                local file_pattern="${FILTER_PATTERN##*/}"
-                find "$BASE_DIR" -type f -name "$file_pattern" ! -name "XX-*" | sort
-                ;;
-            *)
-                # Simple pattern
-                find "$BASE_DIR" -type f -name "$FILTER_PATTERN" ! -name "XX-*" | sort
-                ;;
-        esac
+            fi
+        done
+        cd - > /dev/null
+
+        # Sort and output files
+        if [ ${#files[@]} -gt 0 ]; then
+            printf '%s\n' "${files[@]}" | sort
+        fi
+
+        # Disable globstar
+        if [ -n "$BASH_VERSION" ]; then
+            shopt -u globstar nullglob 2>/dev/null || true
+        fi
     else
         # Default mode - all SQL files except XX-
         find "$BASE_DIR" -type f -name "*.sql" ! -name "XX-*" | sort
@@ -332,31 +344,27 @@ main() {
     if [ -z "$SPECIFIC_FILE" ]; then
         local xx_count=0
         if [ -n "$FILTER_PATTERN" ]; then
-            # Check for XX- files only within the pattern scope
-            case "$FILTER_PATTERN" in
-                */*)
-                    # Directory-specific pattern like encarta/*.sql
-                    local dir_pattern="${FILTER_PATTERN%%/*}"
-                    local file_pattern="${FILTER_PATTERN##*/}"
-                    if [ -d "$BASE_DIR/$dir_pattern" ]; then
-                        xx_count=$(find "$BASE_DIR/$dir_pattern" -maxdepth 1 -type f -name "$file_pattern" -name "XX-*" | wc -l)
-                    fi
-                    ;;
-                **/*)
-                    # Recursive pattern like **/01-*.sql
-                    local file_pattern="${FILTER_PATTERN##*/}"
-                    xx_count=$(find "$BASE_DIR" -type f -name "$file_pattern" -name "XX-*" | wc -l)
-                    ;;
-                *)
-                    # Simple pattern
-                    xx_count=$(find "$BASE_DIR" -type f -name "$FILTER_PATTERN" -name "XX-*" | wc -l)
-                    ;;
-            esac
+            # Check for XX- files using glob pattern
+            if [ -n "$BASH_VERSION" ]; then
+                shopt -s globstar nullglob 2>/dev/null || true
+            fi
+            cd "$BASE_DIR"
+            local -a xx_files=()
+            for file in $FILTER_PATTERN; do
+                if [ -f "$file" ] && [[ "$(basename "$file")" == XX-* ]]; then
+                    xx_files+=("$file")
+                fi
+            done
+            xx_count=${#xx_files[@]}
+            cd - > /dev/null
+            if [ -n "$BASH_VERSION" ]; then
+                shopt -u globstar nullglob 2>/dev/null || true
+            fi
         else
             # No pattern specified - check all directories
             xx_count=$(find "$BASE_DIR" -type f -name "XX-*.sql" | wc -l)
         fi
-        
+
         if [ "$xx_count" -gt 0 ]; then
             echo -e "${YELLOW}Note: $xx_count XX- prefixed file(s) excluded. Use --file and --force to run them.${NC}"
         fi
