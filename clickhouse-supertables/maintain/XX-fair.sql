@@ -25,7 +25,7 @@ DROP SETTINGS PROFILE IF EXISTS readonly_profile;
 CREATE SETTINGS PROFILE readonly_profile SETTINGS
     max_memory_usage = 10000000000,              -- 10 GB max memory per query
     max_execution_time = 30,                     -- 30 seconds max execution time
-    max_concurrent_queries_for_user = 5          -- Max 5 concurrent queries
+    max_concurrent_queries_for_user = 20         -- Max 20 concurrent queries
     TO readonly;
 
 -- =============================================================================
