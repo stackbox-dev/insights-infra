@@ -121,13 +121,29 @@ async function updatePipelineStatus(
     if (pipeline.expectedJobName) {
       const job = jobMap.get(pipeline.expectedJobName);
       if (job) {
+        // Job exists in Flink cluster - update all info
         pipeline.jobId = job.jid || job.id;
         pipeline.status = job.state;
         pipeline.startTime = job['start-time'];
         pipeline.duration = job.duration;
       } else {
-        pipeline.status = 'NOT_RUNNING';
-        pipeline.jobId = undefined;
+        // Job not found in cluster
+        // If previously had a terminal state (CANCELED, FAILED, FINISHED), keep it
+        // Otherwise mark as NOT_RUNNING
+        const previousStatus = pipeline.status;
+        if (previousStatus === 'CANCELED' ||
+            previousStatus === 'CANCELLED' ||
+            previousStatus === 'FAILED' ||
+            previousStatus === 'FINISHED') {
+          // Keep the terminal status and job ID
+          // Don't clear jobId so we can still show job info if available
+        } else {
+          // Was running or unknown, now it's not running
+          pipeline.status = 'NOT_RUNNING';
+          pipeline.jobId = undefined;
+          pipeline.startTime = undefined;
+          pipeline.duration = undefined;
+        }
       }
     } else {
       pipeline.status = 'UNKNOWN';
