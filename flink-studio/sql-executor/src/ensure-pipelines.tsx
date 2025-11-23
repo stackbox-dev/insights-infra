@@ -535,8 +535,10 @@ const App: React.FC<{ executor: FlinkSQLExecutor; pipelines: PipelineInfo[] }> =
 
   const refreshPipelines = async () => {
     setState((s) => ({ ...s, mode: 'loading', isRefreshing: true }));
-    await updatePipelineStatus(state.pipelines, executor);
-    setState((s) => ({ ...s, mode: 'main', isRefreshing: false }));
+    // Create a new array to trigger React re-render
+    const updatedPipelines = [...state.pipelines];
+    await updatePipelineStatus(updatedPipelines, executor);
+    setState((s) => ({ ...s, pipelines: updatedPipelines, mode: 'main', isRefreshing: false }));
   };
 
   const showMessage = (message: string, type: 'info' | 'success' | 'error' | 'warning') => {
