@@ -115,7 +115,14 @@ async function updatePipelineStatus(
     return;
   }
 
-  const jobMap = new Map(allJobs.map(job => [job.name, job]));
+  // Create a map with the latest job for each pipeline name (by start-time)
+  const jobMap = new Map<string, any>();
+  for (const job of allJobs) {
+    const existing = jobMap.get(job.name);
+    if (!existing || (job['start-time'] && (!existing['start-time'] || job['start-time'] > existing['start-time']))) {
+      jobMap.set(job.name, job);
+    }
+  }
 
   for (const pipeline of pipelines) {
     if (pipeline.expectedJobName) {
@@ -535,8 +542,8 @@ const App: React.FC<{ executor: FlinkSQLExecutor; pipelines: PipelineInfo[] }> =
 
   const refreshPipelines = async () => {
     setState((s) => ({ ...s, mode: 'loading', isRefreshing: true }));
-    // Create a new array to trigger React re-render
-    const updatedPipelines = [...state.pipelines];
+    // Create deep copies of pipeline objects to avoid mutating state
+    const updatedPipelines = state.pipelines.map(p => ({ ...p }));
     await updatePipelineStatus(updatedPipelines, executor);
     setState((s) => ({ ...s, pipelines: updatedPipelines, mode: 'main', isRefreshing: false }));
   };
