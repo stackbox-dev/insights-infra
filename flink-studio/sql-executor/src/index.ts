@@ -23,7 +23,7 @@ program
 program
   .option('-f, --file <path>', 'Path to SQL file to execute')
   .option('-s, --sql <query>', 'Inline SQL query to execute')
-  .option('-e, --env-file <path>', 'Environment file for variable substitution', '.sbx-uat.env')
+  .option('-e, --env-file <path>', 'Environment file for variable substitution')
   .option('-u, --sql-gateway-url <url>', 'Flink SQL Gateway URL')
   .option('--flink-rest-url <url>', 'Flink REST API URL')
   .option('-d, --dry-run', 'Show what would be executed without running')

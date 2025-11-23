@@ -22,7 +22,7 @@ program
   .version('2.0.0');
 
 program
-  .option('-e, --env-file <path>', 'Environment file for configuration', '.sbx-uat.env')
+  .option('-e, --env-file <path>', 'Environment file for configuration')
   .option('--health', 'Check cluster health')
   .option('--exceptions', 'Show recent exceptions across all jobs')
   .option('--job-id <id>', 'Monitor specific job by ID')
