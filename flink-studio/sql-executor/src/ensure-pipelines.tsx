@@ -334,7 +334,11 @@ const PipelineDetail: React.FC<{
   onAction: (action: string) => void;
 }> = ({ pipeline, executor, onBack, onAction }) => {
   const isRunning = pipeline.status === 'RUNNING';
-  const isNotRunning = pipeline.status === 'NOT_RUNNING';
+  const canStart = pipeline.status === 'NOT_RUNNING' ||
+                   pipeline.status === 'CANCELED' ||
+                   pipeline.status === 'CANCELLED' ||
+                   pipeline.status === 'FAILED' ||
+                   pipeline.status === 'FINISHED';
 
   const actions = [];
 
@@ -343,8 +347,11 @@ const PipelineDetail: React.FC<{
     actions.push({ label: '⏹️  Kill (cancel)', value: 'kill' });
     actions.push({ label: '🔄 Restart', value: 'restart' });
     actions.push({ label: 'ℹ️  Show Job Info', value: 'info' });
-  } else if (isNotRunning) {
+  } else if (canStart) {
     actions.push({ label: '▶️  Start Pipeline', value: 'start' });
+    if (pipeline.jobId) {
+      actions.push({ label: 'ℹ️  Show Job Info', value: 'info' });
+    }
   }
 
   actions.push({ label: '◀️  Back to Main Menu', value: 'back' });
