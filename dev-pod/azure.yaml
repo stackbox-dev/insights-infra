@@ -3,17 +3,17 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: dev-pod-v2
+  name: dev-pod
 spec:
-  serviceName: dev-pod-v2-service
+  serviceName: dev-pod-service
   replicas: 1
   selector:
     matchLabels:
-      app: dev-pod-v2
+      app: dev-pod
   template:
     metadata:
       labels:
-        app: dev-pod-v2
+        app: dev-pod
         environment: development
     spec:
       containers:
@@ -24,10 +24,10 @@ spec:
           # Resource limits (adjust as needed)
           resources:
             requests:
-              memory: "24Gi"
-              cpu: "4"
+              memory: "256Mi"
+              cpu: "100m"
             limits:
-              memory: "32Gi"
+              memory: "1Gi"
 
           # Environment variables
           env:
@@ -98,19 +98,19 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 500Gi
+            storage: 10Gi
         storageClassName: managed-csi-premium
 ---
 # Headless service for StatefulSet
 apiVersion: v1
 kind: Service
 metadata:
-  name: dev-pod-v2-service
+  name: dev-pod-service
 spec:
   type: ClusterIP
   clusterIP: None # Headless service for StatefulSet
   selector:
-    app: dev-pod-v2
+    app: dev-pod
   ports:
     - name: nodejs
       port: 3000

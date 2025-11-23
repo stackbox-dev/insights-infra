@@ -1,7 +1,7 @@
 -- OMS Allocation Run table
 -- Populated from topic: samadhan_prod.oms.public.allocation_run
 
-CREATE TABLE oms_allocation_run (
+CREATE TABLE IF NOT EXISTS oms_allocation_run (
     id String DEFAULT '',
     node_id String DEFAULT '',
     active Bool DEFAULT true,

@@ -109,7 +109,6 @@ export function loadConfig(_configFile?: string): any {
     },
     logging: {
       level: process.env.LOG_LEVEL || 'INFO',
-      format: process.env.LOG_FORMAT || '%(asctime)s - %(levelname)s - %(message)s',
     },
     execution: {
       continue_on_error: process.env.CONTINUE_ON_ERROR !== 'false',

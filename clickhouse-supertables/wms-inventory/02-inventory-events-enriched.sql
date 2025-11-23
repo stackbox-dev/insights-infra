@@ -228,7 +228,9 @@ SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop';
 
 -- Create indexes for common query patterns
-ALTER TABLE wms_inventory_events_enriched ADD INDEX idx_hu_code hu_code TYPE bloom_filter(0.01) GRANULARITY 4;
-ALTER TABLE wms_inventory_events_enriched ADD INDEX idx_sku_code sku_code TYPE bloom_filter(0.01) GRANULARITY 4;
-ALTER TABLE wms_inventory_events_enriched ADD INDEX idx_storage_bin storage_bin_code TYPE bloom_filter(0.01) GRANULARITY 4;
-ALTER TABLE wms_inventory_events_enriched ADD INDEX idx_batch batch TYPE bloom_filter(0.01) GRANULARITY 4;
+-- Note: If indexes already exist, this will fail silently - that's expected behavior
+-- The indexes are created once and persist across table recreations
+ALTER TABLE wms_inventory_events_enriched ADD INDEX IF NOT EXISTS idx_hu_code hu_code TYPE bloom_filter(0.01) GRANULARITY 4;
+ALTER TABLE wms_inventory_events_enriched ADD INDEX IF NOT EXISTS idx_sku_code sku_code TYPE bloom_filter(0.01) GRANULARITY 4;
+ALTER TABLE wms_inventory_events_enriched ADD INDEX IF NOT EXISTS idx_storage_bin storage_bin_code TYPE bloom_filter(0.01) GRANULARITY 4;
+ALTER TABLE wms_inventory_events_enriched ADD INDEX IF NOT EXISTS idx_batch batch TYPE bloom_filter(0.01) GRANULARITY 4;

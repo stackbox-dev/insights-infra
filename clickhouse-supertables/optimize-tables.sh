@@ -82,10 +82,13 @@ set +a
 # Use database override if provided, otherwise use env file value
 DATABASE="${DATABASE_OVERRIDE:-${CLICKHOUSE_DATABASE:-sbx_uat}}"
 
+# Support both CLICKHOUSE_NATIVE_PORT and CLICKHOUSE_PORT
+CLICKHOUSE_NATIVE_PORT="${CLICKHOUSE_NATIVE_PORT:-${CLICKHOUSE_PORT}}"
+
 # Validate required environment variables
 if [ -z "$CLICKHOUSE_HOSTNAME" ] || [ -z "$CLICKHOUSE_NATIVE_PORT" ] || [ -z "$CLICKHOUSE_USER" ]; then
     echo -e "${RED}Error: Missing required ClickHouse configuration in $ENV_FILE${NC}"
-    echo "Required variables: CLICKHOUSE_HOSTNAME, CLICKHOUSE_NATIVE_PORT, CLICKHOUSE_USER"
+    echo "Required variables: CLICKHOUSE_HOSTNAME, CLICKHOUSE_NATIVE_PORT (or CLICKHOUSE_PORT), CLICKHOUSE_USER"
     exit 1
 fi
 
@@ -140,80 +143,6 @@ setup_clickhouse_client() {
     fi
 }
 
-# Function to execute ClickHouse query
-execute_query() {
-    local query="$1"
-    local description="$2"
-    
-    if [ -n "$description" ]; then
-        echo "  $description"
-    fi
-    
-    if [ "$DRY_RUN" = true ]; then
-        echo "  [DRY RUN] Would execute: $query"
-        return
-    fi
-    
-    # Execute query with retry logic
-    local max_retries=3
-    local retry_count=0
-    local success=false
-    
-    while [ $retry_count -lt $max_retries ] && [ "$success" = "false" ]; do
-        if [ $retry_count -gt 0 ]; then
-            echo "  Retrying (attempt $((retry_count + 1))/$max_retries)..."
-            sleep 2
-        fi
-        
-        # Execute with timeout and connection settings
-        local cmd_output=""
-        local cmd_exit_code=0
-        
-        # Run the command and capture output
-        cmd_output=$(kubectl exec -n default $DEV_POD -- clickhouse-client \
-            --host="$CLICKHOUSE_HOSTNAME" \
-            --port="$CLICKHOUSE_NATIVE_PORT" \
-            --user="$CLICKHOUSE_USER" \
-            --password="$CLICKHOUSE_PASSWORD" \
-            --database="$DATABASE" \
-            --secure \
-            --connect_timeout=30 \
-            --receive_timeout=600 \
-            --send_timeout=300 \
-            --query="$query" 2>&1) || cmd_exit_code=$?
-        
-        # Display the output with appropriate coloring
-        if [ -n "$cmd_output" ]; then
-            echo "$cmd_output" | while IFS= read -r line; do
-                if [[ $line == *"Error"* ]] || [[ $line == *"Exception"* ]] || [[ $line == *"FAILED"* ]]; then
-                    echo -e "  ${RED}$line${NC}"
-                elif [[ $line == *"OPTIMIZE"* ]] || [[ $line == *"Ok."* ]]; then
-                    echo -e "  ${GREEN}$line${NC}"
-                elif [[ $line == *"rows in set"* ]] || [[ $line == *"Elapsed:"* ]]; then
-                    echo -e "  ${YELLOW}$line${NC}"
-                else
-                    echo "  $line"
-                fi
-            done
-        fi
-        
-        if [ $cmd_exit_code -eq 0 ]; then
-            success=true
-            echo -e "  ${GREEN}✓ Query executed successfully${NC}"
-        else
-            echo -e "  ${RED}✗ Query failed with exit code $cmd_exit_code${NC}"
-            retry_count=$((retry_count + 1))
-        fi
-    done
-    
-    if [ "$success" = "false" ]; then
-        echo -e "  ${RED}✗ Failed after $max_retries attempts${NC}"
-        return 1
-    fi
-    
-    return 0
-}
-
 # Function to get list of tables to optimize
 get_tables_to_optimize() {
     local query="SELECT name FROM system.tables WHERE database = '$DATABASE' AND engine NOT LIKE '%View' AND engine != 'MaterializedView' ORDER BY name"
@@ -255,16 +184,6 @@ get_tables_to_optimize() {
     fi
 }
 
-# Function to optimize a table
-optimize_table() {
-    local table_name="$1"
-    
-    echo -e "\n${YELLOW}Optimizing table: $table_name${NC}"
-    
-    local optimize_query="OPTIMIZE TABLE \`$table_name\` FINAL"
-    execute_query "$optimize_query" "Running OPTIMIZE TABLE FINAL..."
-}
-
 # Main execution
 main() {
     # Get credentials
@@ -298,23 +217,88 @@ main() {
         exit 0
     fi
     
-    echo -e "\n${GREEN}Optimizing tables...${NC}"
+    echo -e "\n${GREEN}Optimizing tables using single connection...${NC}"
     echo -e "${YELLOW}WARNING: This operation can be resource intensive and may take time for large tables${NC}"
-    
-    # Optimize each table
-    local success_count=0
-    local failure_count=0
-    
+
+    # Build a master script with all OPTIMIZE commands
+    local tmp_dir="/tmp/clickhouse-optimize-$$"
+    local master_script_pod="$tmp_dir/optimize.sql"
+    local master_script_local="/tmp/clickhouse-optimize-$$.sql"
+
+    echo "Building optimization script locally..."
+
+    # Build master script locally
+    > "$master_script_local"  # Create/truncate the file
+
+    local table_count=0
     while IFS= read -r table_name; do
         if [ -n "$table_name" ]; then
-            if optimize_table "$table_name"; then
-                success_count=$((success_count + 1))
-            else
-                failure_count=$((failure_count + 1))
-                echo -e "${RED}✗ Failed to optimize table: $table_name${NC}"
-            fi
+            ((table_count++))
+            echo "  [$table_count/$TABLE_COUNT] Adding OPTIMIZE for $table_name..."
+            echo "-- Optimizing table: $table_name" >> "$master_script_local"
+            echo "OPTIMIZE TABLE \`$table_name\` FINAL;" >> "$master_script_local"
+            echo "" >> "$master_script_local"
         fi
     done <<< "$TABLES"
+
+    echo "Copying optimization script to pod..."
+
+    # Create temporary directory in pod
+    kubectl exec -n default $DEV_POD -- mkdir -p "$tmp_dir"
+
+    # Copy the master script to pod
+    kubectl cp "$master_script_local" "default/$DEV_POD:$master_script_pod"
+
+    # Clean up local temp file
+    rm -f "$master_script_local"
+
+    echo "Executing all OPTIMIZE commands in single connection..."
+
+    # Execute the master script with a single connection
+    local cmd_output=""
+    local cmd_exit_code=0
+
+    cmd_output=$(kubectl exec -n default $DEV_POD -- clickhouse-client \
+        --host="$CLICKHOUSE_HOSTNAME" \
+        --port="$CLICKHOUSE_NATIVE_PORT" \
+        --user="$CLICKHOUSE_USER" \
+        --password="$CLICKHOUSE_PASSWORD" \
+        --database="$DATABASE" \
+        --secure \
+        --multiquery \
+        --connect_timeout=30 \
+        --receive_timeout=1800 \
+        --send_timeout=600 \
+        --progress \
+        --queries-file="$master_script_pod" 2>&1) || cmd_exit_code=$?
+
+    # Display the output with appropriate coloring
+    if [ -n "$cmd_output" ]; then
+        echo "$cmd_output" | while IFS= read -r line; do
+            if [[ $line == *"Optimizing table:"* ]]; then
+                echo -e "\n${YELLOW}$line${NC}"
+            elif [[ $line == *"Error"* ]] || [[ $line == *"Exception"* ]] || [[ $line == *"FAILED"* ]]; then
+                echo -e "  ${RED}$line${NC}"
+            elif [[ $line == *"OPTIMIZE"* ]] || [[ $line == *"Ok."* ]]; then
+                echo -e "  ${GREEN}$line${NC}"
+            elif [[ $line == *"rows in set"* ]] || [[ $line == *"Elapsed:"* ]]; then
+                echo -e "  ${YELLOW}$line${NC}"
+            else
+                echo "  $line"
+            fi
+        done
+    fi
+
+    # Cleanup
+    kubectl exec -n default $DEV_POD -- rm -rf "$tmp_dir" 2>/dev/null || true
+
+    local success_count=$TABLE_COUNT
+    local failure_count=0
+
+    if [ $cmd_exit_code -ne 0 ]; then
+        failure_count=$TABLE_COUNT
+        success_count=0
+    fi
     
     echo -e "\n${GREEN}Optimization Summary:${NC}"
     echo "  Successfully optimized: $success_count tables"

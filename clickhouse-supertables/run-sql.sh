@@ -170,84 +170,50 @@ setup_clickhouse_client() {
     fi
 }
 
-# Function to copy SQL file to pod and execute
-execute_sql_file() {
+# Function to copy all SQL files to pod
+copy_all_files_to_pod() {
+    local -a sql_files=("$@")
+    local tmp_dir="/tmp/clickhouse-sql-$$"
+
+    echo "Copying all SQL files to pod..."
+
+    # Create temporary directory in pod
+    kubectl exec -n default $DEV_POD -- mkdir -p "$tmp_dir"
+
+    # Copy all files at once
+    for sql_file in "${sql_files[@]}"; do
+        local file_name=$(basename "$sql_file")
+        kubectl cp "$sql_file" "default/$DEV_POD:$tmp_dir/$file_name" 2>/dev/null
+    done
+
+    echo "$tmp_dir"
+}
+
+# Function to execute SQL file using persistent connection
+execute_sql_file_in_session() {
     local sql_file=$1
+    local tmp_dir=$2
     local file_name=$(basename "$sql_file")
     local dir_name=$(dirname "$sql_file" | xargs basename)
-    
+
     echo -e "\n${YELLOW}Processing: $dir_name/$file_name${NC}"
-    
+
     if [ "$DRY_RUN" = true ]; then
         echo "  [DRY RUN] Would execute: $sql_file"
         return
     fi
-    
-    # Copy SQL file to pod
-    kubectl cp "$sql_file" "default/$DEV_POD:/tmp/$file_name"
-    
-    # Execute SQL file with retry logic
-    echo "  Executing SQL..."
-    local max_retries=3
-    local retry_count=0
-    local success=false
-    
-    while [ $retry_count -lt $max_retries ] && [ "$success" = "false" ]; do
-        if [ $retry_count -gt 0 ]; then
-            echo "  Retrying (attempt $((retry_count + 1))/$max_retries)..."
-            sleep 2
-        fi
-        
-        # Execute with timeout and connection settings
-        local cmd_output=""
-        local cmd_exit_code=0
-        
-        # Run the command and capture output
-        cmd_output=$(kubectl exec -n default $DEV_POD -- clickhouse-client \
-            --host="$CLICKHOUSE_HOSTNAME" \
-            --port="$CLICKHOUSE_NATIVE_PORT" \
-            --user="$CLICKHOUSE_USER" \
-            --password="$CLICKHOUSE_PASSWORD" \
-            --database="$DATABASE" \
-            --secure \
-            --multiquery \
-            --connect_timeout=30 \
-            --receive_timeout=300 \
-            --send_timeout=300 \
-            --progress \
-            --queries-file="/tmp/$file_name" 2>&1) || cmd_exit_code=$?
-        
-        # Display the output with appropriate coloring
-        if [ -n "$cmd_output" ]; then
-            echo "$cmd_output" | while IFS= read -r line; do
-                if [[ $line == *"Error"* ]] || [[ $line == *"Exception"* ]] || [[ $line == *"FAILED"* ]]; then
-                    echo -e "  ${RED}$line${NC}"
-                elif [[ $line == *"CREATE"* ]] || [[ $line == *"ALTER"* ]] || [[ $line == *"DROP"* ]] || [[ $line == *"Ok."* ]]; then
-                    echo -e "  ${GREEN}$line${NC}"
-                elif [[ $line == *"rows in set"* ]] || [[ $line == *"Elapsed:"* ]]; then
-                    echo -e "  ${YELLOW}$line${NC}"
-                else
-                    echo "  $line"
-                fi
-            done
-        fi
-        
-        if [ $cmd_exit_code -eq 0 ]; then
-            success=true
-            echo -e "  ${GREEN}✓ Query executed successfully${NC}"
-        else
-            echo -e "  ${RED}✗ Query failed with exit code $cmd_exit_code${NC}"
-            retry_count=$((retry_count + 1))
-        fi
-    done
-    
-    if [ "$success" = "false" ]; then
-        echo -e "  ${RED}✗ Failed after $max_retries attempts${NC}"
-        return 1
+
+    # Send the file path as a query to the persistent session
+    # Use SOURCE command which is more efficient
+    echo "SOURCE $tmp_dir/$file_name;"
+}
+
+# Function to cleanup temporary directory in pod
+cleanup_pod_files() {
+    local tmp_dir=$1
+    if [ -n "$tmp_dir" ] && [ "$tmp_dir" != "/" ]; then
+        kubectl exec -n default $DEV_POD -- rm -rf "$tmp_dir" 2>/dev/null || true
     fi
-    
-    # Clean up
-    kubectl exec -n default $DEV_POD -- rm -f "/tmp/$file_name"
 }
 
 # Function to get SQL files based on pattern or mode
@@ -268,38 +234,42 @@ get_sql_files() {
             return 1
         fi
     elif [ -n "$FILTER_PATTERN" ]; then
-        # Pattern mode - use full glob support with globstar
-        # Enable globstar if available (bash 4+)
+        # Pattern mode - use full glob support with globstar and brace expansion
+        # Enable globstar and extended globbing if available (bash 4+)
         if [ -n "$BASH_VERSION" ]; then
             shopt -s globstar nullglob 2>/dev/null || true
+            shopt -s extglob 2>/dev/null || true
         fi
         local -a files=()
 
         # Expand glob pattern relative to BASE_DIR
         cd "$BASE_DIR"
-        for file in $FILTER_PATTERN; do
-            # Only include regular files
+
+        # Use a subshell with eval to safely expand braces and globs
+        # This allows patterns like {encarta,wms-*}/*.sql to work
+        while IFS= read -r file; do
             if [ -f "$file" ]; then
                 # Exclude XX- files unless force is enabled
                 if [[ "$(basename "$file")" != XX-* ]]; then
                     files+=("$BASE_DIR/$file")
                 fi
             fi
-        done
+        done < <(bash -c "shopt -s globstar nullglob 2>/dev/null || true; for f in $FILTER_PATTERN; do [ -f \"\$f\" ] && echo \"\$f\"; done")
+
         cd - > /dev/null
 
-        # Sort and output files
+        # Sort and output files using natural sort (numeric-aware)
         if [ ${#files[@]} -gt 0 ]; then
-            printf '%s\n' "${files[@]}" | sort
+            printf '%s\n' "${files[@]}" | sort -V
         fi
 
-        # Disable globstar
+        # Disable globstar and extglob
         if [ -n "$BASH_VERSION" ]; then
-            shopt -u globstar nullglob 2>/dev/null || true
+            shopt -u globstar nullglob extglob 2>/dev/null || true
         fi
     else
         # Default mode - all SQL files except XX-
-        find "$BASE_DIR" -type f -name "*.sql" ! -name "XX-*" | sort
+        find "$BASE_DIR" -type f -name "*.sql" ! -name "XX-*" | sort -V
     fi
 }
 
@@ -344,22 +314,13 @@ main() {
     if [ -z "$SPECIFIC_FILE" ]; then
         local xx_count=0
         if [ -n "$FILTER_PATTERN" ]; then
-            # Check for XX- files using glob pattern
-            if [ -n "$BASH_VERSION" ]; then
-                shopt -s globstar nullglob 2>/dev/null || true
-            fi
+            # Check for XX- files using glob pattern with brace expansion
             cd "$BASE_DIR"
-            local -a xx_files=()
-            for file in $FILTER_PATTERN; do
-                if [ -f "$file" ] && [[ "$(basename "$file")" == XX-* ]]; then
-                    xx_files+=("$file")
-                fi
-            done
-            xx_count=${#xx_files[@]}
+
+            # Use a subshell to expand braces and globs
+            xx_count=$(bash -c "shopt -s globstar nullglob 2>/dev/null || true; count=0; for f in $FILTER_PATTERN; do if [ -f \"\$f\" ] && [[ \"\$(basename \"\$f\")\" == XX-* ]]; then ((count++)); fi; done; echo \$count")
+
             cd - > /dev/null
-            if [ -n "$BASH_VERSION" ]; then
-                shopt -u globstar nullglob 2>/dev/null || true
-            fi
         else
             # No pattern specified - check all directories
             xx_count=$(find "$BASE_DIR" -type f -name "XX-*.sql" | wc -l)
@@ -370,16 +331,114 @@ main() {
         fi
     fi
     
-    # Process files in alphabetical order
-    echo -e "\n${GREEN}Executing SQL files in alphabetical order...${NC}"
-    
-    while IFS= read -r sql_file; do
-        if [ -n "$sql_file" ]; then
-            execute_sql_file "$sql_file"
+    # Process files using a single persistent connection
+    echo -e "\n${GREEN}Executing SQL files using persistent connection...${NC}"
+
+    if [ "$DRY_RUN" = true ]; then
+        # For dry-run, just show what would be executed
+        while IFS= read -r sql_file; do
+            if [ -n "$sql_file" ]; then
+                local file_name=$(basename "$sql_file")
+                local dir_name=$(dirname "$sql_file" | xargs basename)
+                echo -e "\n${YELLOW}Processing: $dir_name/$file_name${NC}"
+                echo "  [DRY RUN] Would execute: $sql_file"
+            fi
+        done <<< "$SQL_FILES"
+    else
+        # Convert SQL_FILES to array
+        local -a sql_files_array=()
+        while IFS= read -r sql_file; do
+            if [ -n "$sql_file" ]; then
+                sql_files_array+=("$sql_file")
+            fi
+        done <<< "$SQL_FILES"
+
+        # Build a master SQL script by concatenating all files LOCALLY first
+        local tmp_dir="/tmp/clickhouse-sql-$$"
+        local master_script_pod="$tmp_dir/master.sql"
+        local master_script_local="/tmp/clickhouse-master-$$.sql"
+
+        echo "Building master execution script locally..."
+
+        # Build master script locally by concatenating all SQL files
+        > "$master_script_local"  # Create/truncate the file
+
+        local file_count=0
+        local total_files=${#sql_files_array[@]}
+
+        for sql_file in "${sql_files_array[@]}"; do
+            local file_name=$(basename "$sql_file")
+            local dir_name=$(dirname "$sql_file" | xargs basename)
+            ((file_count++))
+
+            echo "  [$file_count/$total_files] Adding $dir_name/$file_name..."
+
+            # Append to local master script
+            echo "-- Processing: $dir_name/$file_name" >> "$master_script_local"
+            cat "$sql_file" >> "$master_script_local"
+            echo "" >> "$master_script_local"
+        done
+
+        echo "Copying master script to pod..."
+
+        # Create temporary directory in pod
+        kubectl exec -n default $DEV_POD -- mkdir -p "$tmp_dir"
+
+        # Copy the master script to pod in one operation
+        kubectl cp "$master_script_local" "default/$DEV_POD:$master_script_pod"
+
+        # Clean up local temp file
+        rm -f "$master_script_local"
+
+        TMP_DIR="$tmp_dir"
+
+        echo "Executing all SQL files in single connection..."
+
+        # Execute the master script with a single connection
+        local cmd_output=""
+        local cmd_exit_code=0
+
+        cmd_output=$(kubectl exec -n default $DEV_POD -- clickhouse-client \
+            --host="$CLICKHOUSE_HOSTNAME" \
+            --port="$CLICKHOUSE_NATIVE_PORT" \
+            --user="$CLICKHOUSE_USER" \
+            --password="$CLICKHOUSE_PASSWORD" \
+            --database="$DATABASE" \
+            --secure \
+            --multiquery \
+            --connect_timeout=30 \
+            --receive_timeout=600 \
+            --send_timeout=600 \
+            --progress \
+            --queries-file="$master_script_pod" 2>&1) || cmd_exit_code=$?
+
+        # Display the output with appropriate coloring
+        if [ -n "$cmd_output" ]; then
+            echo "$cmd_output" | while IFS= read -r line; do
+                if [[ $line == *"Processing:"* ]]; then
+                    echo -e "\n${YELLOW}$line${NC}"
+                elif [[ $line == *"Error"* ]] || [[ $line == *"Exception"* ]] || [[ $line == *"FAILED"* ]]; then
+                    echo -e "  ${RED}$line${NC}"
+                elif [[ $line == *"CREATE"* ]] || [[ $line == *"ALTER"* ]] || [[ $line == *"DROP"* ]] || [[ $line == *"Ok."* ]]; then
+                    echo -e "  ${GREEN}$line${NC}"
+                elif [[ $line == *"rows in set"* ]] || [[ $line == *"Elapsed:"* ]]; then
+                    echo -e "  ${YELLOW}$line${NC}"
+                else
+                    echo "  $line"
+                fi
+            done
         fi
-    done <<< "$SQL_FILES"
-    
-    echo -e "\n${GREEN}✓ All SQL files processed successfully!${NC}"
+
+        # Cleanup
+        cleanup_pod_files "$TMP_DIR"
+
+        if [ $cmd_exit_code -eq 0 ]; then
+            echo -e "\n${GREEN}✓ All SQL files processed successfully!${NC}"
+        else
+            echo -e "\n${RED}✗ Execution failed with exit code $cmd_exit_code${NC}"
+            exit 1
+        fi
+    fi
 }
 
 # Run main function
