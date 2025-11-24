@@ -156,7 +156,8 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'ob_order', table: 'wms_ob_order' },
       { namespace: 'public', topic: 'ob_order_progress', table: 'wms_ob_order_progress' },
       { namespace: 'public', topic: 'ob_order_lineitem', table: 'wms_ob_order_lineitem' },
-      { namespace: 'public', topic: 'ob_load_unpick_item', table: 'wms_ob_load_unpick_item' }
+      { namespace: 'public', topic: 'ob_load_unpick_item', table: 'wms_ob_load_unpick_item' },
+      { namespace: 'public', topic: 'ob_gin_line', table: 'wms_ob_gin_line' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
