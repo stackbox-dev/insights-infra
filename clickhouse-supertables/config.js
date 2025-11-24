@@ -5,7 +5,6 @@ const baseConfig = {
   'connector.class': 'com.clickhouse.kafka.connect.ClickHouseSinkConnector',
   exactlyOnce: 'false',
   ssl: 'true',
-  username: 'avnadmin',
 
   // Tombstone filtering to handle ClickHouse connector bug
   transforms: 'dropNull',
@@ -295,6 +294,7 @@ function buildConfig(sinkConfig) {
     // Connection settings from process.env
     hostname: process.env.CLICKHOUSE_HOSTNAME,
     port: process.env.CLICKHOUSE_HTTP_PORT || process.env.CLICKHOUSE_PORT,
+    username: process.env.CLICKHOUSE_USER,
     password: process.env.CLICKHOUSE_ADMIN_PASSWORD,
     database: process.env.CLICKHOUSE_DATABASE,
 
