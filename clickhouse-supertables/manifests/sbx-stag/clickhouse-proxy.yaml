@@ -11,12 +11,19 @@ data:
       timeout client  1m
       timeout server  1m
 
-    frontend clickhouse_front
+    frontend clickhouse_native
       bind *:9000
-      default_backend clickhouse_backend
+      default_backend clickhouse_native_backend
 
-    backend clickhouse_backend
+    backend clickhouse_native_backend
       server clickhouse sbx-stag-clickhouse-stackbox.h.aivencloud.com:22154 check
+
+    frontend clickhouse_http
+      bind *:8080
+      default_backend clickhouse_http_backend
+
+    backend clickhouse_http_backend
+      server clickhouse sbx-stag-clickhouse-stackbox.h.aivencloud.com:22155 check ssl verify none
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -38,6 +45,7 @@ spec:
           image: haproxy:latest
           ports:
             - containerPort: 9000
+            - containerPort: 8080
           volumeMounts:
             - name: config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
@@ -61,5 +69,9 @@ spec:
       targetPort: 9000
       protocol: TCP
       name: clickhouse
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: clickhouse-http
   selector:
     app: clickhouse-tcp-proxy
