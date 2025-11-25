@@ -293,7 +293,7 @@ function buildConfig(sinkConfig) {
 
     // Connection settings from process.env
     hostname: process.env.CLICKHOUSE_HOSTNAME,
-    port: process.env.CLICKHOUSE_HTTP_PORT || process.env.CLICKHOUSE_PORT,
+    port: process.env.CLICKHOUSE_HTTP_PORT,
     username: process.env.CLICKHOUSE_USER,
     password: process.env.CLICKHOUSE_ADMIN_PASSWORD,
     database: process.env.CLICKHOUSE_DATABASE,
@@ -310,7 +310,7 @@ function buildConfig(sinkConfig) {
 
     // Consumer settings from process.env
     'consumer.sasl.jaas.config': `org.apache.kafka.common.security.scram.ScramLoginModule required username="${process.env.CLUSTER_USER_NAME}" password="${process.env.CLUSTER_PASSWORD}";`,
-    'consumer.ssl.truststore.password': process.env.AIVEN_TRUSTSTORE
+    'consumer.ssl.truststore.password': process.env.AIVEN_TRUSTSTORE_PASSWORD
   };
 
   // Add DLQ topic if specified

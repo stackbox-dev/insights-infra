@@ -68,7 +68,7 @@ function validateEnv() {
   const required = [
     'TOPIC_PREFIX',
     'CLICKHOUSE_HOSTNAME',
-    'CLICKHOUSE_PORT',
+    'CLICKHOUSE_HTTP_PORT',
     'CLICKHOUSE_USER',
     'CLICKHOUSE_DATABASE',
     'SCHEMA_REGISTRY_URL',
@@ -77,7 +77,7 @@ function validateEnv() {
     'SCHEMA_REGISTRY_AUTH',
     'CLUSTER_USER_NAME',
     'CLUSTER_PASSWORD',
-    'AIVEN_TRUSTSTORE'
+    'AIVEN_TRUSTSTORE_PASSWORD'
   ];
 
   const missing = required.filter(key => !process.env[key]);

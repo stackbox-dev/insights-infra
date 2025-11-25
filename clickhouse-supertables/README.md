@@ -119,16 +119,17 @@ Each environment file (`.env`) must contain:
 ### Required Variables
 
 ```bash
-# Topic Configuration
+# Kafka Connect API URL (manager.js connects to this to configure connectors)
+CP_CONNECT_URL=http://localhost:8083
+
+# Connector Configuration (these are used to configure the connector itself)
 TOPIC_PREFIX=sbx_uat
 
 # ClickHouse Connection
 CLICKHOUSE_HOSTNAME=your-clickhouse-host.com
-CLICKHOUSE_PORT=22155
+CLICKHOUSE_HTTP_PORT=22156
+CLICKHOUSE_USER=avnadmin
 CLICKHOUSE_DATABASE=sbx_uat
-
-# Kafka Connect
-CP_CONNECT_URL=http://localhost:8083
 
 # Schema Registry
 SCHEMA_REGISTRY_URL=https://your-schema-registry.com:22159
@@ -138,7 +139,7 @@ CLICKHOUSE_ADMIN_PASSWORD=your_password
 SCHEMA_REGISTRY_AUTH=username:password
 CLUSTER_USER_NAME=avnconnect
 CLUSTER_PASSWORD=your_password
-AIVEN_TRUSTSTORE=secret
+AIVEN_TRUSTSTORE_PASSWORD=secret
 ```
 
 ### Fetching Credentials from Kubernetes
