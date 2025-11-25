@@ -12,18 +12,20 @@ data:
       timeout server  1m
 
     frontend clickhouse_native
-      bind *:9000
+      bind *:22154
       default_backend clickhouse_native_backend
 
     backend clickhouse_native_backend
       server clickhouse sbx-prod-clickhouse-stackbox.h.aivencloud.com:22154 check
 
-    frontend clickhouse_http
-      bind *:8080
-      default_backend clickhouse_http_backend
+    frontend clickhouse_https
+      bind *:22155
+      mode tcp
+      default_backend clickhouse_https_backend
 
-    backend clickhouse_http_backend
-      server clickhouse sbx-prod-clickhouse-stackbox.h.aivencloud.com:22155 check ssl verify none
+    backend clickhouse_https_backend
+      mode tcp
+      server clickhouse sbx-prod-clickhouse-stackbox.h.aivencloud.com:22155 check
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -44,8 +46,8 @@ spec:
         - name: haproxy
           image: haproxy:latest
           ports:
-            - containerPort: 9000
-            - containerPort: 8080
+            - containerPort: 22154
+            - containerPort: 22155
           volumeMounts:
             - name: config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
@@ -66,12 +68,16 @@ spec:
   type: LoadBalancer
   ports:
     - port: 9000
-      targetPort: 9000
+      targetPort: 22154
       protocol: TCP
       name: clickhouse
-    - port: 80
-      targetPort: 8080
+    - port: 22154
+      targetPort: 22154
       protocol: TCP
-      name: clickhouse-http
+      name: clickhouse-native
+    - port: 22155
+      targetPort: 22155
+      protocol: TCP
+      name: clickhouse-https
   selector:
     app: clickhouse-tcp-proxy

@@ -5,7 +5,8 @@
   "main": "manager.js",
   "type": "module",
   "scripts": {
-    "start": "node manager.js"
+    "start": "node manager.js",
+    "clickhouse": "node clickhouse-cli.js"
   },
   "keywords": [
     "clickhouse",
@@ -19,13 +20,15 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "chalk": "^5.3.0",
+    "date-fns": "^3.0.0",
+    "fast-glob": "^3.3.2",
+    "glob": "^10.3.10",
     "ink": "^4.4.1",
-    "ink-text-input": "^5.0.1",
     "ink-select-input": "^5.0.0",
     "ink-spinner": "^5.0.0",
     "ink-table": "^3.1.0",
-    "react": "^18.2.0",
-    "chalk": "^5.3.0",
-    "date-fns": "^3.0.0"
+    "ink-text-input": "^5.0.1",
+    "react": "^18.2.0"
   }
 }
