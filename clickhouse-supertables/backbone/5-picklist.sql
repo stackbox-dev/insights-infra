@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS backbone_picklist
 (
     id Int64 DEFAULT 0,
     planId Int32 DEFAULT 0,
-    index Int32 DEFAULT 0,
+    `index` Int32 DEFAULT 0,
     active Bool DEFAULT true,
     tripTime Int32 DEFAULT 0,
     serviceTime Int32 DEFAULT 0,

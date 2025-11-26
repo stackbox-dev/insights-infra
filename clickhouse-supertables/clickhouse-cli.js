@@ -158,11 +158,18 @@ async function getSQLFilesInFolder(folderName) {
 
   return files
     .filter(f => !f.startsWith('XX-'))
-    .sort()
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
     .map(f => ({
       name: f,
       path: join(folderPath, f),
     }));
+}
+
+// Get list of databases
+async function getDatabases(config) {
+  const query = `SELECT name FROM system.databases WHERE name NOT IN ('system', 'INFORMATION_SCHEMA', 'information_schema') ORDER BY name`;
+  const result = await executeClickHouseQuery({ ...config, database: 'system' }, query);
+  return result.trim().split('\n').filter(Boolean);
 }
 
 // Get list of tables
@@ -190,11 +197,13 @@ async function getTables(config, filter = null) {
 // Main App Component
 function App({ clickhouseConfig, inputType }) {
   const { exit } = useApp();
-  const [screen, setScreen] = useState('main');
-  const [config, setConfig] = useState(null);
+  const needsDbSelection = clickhouseConfig.database === 'default' || !clickhouseConfig.database;
+  const [screen, setScreen] = useState(needsDbSelection ? 'select_db' : 'main');
+  const [config, setConfig] = useState(needsDbSelection ? null : clickhouseConfig);
+  const [databases, setDatabases] = useState([]);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(needsDbSelection);
+  const [status, setStatus] = useState(needsDbSelection ? 'Loading databases...' : '');
   const [tables, setTables] = useState([]);
   const [folders, setFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
@@ -203,6 +212,8 @@ function App({ clickhouseConfig, inputType }) {
   const [inlineSQLMode, setInlineSQLMode] = useState(false);
   const [executionLog, setExecutionLog] = useState([]);
   const [selectedFileIndices, setSelectedFileIndices] = useState(new Set());
+  const [selectedTableIndices, setSelectedTableIndices] = useState(new Set());
+  const [tablesToDelete, setTablesToDelete] = useState([]);
 
   // Keyboard shortcuts
   useInput((input, key) => {
@@ -210,7 +221,7 @@ function App({ clickhouseConfig, inputType }) {
 
     // ESC to go back
     if (key.escape) {
-      if (screen === 'main') {
+      if (screen === 'main' || screen === 'select_db') {
         exit();
       } else if (screen === 'folder_files') {
         setScreen('browse_folder');
@@ -221,6 +232,13 @@ function App({ clickhouseConfig, inputType }) {
         setScreen('main');
         setInlineSQLMode(false);
         setInlineSQL('');
+      } else if (screen === 'confirm_delete') {
+        setScreen('delete_tables');
+        setTablesToDelete([]);
+      } else if (screen === 'delete_tables') {
+        setScreen('main');
+        setTables([]);
+        setSelectedTableIndices(new Set());
       } else {
         setScreen('main');
         setTables([]);
@@ -239,21 +257,40 @@ function App({ clickhouseConfig, inputType }) {
       setExecutionLog([]);
     }
 
-    // 'q' to quit from main menu
-    if (input === 'q' && screen === 'main') {
+    // 'q' to quit from main menu or db selection
+    if (input === 'q' && (screen === 'main' || screen === 'select_db')) {
       exit();
     }
   });
 
+  // Load databases if needed
   useEffect(() => {
-    setConfig(clickhouseConfig);
-  }, [clickhouseConfig]);
+    if (needsDbSelection) {
+      getDatabases(clickhouseConfig)
+        .then(dbs => {
+          setDatabases(dbs);
+          setLoading(false);
+          setStatus('');
+        })
+        .catch(err => {
+          setError(err.message);
+          setLoading(false);
+        });
+    }
+  }, [clickhouseConfig, needsDbSelection]);
+
+  const handleDatabaseSelect = (db) => {
+    const newConfig = { ...clickhouseConfig, database: db };
+    setConfig(newConfig);
+    setScreen('main');
+  };
 
   const mainMenuItems = [
     { label: '📁 Browse & Execute SQL by Folder', value: 'browse_folder' },
     { label: '✏️  Execute Inline SQL', value: 'inline_sql' },
     { label: '⚡ Optimize Tables', value: 'optimize' },
     { label: '📊 Show Tables', value: 'tables' },
+    { label: '🗑️  Delete Tables', value: 'delete_tables' },
     { label: '❌ Exit', value: 'exit' },
   ];
 
@@ -279,6 +316,10 @@ function App({ clickhouseConfig, inputType }) {
       } else if (item.value === 'tables') {
         const tableList = await getTables(config);
         setTables(tableList);
+      } else if (item.value === 'delete_tables') {
+        const tableList = await getTables(config);
+        setTables(tableList);
+        setSelectedTableIndices(new Set());
       }
     } catch (err) {
       setError(err.message);
@@ -436,11 +477,90 @@ function App({ clickhouseConfig, inputType }) {
     }
   };
 
-  // Error state
-  if (error && !config) {
+  const handleDeleteTables = async (tablesToDrop) => {
+    setLoading(true);
+    setError(null);
+    setExecutionLog([]);
+    setStatus(`Deleting ${tablesToDrop.length} table(s)...`);
+
+    const logs = [];
+    try {
+      let successCount = 0;
+
+      for (const table of tablesToDrop) {
+        setStatus(`Deleting ${table} (${successCount + 1}/${tablesToDrop.length})...`);
+        logs.push(`[${successCount + 1}/${tablesToDrop.length}] Dropping: ${table}`);
+        setExecutionLog([...logs]);
+
+        await executeClickHouseQuery(config, `DROP TABLE IF EXISTS \`${table}\``, {
+          max_execution_time: 600,
+        });
+
+        logs.push(`✓ Dropped: ${table}`);
+        setExecutionLog([...logs]);
+
+        successCount++;
+      }
+
+      logs.push('');
+      logs.push(`✅ Successfully deleted ${successCount} table(s)!`);
+      setExecutionLog([...logs]);
+      setStatus('Deletion completed. Review logs below.');
+      setLoading(false);
+      setTablesToDelete([]);
+      setSelectedTableIndices(new Set());
+      setScreen('logs');
+    } catch (err) {
+      logs.push('');
+      logs.push(`❌ Error: ${err.message}`);
+      setExecutionLog([...logs]);
+      setError(err.message);
+      setLoading(false);
+      setScreen('logs');
+    }
+  };
+
+  // Error state during database loading
+  if (error && !config && screen === 'select_db') {
     return h(Box, { flexDirection: 'column', padding: 1 },
       h(Text, { color: 'red' }, `❌ Error: ${error}`),
-      h(Text, { color: 'yellow' }, 'Usage: npm run clickhouse https://user:password@hostname:port/database')
+      h(Text, { color: 'yellow' }, 'Could not load databases. Check your connection.')
+    );
+  }
+
+  // Database selection screen
+  if (screen === 'select_db') {
+    if (loading) {
+      return h(Box, { padding: 1 },
+        h(Spinner, { type: 'dots' }),
+        h(Text, null, ' Loading databases...')
+      );
+    }
+
+    const dbItems = databases.map(db => ({
+      key: `db-${db}`,
+      label: `📁 ${db}`,
+      value: db
+    }));
+    // Only add default if it's not already in the list
+    if (!databases.includes('default')) {
+      dbItems.push({ key: 'db-default-fallback', label: '📁 default', value: 'default' });
+    }
+
+    return h(Box, { flexDirection: 'column', padding: 1 },
+      h(Box, { borderStyle: 'round', borderColor: 'cyan', padding: 1, marginBottom: 1 },
+        h(Box, { flexDirection: 'column' },
+          h(Text, { bold: true, color: 'cyan' }, '🗄️  ClickHouse CLI'),
+          h(Text, { dimColor: true }, `Host: ${clickhouseConfig.hostname}:${clickhouseConfig.port}`),
+          h(Text, { dimColor: true, color: 'yellow' }, 'No database specified')
+        )
+      ),
+      h(Text, { bold: true }, 'Select a database:'),
+      h(Text, { dimColor: true, marginBottom: 1 }, 'Press Esc to quit'),
+      h(SelectInput, {
+        items: dbItems,
+        onSelect: (item) => handleDatabaseSelect(item.value)
+      })
     );
   }
 
@@ -675,6 +795,101 @@ function App({ clickhouseConfig, inputType }) {
         )
       );
     }
+  }
+
+  // Delete tables screen (multi-select)
+  if (screen === 'delete_tables' && !loading && tables.length > 0) {
+    const allItems = [
+      ...tables.map((table, idx) => {
+        const isSelected = selectedTableIndices.has(idx);
+        return {
+          key: `table-${idx}`,
+          label: `${isSelected ? '☑' : '☐'} ${table}`,
+          value: { type: 'table', idx, name: table }
+        };
+      }),
+      { key: 'sep', label: '─'.repeat(40), value: { type: 'separator' } },
+      { key: 'delete-sel', label: `🗑️  Delete Selected (${selectedTableIndices.size})`, value: { type: 'action', action: 'delete_selected' } },
+      { key: 'clear', label: '🔄 Clear Selection', value: { type: 'action', action: 'clear' } },
+      { key: 'back', label: '⬅️  Back to Main Menu', value: { type: 'action', action: 'back' } },
+    ];
+
+    children.push(
+      h(Box, { key: 'delete_tables', flexDirection: 'column' },
+        h(Text, { bold: true, color: 'red' }, '🗑️  Delete Tables'),
+        h(Text, { color: 'yellow', marginBottom: 1 }, `⚠️  WARNING: This will permanently delete tables!`),
+        h(Text, { dimColor: true, marginBottom: 1 }, `Enter: toggle | Esc: back | ${selectedTableIndices.size}/${tables.length} selected`),
+        h(SelectInput, {
+          items: allItems,
+          onSelect: (item) => {
+            if (item.value.type === 'table') {
+              const idx = item.value.idx;
+              const newSelection = new Set(selectedTableIndices);
+              if (newSelection.has(idx)) {
+                newSelection.delete(idx);
+              } else {
+                newSelection.add(idx);
+              }
+              setSelectedTableIndices(newSelection);
+            } else if (item.value.type === 'action') {
+              const action = item.value.action;
+              if (action === 'delete_selected') {
+                if (selectedTableIndices.size === 0) {
+                  setError('No tables selected');
+                  return;
+                }
+                const selectedTables = Array.from(selectedTableIndices).sort((a, b) => a - b).map(idx => tables[idx]);
+                setTablesToDelete(selectedTables);
+                setScreen('confirm_delete');
+              } else if (action === 'clear') {
+                setSelectedTableIndices(new Set());
+              } else if (action === 'back') {
+                setScreen('main');
+                setTables([]);
+                setSelectedTableIndices(new Set());
+              }
+            }
+          }
+        })
+      )
+    );
+  }
+
+  // Confirm delete screen
+  if (screen === 'confirm_delete' && !loading && tablesToDelete.length > 0) {
+    const tableList = tablesToDelete.map((table, idx) =>
+      h(Text, { key: `del-${idx}`, color: 'red' }, `  • ${table}`)
+    );
+
+    const confirmItems = [
+      { key: 'cancel', label: '❌ Cancel - Go Back', value: 'cancel' },
+      { key: 'confirm', label: '✅ Yes, Delete These Tables', value: 'confirm' },
+    ];
+
+    children.push(
+      h(Box, { key: 'confirm_delete', flexDirection: 'column' },
+        h(Box, { borderStyle: 'round', borderColor: 'red', padding: 1, marginBottom: 1, flexDirection: 'column' },
+          h(Text, { bold: true, color: 'red' }, '⚠️  CONFIRM DELETION'),
+          h(Text, { color: 'yellow' }, `You are about to DELETE ${tablesToDelete.length} table(s):`)
+        ),
+        h(Box, { flexDirection: 'column', marginBottom: 1 },
+          ...tableList
+        ),
+        h(Text, { color: 'red', bold: true, marginBottom: 1 }, 'This action CANNOT be undone!'),
+        h(Text, { dimColor: true, marginBottom: 1 }, 'Esc: cancel'),
+        h(SelectInput, {
+          items: confirmItems,
+          onSelect: (item) => {
+            if (item.value === 'cancel') {
+              setScreen('delete_tables');
+              setTablesToDelete([]);
+            } else if (item.value === 'confirm') {
+              handleDeleteTables(tablesToDelete);
+            }
+          }
+        })
+      )
+    );
   }
 
   // Logs/Results screen
