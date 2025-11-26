@@ -26,6 +26,15 @@ data:
     backend clickhouse_https_backend
       mode tcp
       server clickhouse nestle-prod-clickhouse-stackbox.l.aivencloud.com:22155 check
+
+    frontend clickhouse_mysql
+      bind *:22156
+      mode tcp
+      default_backend clickhouse_mysql_backend
+
+    backend clickhouse_mysql_backend
+      mode tcp
+      server clickhouse nestle-prod-clickhouse-stackbox.l.aivencloud.com:22156 check
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -48,6 +57,7 @@ spec:
           ports:
             - containerPort: 22154
             - containerPort: 22155
+            - containerPort: 22156
           volumeMounts:
             - name: config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
@@ -79,5 +89,9 @@ spec:
       targetPort: 22155
       protocol: TCP
       name: clickhouse-https
+    - port: 22156
+      targetPort: 22156
+      protocol: TCP
+      name: clickhouse-mysql
   selector:
     app: clickhouse-tcp-proxy

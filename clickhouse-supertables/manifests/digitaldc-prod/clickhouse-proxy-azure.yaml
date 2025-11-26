@@ -26,6 +26,15 @@ data:
     backend clickhouse_https_backend
       mode tcp
       server clickhouse digitaldc-clickhouse-hul-samadhan.l.aivencloud.com:25651 check
+
+    frontend clickhouse_mysql
+      bind *:25652
+      mode tcp
+      default_backend clickhouse_mysql_backend
+
+    backend clickhouse_mysql_backend
+      mode tcp
+      server clickhouse digitaldc-clickhouse-hul-samadhan.l.aivencloud.com:25652 check
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -48,6 +57,7 @@ spec:
           ports:
             - containerPort: 25650
             - containerPort: 25651
+            - containerPort: 25652
           volumeMounts:
             - name: config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
@@ -79,5 +89,9 @@ spec:
       targetPort: 25651
       protocol: TCP
       name: clickhouse-https
+    - port: 25652
+      targetPort: 25652
+      protocol: TCP
+      name: clickhouse-mysql
   selector:
     app: clickhouse-tcp-proxy
