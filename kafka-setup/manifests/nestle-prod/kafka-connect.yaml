@@ -15,9 +15,14 @@ spec:
       labels:
         app: cp-connect
     spec:
+      tolerations:
+        - key: "cloud.google.com/gke-spot"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
       containers:
         - name: cp-connect
-          image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-kafka-connect:bf7085eff8b4ba2647aeea342371e77962975bde
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/devops-kafka-connect:06b578e905d93ccd232d80b16c1070fd782fccc0
           imagePullPolicy: Always
           ports:
             - containerPort: 8083
@@ -206,6 +211,11 @@ spec:
       labels:
         app: cp-connect-ui
     spec:
+      tolerations:
+        - key: "cloud.google.com/gke-spot"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
       containers:
         - name: cp-connect-ui
           image: landoop/kafka-connect-ui:latest
