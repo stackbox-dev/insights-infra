@@ -4,10 +4,7 @@
   "description": "Interactive manager for ClickHouse sink connectors in Kafka Connect",
   "main": "manager.js",
   "type": "module",
-  "scripts": {
-    "start": "node manager.js",
-    "clickhouse": "node clickhouse-cli.js"
-  },
+  "scripts": {},
   "keywords": [
     "clickhouse",
     "kafka-connect",

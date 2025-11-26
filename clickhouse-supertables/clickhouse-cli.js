@@ -15,6 +15,118 @@ import { glob } from 'glob';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Searchable Select Component with jump-to-actions feature
+// Press Tab to jump to action items at the bottom (Execute, Clear, Back, etc.)
+// Press / to filter/search items
+function SearchableSelect({ items, onSelect, searchPlaceholder = 'Type to filter...', showSearch = true }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [jumpToActions, setJumpToActions] = useState(false);
+
+  // Separate action items from regular items
+  const actionItems = items.filter(item =>
+    item.value?.type === 'action' || item.value?.type === 'separator' ||
+    item.value === '__back__' || item.value === '__all__'
+  );
+  const regularItems = items.filter(item =>
+    item.value?.type !== 'action' && item.value?.type !== 'separator' &&
+    item.value !== '__back__' && item.value !== '__all__'
+  );
+
+  // Filter regular items based on search term
+  const filteredRegularItems = searchTerm
+    ? regularItems.filter(item => {
+        const label = item.label.toLowerCase();
+        const search = searchTerm.toLowerCase();
+        return label.includes(search);
+      })
+    : regularItems;
+
+  // Build final item list based on mode
+  let displayItems;
+  if (jumpToActions) {
+    // Show only action items when jumped to actions
+    displayItems = actionItems;
+  } else if (searchTerm) {
+    // Show filtered items + actions when searching
+    displayItems = [...filteredRegularItems, ...actionItems];
+  } else {
+    // Show all items normally
+    displayItems = items;
+  }
+
+  // Handle keyboard input
+  useInput((input, key) => {
+    // Tab to toggle jump to actions
+    if (key.tab) {
+      setJumpToActions(!jumpToActions);
+      setSearchTerm('');
+      setIsSearching(false);
+      return;
+    }
+
+    if (!showSearch) return;
+
+    // '/' to start searching (only when not in jump mode)
+    if (input === '/' && !isSearching && !jumpToActions) {
+      setIsSearching(true);
+      return;
+    }
+
+    // Escape to clear search and exit search mode
+    if (key.escape && isSearching) {
+      setSearchTerm('');
+      setIsSearching(false);
+      return;
+    }
+
+    // Escape to exit jump mode
+    if (key.escape && jumpToActions) {
+      setJumpToActions(false);
+      return;
+    }
+  });
+
+  if (!showSearch) {
+    return h(SelectInput, { items, onSelect });
+  }
+
+  return h(Box, { flexDirection: 'column' },
+    // Status row showing current mode
+    h(Box, { marginBottom: 1 },
+      jumpToActions
+        ? h(Text, { color: 'cyan', bold: true }, '⚡ Actions (Tab to go back to list)')
+        : isSearching
+          ? h(Box, null,
+              h(Text, { dimColor: true }, '🔍 '),
+              h(TextInput, {
+                value: searchTerm,
+                onChange: setSearchTerm,
+                placeholder: searchPlaceholder,
+                focus: true
+              })
+            )
+          : h(Text, { dimColor: true }, `Tab: jump to actions | /: search (${regularItems.length} items)`)
+    ),
+    // Show filtered count if searching
+    searchTerm && h(Text, { dimColor: true, marginBottom: 1 },
+      `Showing ${filteredRegularItems.length} matches`
+    ),
+    // Select input with appropriate items
+    h(SelectInput, {
+      items: displayItems.length > 0 ? displayItems : [{ label: 'No matches found', value: '__no_match__' }],
+      onSelect: (item) => {
+        if (item.value === '__no_match__') return;
+        // Reset jump mode when an action is selected
+        if (jumpToActions) {
+          setJumpToActions(false);
+        }
+        onSelect(item);
+      }
+    })
+  );
+}
+
 // Load environment variables from file
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) {
@@ -668,9 +780,10 @@ function App({ clickhouseConfig, inputType }) {
     children.push(
       h(Box, { key: 'folder_files', flexDirection: 'column' },
         h(Text, { bold: true }, `Files in ${selectedFolder}:`),
-        h(Text, { dimColor: true, marginBottom: 1 }, `Enter: toggle | Esc: back | ${selectedFileIndices.size}/${folderFiles.length} selected`),
-        h(SelectInput, {
+        h(Text, { dimColor: true, marginBottom: 1 }, `Enter: toggle | Tab: jump to actions | Esc: back | ${selectedFileIndices.size}/${folderFiles.length} selected`),
+        h(SearchableSelect, {
           items: allItems,
+          searchPlaceholder: 'Filter files...',
           onSelect: (item) => {
             if (item.value.type === 'file') {
               const idx = item.value.idx;
@@ -740,9 +853,10 @@ function App({ clickhouseConfig, inputType }) {
       h(Box, { key: 'optimize', flexDirection: 'column' },
         h(Text, { bold: true, marginBottom: 1 }, `Select table(s) to optimize:`),
         h(Text, { color: 'yellow', marginBottom: 1 }, `⚠️  Warning: This operation can be resource intensive!`),
-        h(Text, { dimColor: true, marginBottom: 1 }, `Total tables: ${tables.length}`),
-        h(SelectInput, {
+        h(Text, { dimColor: true, marginBottom: 1 }, `Total tables: ${tables.length} | Tab: jump to actions`),
+        h(SearchableSelect, {
           items: selectItems,
+          searchPlaceholder: 'Filter tables...',
           onSelect: (item) => {
             if (item.value === '__back__') {
               setScreen('main');
@@ -818,9 +932,10 @@ function App({ clickhouseConfig, inputType }) {
       h(Box, { key: 'delete_tables', flexDirection: 'column' },
         h(Text, { bold: true, color: 'red' }, '🗑️  Delete Tables'),
         h(Text, { color: 'yellow', marginBottom: 1 }, `⚠️  WARNING: This will permanently delete tables!`),
-        h(Text, { dimColor: true, marginBottom: 1 }, `Enter: toggle | Esc: back | ${selectedTableIndices.size}/${tables.length} selected`),
-        h(SelectInput, {
+        h(Text, { dimColor: true, marginBottom: 1 }, `Enter: toggle | Tab: jump to actions | Esc: back | ${selectedTableIndices.size}/${tables.length} selected`),
+        h(SearchableSelect, {
           items: allItems,
+          searchPlaceholder: 'Filter tables...',
           onSelect: (item) => {
             if (item.value.type === 'table') {
               const idx = item.value.idx;

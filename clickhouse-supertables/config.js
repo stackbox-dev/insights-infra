@@ -35,7 +35,7 @@ const baseConfig = {
 };
 
 const defaultPerformanceConfig = {
-  'tasks.max': '2',
+  'tasks.max': '1',
   bufferFlushTime: '30000',
   bufferSize: '100000',
   clickhouseSettings: 'date_time_input_format=best_effort,max_insert_block_size=100000',
@@ -195,62 +195,51 @@ const sinkConfigurations = {
     performanceConfig: defaultPerformanceConfig
   },
 
+  tms_lht: {
+    service: 'tms_lht',
+    topicMappings: [
+      { namespace: 'public', topic: 'invoice', table: 'tms_lht_invoice' },
+      { namespace: 'public', topic: 'invoice_state', table: 'tms_lht_invoice_state' },
+      { namespace: 'public', topic: 'invoice_line', table: 'tms_lht_invoice_line' },
+      { namespace: 'public', topic: 'load', table: 'tms_lht_load' },
+      { namespace: 'public', topic: 'load_line', table: 'tms_lht_load_line' },
+      { namespace: 'public', topic: 'ord', table: 'tms_lht_ord' },
+      { namespace: 'public', topic: 'ord_state', table: 'tms_lht_ord_state' },
+      { namespace: 'public', topic: 'line', table: 'tms_lht_line' },
+      { namespace: 'public', topic: 'line_state', table: 'tms_lht_line_state' },
+      { namespace: 'public', topic: 'contract', table: 'tms_lht_contract' },
+      { namespace: 'public', topic: 'contract_line', table: 'tms_lht_contract_line' }
+    ],
+    dlqTopic: 'dlq-tms-lht-clickhouse',
+    performanceConfig: defaultPerformanceConfig
+  },
+
   tms: {
     service: 'tms',
     topicMappings: [
+      { namespace: 'public', topic: 'retailer', table: 'tms_retailer' },
+      { namespace: 'public', topic: 'skuMaster', table: 'tms_skuMaster' },
+      { namespace: 'public', topic: 'picklistRetailer', table: 'tms_picklistRetailer' },
+      { namespace: 'public', topic: 'trip_invoice', table: 'tms_trip_invoice' },
+      { namespace: 'public', topic: 'picklist', table: 'tms_picklist' },
+      { namespace: 'public', topic: 'plan', table: 'tms_plan' },
+      { namespace: 'public', topic: 'picklistAssignment', table: 'tms_picklistAssignment' },
+      { namespace: 'public', topic: 'vehicle', table: 'tms_vehicle' },
+      { namespace: 'public', topic: 'vehicleType', table: 'tms_vehicleType' },
       { namespace: 'public', topic: 'invoice', table: 'tms_invoice' },
-      { namespace: 'public', topic: 'invoice_state', table: 'tms_invoice_state' },
-      { namespace: 'public', topic: 'invoice_line', table: 'tms_invoice_line' },
-      { namespace: 'public', topic: 'load', table: 'tms_load' },
-      { namespace: 'public', topic: 'load_line', table: 'tms_load_line' },
-      { namespace: 'public', topic: 'ord', table: 'tms_ord' },
-      { namespace: 'public', topic: 'ord_state', table: 'tms_ord_state' },
-      { namespace: 'public', topic: 'line', table: 'tms_line' },
-      { namespace: 'public', topic: 'line_state', table: 'tms_line_state' },
-      { namespace: 'public', topic: 'contract', table: 'tms_contract' },
-      { namespace: 'public', topic: 'contract_line', table: 'tms_contract_line' }
+      { namespace: 'public', topic: 'invoiceState', table: 'tms_invoiceState' },
+      { namespace: 'public', topic: 'lineItem', table: 'tms_lineItem' },
+      { namespace: 'public', topic: 'node', table: 'tms_node' },
+      { namespace: 'public', topic: 'node_closure', table: 'tms_node_closure' },
+      { namespace: 'public', topic: 'planProfile', table: 'tms_planProfile' },
+      { namespace: 'public', topic: 'orderUpload', table: 'tms_orderUpload' },
+      { namespace: 'public', topic: 'invoiceExtras', table: 'tms_invoiceExtras' },
+      { namespace: 'public', topic: 'line_item_state', table: 'tms_line_item_state' },
+      { namespace: 'public', topic: 'odometer', table: 'tms_odometer' },
+      { namespace: 'public', topic: 'invoice_tray', table: 'tms_invoice_tray' },
+      { namespace: 'public', topic: 'extvehicleevents', table: 'tms_extvehicleevents' }
     ],
     dlqTopic: 'dlq-tms-clickhouse',
-    performanceConfig: defaultPerformanceConfig
-  },
-
-  razum: {
-    service: 'razum',
-    topicMappings: [
-      { namespace: 'public', topic: 'market_activity', table: 'razum_market_activity' },
-      { namespace: 'public', topic: 'retailer_activity', table: 'razum_retailer_activity' },
-      { namespace: 'public', topic: 'metrics', table: 'razum_metrics' }
-    ],
-    dlqTopic: 'dlq-razum-clickhouse',
-    performanceConfig: defaultPerformanceConfig
-  },
-
-  backbone: {
-    service: 'backbone',
-    topicMappings: [
-      { namespace: 'public', topic: 'retailer', table: 'backbone_retailer' },
-      { namespace: 'public', topic: 'skuMaster', table: 'backbone_skuMaster' },
-      { namespace: 'public', topic: 'picklistRetailer', table: 'backbone_picklistRetailer' },
-      { namespace: 'public', topic: 'trip_invoice', table: 'backbone_trip_invoice' },
-      { namespace: 'public', topic: 'picklist', table: 'backbone_picklist' },
-      { namespace: 'public', topic: 'plan', table: 'backbone_plan' },
-      { namespace: 'public', topic: 'picklistAssignment', table: 'backbone_picklistAssignment' },
-      { namespace: 'public', topic: 'vehicle', table: 'backbone_vehicle' },
-      { namespace: 'public', topic: 'vehicleType', table: 'backbone_vehicleType' },
-      { namespace: 'public', topic: 'invoice', table: 'backbone_invoice' },
-      { namespace: 'public', topic: 'invoiceState', table: 'backbone_invoiceState' },
-      { namespace: 'public', topic: 'lineItem', table: 'backbone_lineItem' },
-      { namespace: 'public', topic: 'node', table: 'backbone_node' },
-      { namespace: 'public', topic: 'node_closure', table: 'backbone_node_closure' },
-      { namespace: 'public', topic: 'planProfile', table: 'backbone_planProfile' },
-      { namespace: 'public', topic: 'orderUpload', table: 'backbone_orderUpload' },
-      { namespace: 'public', topic: 'invoiceExtras', table: 'backbone_invoiceExtras' },
-      { namespace: 'public', topic: 'line_item_state', table: 'backbone_line_item_state' },
-      { namespace: 'public', topic: 'odometer', table: 'backbone_odometer' },
-      { namespace: 'public', topic: 'invoice_tray', table: 'backbone_invoice_tray' },
-      { namespace: 'public', topic: 'extvehicleevents', table: 'backbone_extvehicleevents' }
-    ],
-    dlqTopic: 'dlq-backbone-clickhouse',
     performanceConfig: defaultPerformanceConfig
   }
 };
