@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
-import React, { useState, useEffect, createElement as h } from 'react';
-import { render, Box, Text, useApp } from 'ink';
+import { useState, useEffect, createElement as h } from 'react';
+import { render, Box, Text, useApp, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
 import { readFile, readdir } from 'fs/promises';
 import { basename, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, readFileSync, statSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import chalk from 'chalk';
 import { glob } from 'glob';
 
@@ -67,12 +67,25 @@ function configFromEnv(env) {
 // Parse ClickHouse URL
 function parseClickHouseURL(url) {
   try {
-    const urlObj = new URL(url);
+    // Normalize clickhouse:// and clickhouses:// to http:// and https://
+    let normalizedUrl = url;
+    if (url.startsWith('clickhouses://')) {
+      normalizedUrl = url.replace('clickhouses://', 'https://');
+    } else if (url.startsWith('clickhouse://')) {
+      normalizedUrl = url.replace('clickhouse://', 'http://');
+    }
+
+    const urlObj = new URL(normalizedUrl);
+
+    // Use the port from URL, no smart defaults - user knows their port
+    if (!urlObj.port) {
+      throw new Error('Port is required in the URL (e.g., https://user:pass@host:8443/database)');
+    }
 
     return {
       protocol: urlObj.protocol.replace(':', ''),
       hostname: urlObj.hostname,
-      port: urlObj.port || (urlObj.protocol === 'https:' ? '8443' : '8123'),
+      port: urlObj.port,
       username: urlObj.username || 'default',
       password: urlObj.password || '',
       database: urlObj.pathname.replace('/', '') || 'default',
@@ -94,13 +107,15 @@ async function executeClickHouseQuery(config, query, settings = {}) {
   const queryUrl = `${url}?database=${config.database}${settingsParam ? '&' + settingsParam : ''}`;
 
   try {
+    const bodyBuffer = Buffer.from(query, 'utf-8');
     const response = await fetch(queryUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'text/plain',
+        'Content-Length': String(bodyBuffer.length),
       },
-      body: query,
+      body: bodyBuffer,
     });
 
     const text = await response.text();
@@ -127,14 +142,8 @@ async function getSQLFolders() {
     .filter(entry => {
       // Check if folder contains SQL files
       const folderPath = join(baseDir, entry.name);
-      try {
-        const files = readFileSync(folderPath, 'utf-8');
-        return false;
-      } catch {
-        // It's a directory, check for SQL files
-        const sqlFiles = glob.sync('*.sql', { cwd: folderPath });
-        return sqlFiles.length > 0;
-      }
+      const sqlFiles = glob.sync('*.sql', { cwd: folderPath });
+      return sqlFiles.length > 0;
     })
     .map(entry => entry.name)
     .sort();
@@ -154,28 +163,6 @@ async function getSQLFilesInFolder(folderName) {
       name: f,
       path: join(folderPath, f),
     }));
-}
-
-// Get list of SQL files (all files recursively)
-async function getSQLFiles(pattern = null) {
-  const baseDir = __dirname;
-
-  if (pattern) {
-    // Use glob pattern
-    const files = await glob(pattern, { cwd: baseDir, absolute: true });
-    return files
-      .filter(f => f.endsWith('.sql') && !basename(f).startsWith('XX-'))
-      .sort();
-  }
-
-  // Get all SQL files recursively, excluding XX- files
-  const files = await glob('**/*.sql', {
-    cwd: baseDir,
-    absolute: true,
-    ignore: ['**/XX-*.sql', 'node_modules/**']
-  });
-
-  return files.sort();
 }
 
 // Get list of tables
@@ -208,17 +195,55 @@ function App({ clickhouseConfig, inputType }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
-  const [sqlFiles, setSqlFiles] = useState([]);
   const [tables, setTables] = useState([]);
   const [folders, setFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [folderFiles, setFolderFiles] = useState([]);
-  const [selectedFiles, setSelectedFiles] = useState([]);
   const [inlineSQL, setInlineSQL] = useState('');
   const [inlineSQLMode, setInlineSQLMode] = useState(false);
   const [executionLog, setExecutionLog] = useState([]);
-  const [queryResult, setQueryResult] = useState('');
   const [selectedFileIndices, setSelectedFileIndices] = useState(new Set());
+
+  // Keyboard shortcuts
+  useInput((input, key) => {
+    if (loading) return;
+
+    // ESC to go back
+    if (key.escape) {
+      if (screen === 'main') {
+        exit();
+      } else if (screen === 'folder_files') {
+        setScreen('browse_folder');
+        setSelectedFolder(null);
+        setFolderFiles([]);
+        setSelectedFileIndices(new Set());
+      } else if (screen === 'inline_sql') {
+        setScreen('main');
+        setInlineSQLMode(false);
+        setInlineSQL('');
+      } else {
+        setScreen('main');
+        setTables([]);
+        setFolders([]);
+        setStatus('');
+        setError(null);
+        setExecutionLog([]);
+      }
+    }
+
+    // Enter on logs screen to go back
+    if (key.return && screen === 'logs') {
+      setScreen('main');
+      setStatus('');
+      setError(null);
+      setExecutionLog([]);
+    }
+
+    // 'q' to quit from main menu
+    if (input === 'q' && screen === 'main') {
+      exit();
+    }
+  });
 
   useEffect(() => {
     setConfig(clickhouseConfig);
@@ -274,10 +299,6 @@ function App({ clickhouseConfig, inputType }) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFileSelection = (items) => {
-    setSelectedFiles(items.map(item => item.value));
   };
 
   const handleExecuteSelectedFiles = async (filesToExecute) => {
@@ -341,7 +362,6 @@ function App({ clickhouseConfig, inputType }) {
     setLoading(true);
     setError(null);
     setExecutionLog([]);
-    setQueryResult('');
     setStatus('Executing inline SQL...');
     setInlineSQLMode(false);
 
@@ -350,7 +370,6 @@ function App({ clickhouseConfig, inputType }) {
         max_execution_time: 600,
       });
 
-      setQueryResult(result);
       setExecutionLog([
         'Query executed successfully!',
         '',
@@ -473,7 +492,8 @@ function App({ clickhouseConfig, inputType }) {
   if (screen === 'main' && !loading) {
     children.push(
       h(Box, { key: 'main', flexDirection: 'column' },
-        h(Text, { bold: true, marginBottom: 1 }, 'Select an action:'),
+        h(Text, { bold: true }, 'Select an action:'),
+        h(Text, { dimColor: true, marginBottom: 1 }, 'Press q or Esc to quit'),
         h(SelectInput, { items: mainMenuItems, onSelect: handleMainMenu })
       )
     );
@@ -490,7 +510,8 @@ function App({ clickhouseConfig, inputType }) {
 
     children.push(
       h(Box, { key: 'folders', flexDirection: 'column' },
-        h(Text, { bold: true, marginBottom: 1 }, `Found ${folders.length} SQL folders:`),
+        h(Text, { bold: true }, `Found ${folders.length} SQL folders:`),
+        h(Text, { dimColor: true, marginBottom: 1 }, 'Press Esc to go back'),
         h(SelectInput, {
           items: folderItems,
           onSelect: (item) => {
@@ -505,64 +526,64 @@ function App({ clickhouseConfig, inputType }) {
     );
   }
 
-  // Folder files screen
+  // Folder files screen - combined list with files and actions
   if (screen === 'folder_files' && !loading && folderFiles.length > 0) {
-    const fileItems = folderFiles.map((file, idx) => {
-      const isSelected = selectedFileIndices.has(idx);
-      return {
-        label: `${isSelected ? '☑' : '☐'} ${file.name}`,
-        value: idx
-      };
-    });
-
-    const actionItems = [
-      { label: `✅ Execute Selected (${selectedFileIndices.size} files)`, value: 'execute_selected' },
-      { label: '⚡ Execute All Files', value: 'execute_all' },
-      { label: '🔄 Clear Selection', value: 'clear' },
-      { label: '⬅️  Back to Folders', value: 'back' },
+    // Combine files and actions into single list
+    const allItems = [
+      ...folderFiles.map((file, idx) => {
+        const isSelected = selectedFileIndices.has(idx);
+        return {
+          key: `file-${idx}`,
+          label: `${isSelected ? '☑' : '☐'} ${file.name}`,
+          value: { type: 'file', idx }
+        };
+      }),
+      { key: 'sep', label: '─'.repeat(30), value: { type: 'separator' } },
+      { key: 'exec-sel', label: `✅ Execute Selected (${selectedFileIndices.size})`, value: { type: 'action', action: 'execute_selected' } },
+      { key: 'exec-all', label: '⚡ Execute All Files', value: { type: 'action', action: 'execute_all' } },
+      { key: 'clear', label: '🔄 Clear Selection', value: { type: 'action', action: 'clear' } },
+      { key: 'back', label: '⬅️  Back to Folders', value: { type: 'action', action: 'back' } },
     ];
 
     children.push(
       h(Box, { key: 'folder_files', flexDirection: 'column' },
-        h(Text, { bold: true, marginBottom: 1 }, `Select files to execute from ${selectedFolder}:`),
-        h(Text, { dimColor: true, marginBottom: 1 }, `Total files: ${folderFiles.length} | Selected: ${selectedFileIndices.size}`),
+        h(Text, { bold: true }, `Files in ${selectedFolder}:`),
+        h(Text, { dimColor: true, marginBottom: 1 }, `Enter: toggle | Esc: back | ${selectedFileIndices.size}/${folderFiles.length} selected`),
         h(SelectInput, {
-          items: fileItems,
+          items: allItems,
           onSelect: (item) => {
-            const newSelection = new Set(selectedFileIndices);
-            if (newSelection.has(item.value)) {
-              newSelection.delete(item.value);
-            } else {
-              newSelection.add(item.value);
-            }
-            setSelectedFileIndices(newSelection);
-          }
-        }),
-        h(Box, { marginTop: 1 },
-          h(SelectInput, {
-            items: actionItems,
-            onSelect: (item) => {
-              if (item.value === 'execute_selected') {
+            if (item.value.type === 'file') {
+              const idx = item.value.idx;
+              const newSelection = new Set(selectedFileIndices);
+              if (newSelection.has(idx)) {
+                newSelection.delete(idx);
+              } else {
+                newSelection.add(idx);
+              }
+              setSelectedFileIndices(newSelection);
+            } else if (item.value.type === 'action') {
+              const action = item.value.action;
+              if (action === 'execute_selected') {
                 if (selectedFileIndices.size === 0) {
-                  setError('No files selected. Please select at least one file.');
+                  setError('No files selected');
                   return;
                 }
-                const filePaths = Array.from(selectedFileIndices).map(idx => folderFiles[idx].path);
+                const filePaths = Array.from(selectedFileIndices).sort((a, b) => a - b).map(idx => folderFiles[idx].path);
                 handleExecuteSelectedFiles(filePaths);
-              } else if (item.value === 'execute_all') {
+              } else if (action === 'execute_all') {
                 const filePaths = folderFiles.map(f => f.path);
                 handleExecuteSelectedFiles(filePaths);
-              } else if (item.value === 'clear') {
+              } else if (action === 'clear') {
                 setSelectedFileIndices(new Set());
-              } else {
+              } else if (action === 'back') {
                 setScreen('browse_folder');
                 setSelectedFolder(null);
                 setFolderFiles([]);
                 setSelectedFileIndices(new Set());
               }
             }
-          })
-        )
+          }
+        })
       )
     );
   }
@@ -571,20 +592,17 @@ function App({ clickhouseConfig, inputType }) {
   if (screen === 'inline_sql' && !loading && inlineSQLMode) {
     children.push(
       h(Box, { key: 'inline_sql', flexDirection: 'column' },
-        h(Text, { bold: true, marginBottom: 1 }, 'Enter SQL Query:'),
-        h(TextInput, {
-          value: inlineSQL,
-          onChange: setInlineSQL,
-          onSubmit: handleExecuteInlineSQL,
-          placeholder: 'SELECT * FROM ...'
-        }),
+        h(Text, { bold: true }, 'Enter SQL Query:'),
         h(Box, { marginTop: 1 },
-          h(Text, { dimColor: true }, 'Press '),
-          h(Text, { bold: true, color: 'green', dimColor: true }, 'Enter'),
-          h(Text, { dimColor: true }, ' to execute, '),
-          h(Text, { bold: true, color: 'red', dimColor: true }, 'Ctrl+C'),
-          h(Text, { dimColor: true }, ' to cancel')
-        )
+          h(Text, null, '> '),
+          h(TextInput, {
+            value: inlineSQL,
+            onChange: setInlineSQL,
+            onSubmit: handleExecuteInlineSQL,
+            placeholder: 'SELECT * FROM ...'
+          })
+        ),
+        h(Text, { dimColor: true, marginTop: 1 }, 'Enter: execute | Esc: back')
       )
     );
   }
@@ -620,26 +638,43 @@ function App({ clickhouseConfig, inputType }) {
   }
 
   // Show tables screen
-  if (screen === 'tables' && !loading && tables.length > 0) {
-    const tableItems = tables.map((table, idx) =>
-      h(Text, { key: idx }, `  ${idx + 1}. ${table}`)
-    );
+  if (screen === 'tables' && !loading) {
+    if (tables.length > 0) {
+      const tableItems = tables.map((table, idx) =>
+        h(Text, { key: idx }, `  ${idx + 1}. ${table}`)
+      );
 
-    children.push(
-      h(Box, { key: 'tables', flexDirection: 'column' },
-        h(Text, { bold: true, marginBottom: 1 }, `Tables in database '${config.database}': (${tables.length} total)`),
-        ...tableItems,
-        h(Box, { marginTop: 1 },
-          h(SelectInput, {
-            items: [{ label: '⬅️  Back to Main Menu', value: 'back' }],
-            onSelect: () => {
-              setScreen('main');
-              setTables([]);
-            }
-          })
+      children.push(
+        h(Box, { key: 'tables', flexDirection: 'column' },
+          h(Text, { bold: true, marginBottom: 1 }, `Tables in database '${config.database}': (${tables.length} total)`),
+          ...tableItems,
+          h(Box, { marginTop: 1 },
+            h(SelectInput, {
+              items: [{ label: '⬅️  Back to Main Menu', value: 'back' }],
+              onSelect: () => {
+                setScreen('main');
+                setTables([]);
+              }
+            })
+          )
         )
-      )
-    );
+      );
+    } else {
+      children.push(
+        h(Box, { key: 'tables', flexDirection: 'column' },
+          h(Text, { color: 'yellow' }, `No tables found in database '${config.database}'`),
+          h(Box, { marginTop: 1 },
+            h(SelectInput, {
+              items: [{ label: '⬅️  Back to Main Menu', value: 'back' }],
+              onSelect: () => {
+                setScreen('main');
+                setTables([]);
+              }
+            })
+          )
+        )
+      );
+    }
   }
 
   // Logs/Results screen
@@ -656,24 +691,7 @@ function App({ clickhouseConfig, inputType }) {
         h(Box, { flexDirection: 'column', marginBottom: 1 },
           ...logLines
         ),
-        h(Box, { marginTop: 1 },
-          h(Text, { dimColor: true, italic: true }, 'Tip: Scroll up/down in your terminal to view all logs'),
-          h(Box, { marginTop: 1 },
-            h(SelectInput, {
-              items: [{ label: '⬅️  Back to Main Menu', value: 'back' }],
-              onSelect: () => {
-                setScreen('main');
-                setStatus('');
-                setError(null);
-                setInlineSQL('');
-                setSelectedFiles([]);
-                setSelectedFolder(null);
-                setExecutionLog([]);
-                setQueryResult('');
-              }
-            })
-          )
-        )
+        h(Text, { dimColor: true }, 'Press Esc or Enter to go back')
       )
     );
   }
@@ -684,40 +702,80 @@ function App({ clickhouseConfig, inputType }) {
 // Parse command line arguments
 const args = process.argv.slice(2);
 
-// Parse --env flag
+// Parse flags
 let input = null;
 let envFlag = false;
+let queryFlag = null;
+let fileFlag = null;
+let folderFlag = null;
+let tablesFlag = false;
+let optimizeFlag = null;
+let helpFlag = false;
 
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--env' && i + 1 < args.length) {
-    input = args[i + 1];
+  const arg = args[i];
+  if (arg === '--env' && i + 1 < args.length) {
+    input = args[++i];
     envFlag = true;
-    break;
-  } else if (!args[i].startsWith('--')) {
-    input = args[i];
-    break;
+  } else if (arg === '--query' || arg === '-q') {
+    queryFlag = args[++i];
+  } else if (arg === '--file' || arg === '-f') {
+    fileFlag = args[++i];
+  } else if (arg === '--folder') {
+    folderFlag = args[++i];
+  } else if (arg === '--tables') {
+    tablesFlag = true;
+  } else if (arg === '--optimize') {
+    optimizeFlag = args[++i] || '__all__';
+  } else if (arg === '--help' || arg === '-h') {
+    helpFlag = true;
+  } else if (!arg.startsWith('--') && !arg.startsWith('-')) {
+    if (!input) input = arg;
   }
+}
+
+const nonInteractiveMode = queryFlag || fileFlag || folderFlag || tablesFlag || optimizeFlag;
+
+if (helpFlag) {
+  console.log(chalk.cyan.bold('\n🗄️  ClickHouse CLI\n'));
+  console.log(chalk.white('Interactive mode (requires TTY):'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url>'));
+  console.log(chalk.yellow('  node clickhouse-cli.js --env <env-file>\n'));
+  console.log(chalk.white('Non-interactive mode (scriptable):'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --query "SELECT 1"'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> -q "SELECT * FROM system.tables"'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --file <sql-file>'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> -f path/to/query.sql'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --folder <folder-name>'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --tables'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --optimize <table-name>'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --optimize __all__\n'));
+  console.log(chalk.white('Flags:'));
+  console.log(chalk.yellow('  --env <file>      Load config from env file'));
+  console.log(chalk.yellow('  --query, -q       Execute inline SQL query'));
+  console.log(chalk.yellow('  --file, -f        Execute SQL from file'));
+  console.log(chalk.yellow('  --folder          Execute all SQL files in folder'));
+  console.log(chalk.yellow('  --tables          List all tables'));
+  console.log(chalk.yellow('  --optimize        Optimize table(s) (__all__ for all)'));
+  console.log(chalk.yellow('  --help, -h        Show this help\n'));
+  process.exit(0);
 }
 
 if (!input) {
   console.log(chalk.red('❌ Error: ClickHouse URL or environment file is required'));
-  console.log(chalk.yellow('\nUsage:'));
-  console.log(chalk.yellow('  npm run clickhouse -- --env <env-file>'));
-  console.log(chalk.yellow('  npm run clickhouse <clickhouse-url>'));
-  console.log(chalk.yellow('  npm run clickhouse <env-file>'));
-  console.log(chalk.yellow('\nExamples:'));
-  console.log(chalk.yellow('  npm run clickhouse -- --env .sbx-uat.env'));
-  console.log(chalk.yellow('  npm run clickhouse -- --env .samadhan-prod.env'));
-  console.log(chalk.yellow('  npm run clickhouse https://user:password@hostname:8443/database'));
-  console.log(chalk.yellow('  npm run clickhouse .sbx-uat.env'));
+  console.log(chalk.yellow('\nUsage: node clickhouse-cli.js <url> [flags]'));
+  console.log(chalk.yellow('       node clickhouse-cli.js --help for more info'));
   process.exit(1);
 }
 
-// Check if we're in a TTY (but allow npm run to work)
-// Only block if explicitly running in background with &
-if (!process.stdin.isTTY && process.stdout.isTTY) {
-  console.log(chalk.red('❌ Error: This CLI requires an interactive terminal'));
-  console.log(chalk.yellow('Please run directly in your terminal, not in the background'));
+// Check if we're in a TTY - ink requires raw mode support (only for interactive mode)
+if (!nonInteractiveMode && !process.stdin.isTTY) {
+  console.log(chalk.red('❌ Error: Interactive mode requires a TTY'));
+  console.log(chalk.yellow('Use --query, --file, --folder, --tables, or --optimize for non-interactive mode'));
+  console.log(chalk.yellow('\nExamples:'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --query "SELECT 1"'));
+  console.log(chalk.yellow('  node clickhouse-cli.js <url> --tables'));
+  console.log(chalk.yellow('  node clickhouse-cli.js --help'));
   process.exit(1);
 }
 
@@ -768,5 +826,100 @@ try {
   process.exit(1);
 }
 
-// Render the app
-render(h(App, { clickhouseConfig, inputType }));
+// Non-interactive mode handlers
+async function runNonInteractive() {
+  try {
+    // --query: Execute inline SQL
+    if (queryFlag) {
+      console.log(chalk.cyan(`Executing query on ${clickhouseConfig.hostname}:${clickhouseConfig.port}/${clickhouseConfig.database}...\n`));
+      const result = await executeClickHouseQuery(clickhouseConfig, queryFlag, { max_execution_time: 600 });
+      console.log(result);
+      process.exit(0);
+    }
+
+    // --file: Execute SQL from file
+    if (fileFlag) {
+      const filePath = fileFlag.startsWith('/') ? fileFlag : join(__dirname, fileFlag);
+      if (!existsSync(filePath)) {
+        console.log(chalk.red(`❌ Error: File not found: ${filePath}`));
+        process.exit(1);
+      }
+      const content = await readFile(filePath, 'utf-8');
+      console.log(chalk.cyan(`Executing ${basename(filePath)} on ${clickhouseConfig.hostname}...\n`));
+      const result = await executeClickHouseQuery(clickhouseConfig, content, { max_execution_time: 600 });
+      if (result.trim()) console.log(result);
+      console.log(chalk.green(`\n✅ Successfully executed ${basename(filePath)}`));
+      process.exit(0);
+    }
+
+    // --folder: Execute all SQL files in folder
+    if (folderFlag) {
+      const files = await getSQLFilesInFolder(folderFlag);
+      if (files.length === 0) {
+        console.log(chalk.red(`❌ Error: No SQL files found in folder: ${folderFlag}`));
+        process.exit(1);
+      }
+      console.log(chalk.cyan(`Executing ${files.length} SQL files from ${folderFlag}...\n`));
+      let successCount = 0;
+      for (const file of files) {
+        const content = await readFile(file.path, 'utf-8');
+        console.log(chalk.yellow(`[${successCount + 1}/${files.length}] ${file.name}...`));
+        try {
+          await executeClickHouseQuery(clickhouseConfig, content, { max_execution_time: 600 });
+          console.log(chalk.green(`  ✓ Success`));
+          successCount++;
+        } catch (err) {
+          console.log(chalk.red(`  ✗ Failed: ${err.message}`));
+          process.exit(1);
+        }
+      }
+      console.log(chalk.green(`\n✅ Successfully executed ${successCount}/${files.length} files`));
+      process.exit(0);
+    }
+
+    // --tables: List all tables
+    if (tablesFlag) {
+      console.log(chalk.cyan(`Tables in ${clickhouseConfig.database}:\n`));
+      const tables = await getTables(clickhouseConfig);
+      tables.forEach((t, i) => console.log(`  ${i + 1}. ${t}`));
+      console.log(chalk.dim(`\nTotal: ${tables.length} tables`));
+      process.exit(0);
+    }
+
+    // --optimize: Optimize table(s)
+    if (optimizeFlag) {
+      let tablesToOptimize;
+      if (optimizeFlag === '__all__') {
+        tablesToOptimize = await getTables(clickhouseConfig);
+        console.log(chalk.cyan(`Optimizing all ${tablesToOptimize.length} tables...\n`));
+      } else {
+        tablesToOptimize = [optimizeFlag];
+        console.log(chalk.cyan(`Optimizing table: ${optimizeFlag}...\n`));
+      }
+
+      let successCount = 0;
+      for (const table of tablesToOptimize) {
+        console.log(chalk.yellow(`[${successCount + 1}/${tablesToOptimize.length}] Optimizing ${table}...`));
+        try {
+          await executeClickHouseQuery(clickhouseConfig, `OPTIMIZE TABLE \`${table}\` FINAL`, { max_execution_time: 600 });
+          console.log(chalk.green(`  ✓ Success`));
+          successCount++;
+        } catch (err) {
+          console.log(chalk.red(`  ✗ Failed: ${err.message}`));
+        }
+      }
+      console.log(chalk.green(`\n✅ Optimized ${successCount}/${tablesToOptimize.length} tables`));
+      process.exit(0);
+    }
+  } catch (error) {
+    console.log(chalk.red(`❌ Error: ${error.message}`));
+    process.exit(1);
+  }
+}
+
+// Run non-interactive mode or render interactive app
+if (nonInteractiveMode) {
+  runNonInteractive();
+} else {
+  render(h(App, { clickhouseConfig, inputType }));
+}
