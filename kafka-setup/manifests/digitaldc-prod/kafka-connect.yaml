@@ -45,6 +45,10 @@ spec:
               value: "connect-offsets"
             - name: CONNECT_STATUS_STORAGE_TOPIC
               value: "connect-status"
+            - name: CONNECT_PRODUCER_MAX_REQUEST_SIZE
+              value: "10485760"
+            - name: CONNECT_PRODUCER_BUFFER_MEMORY
+              value: "67108864"
             - name: CONNECT_REST_ADVERTISED_HOST_NAME
               valueFrom:
                 fieldRef:
