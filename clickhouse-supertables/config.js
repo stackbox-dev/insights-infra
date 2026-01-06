@@ -156,7 +156,14 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'ob_order_progress', table: 'wms_ob_order_progress' },
       { namespace: 'public', topic: 'ob_order_lineitem', table: 'wms_ob_order_lineitem' },
       { namespace: 'public', topic: 'ob_load_unpick_item', table: 'wms_ob_load_unpick_item' },
-      { namespace: 'public', topic: 'ob_gin_line', table: 'wms_ob_gin_line' }
+      { namespace: 'public', topic: 'ob_gin_line', table: 'wms_ob_gin_line' },
+      { namespace: 'public', topic: 'ccs_hu_conveyor_event', table: 'wms_ccs_hu_conveyor_event' },
+      { namespace: 'public', topic: 'ccs_chu_status', table: 'wms_ccs_chu_status' },
+      { namespace: 'public', topic: 'ccs_cnode', table: 'wms_ccs_cnode' },
+      { namespace: 'public', topic: 'ccs_ptl_chu_visit', table: 'wms_ccs_ptl_chu_visit' },
+      { namespace: 'public', topic: 'sbl_bin_chu', table: 'wms_sbl_bin_chu' },
+      { namespace: 'public', topic: 'ccs_sbl_hu_visit', table: 'wms_ccs_sbl_hu_visit' },
+      { namespace: 'public', topic: 'bbulk_ptl_demand', table: 'wms_bbulk_ptl_demand' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
