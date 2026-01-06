@@ -15,14 +15,9 @@ CREATE TABLE IF NOT EXISTS wms_ccs_hu_conveyor_event
     event String DEFAULT 'SCANNED',
     plannedDestNodeId String DEFAULT '',
     purpose String DEFAULT '',
-    hwTimestamp DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    
-    -- Indexes for common query patterns
-    INDEX idx_whId whId TYPE minmax GRANULARITY 1,
-    INDEX idx_sessionId sessionId TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_huId huId TYPE bloom_filter(0.01) GRANULARITY 1
+    hwTimestamp DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
 )
 ENGINE = ReplacingMergeTree(timestamp)
 PARTITION BY toYYYYMM(sessionCreatedAt)
-ORDER BY (id, sessionCreatedAt)
+ORDER BY (id)
 SETTINGS index_granularity = 8192;

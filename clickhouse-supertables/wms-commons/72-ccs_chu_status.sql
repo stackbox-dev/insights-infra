@@ -37,15 +37,9 @@ CREATE TABLE IF NOT EXISTS wms_ccs_chu_status
     lmTripId String DEFAULT '',
     invoiceIds String DEFAULT '[]',  -- JSON array
     sblShort bool DEFAULT false,
-    ptlShort bool DEFAULT false,
-    
-    -- Indexes for common query patterns
-    INDEX idx_whId whId TYPE minmax GRANULARITY 1,
-    INDEX idx_sessionId sessionId TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_chuId chuId TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_type type TYPE bloom_filter(0.01) GRANULARITY 1
+    ptlShort bool DEFAULT false
 )
 ENGINE = ReplacingMergeTree(createdAt)
 PARTITION BY toYYYYMM(sessionCreatedAt)
-ORDER BY (id, sessionCreatedAt)
+ORDER BY (id)
 SETTINGS index_granularity = 8192;

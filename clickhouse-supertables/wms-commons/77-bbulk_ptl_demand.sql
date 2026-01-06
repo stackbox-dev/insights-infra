@@ -21,15 +21,10 @@ CREATE TABLE IF NOT EXISTS wms_bbulk_ptl_demand
     createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     parentDemandId String DEFAULT '',
-    deactivatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    
-    -- Indexes for common query patterns
-    INDEX idx_whId whId TYPE minmax GRANULARITY 1,
-    INDEX idx_sessionId sessionId TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_groupId groupId TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_invoiceId invoiceId TYPE bloom_filter(0.01) GRANULARITY 1
+    deactivatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 PARTITION BY toYYYYMM(sessionCreatedAt)
-ORDER BY (id, sessionCreatedAt)
-SETTINGS index_granularity = 8192;
+ORDER BY (id)
+SETTINGS index_granularity = 8192
+COMMENT 'BBulk PTL Demand dimension table';

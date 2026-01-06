@@ -13,14 +13,9 @@ CREATE TABLE IF NOT EXISTS wms_ccs_cnode
     createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     active bool DEFAULT true,
-    cmd Int32 DEFAULT 0,
-    
-    -- Indexes for common query patterns
-    INDEX idx_whId whId TYPE minmax GRANULARITY 1,
-    INDEX idx_code code TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_type type TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_active active TYPE minmax GRANULARITY 1
+    cmd Int32 DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id)
-SETTINGS index_granularity = 8192;
+SETTINGS index_granularity = 8192
+COMMENT 'CCS CNode dimension table';

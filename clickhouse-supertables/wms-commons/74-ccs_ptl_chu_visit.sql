@@ -19,15 +19,9 @@ CREATE TABLE IF NOT EXISTS wms_ccs_ptl_chu_visit
     chuFull UInt8 DEFAULT 0,
     predictedWorkTime Int32 DEFAULT 0,
     chuStatusId String DEFAULT '',
-    hybridExit UInt8 DEFAULT 0,
-    
-    -- Indexes for common query patterns
-    INDEX idx_whId whId TYPE minmax GRANULARITY 1,
-    INDEX idx_sessionId sessionId TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_chuId chuId TYPE bloom_filter(0.01) GRANULARITY 1,
-    INDEX idx_zoneId zoneId TYPE bloom_filter(0.01) GRANULARITY 1
+    hybridExit UInt8 DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(assignedAt)
 PARTITION BY toYYYYMM(sessionCreatedAt)
-ORDER BY (id, sessionCreatedAt)
+ORDER BY (id)
 SETTINGS index_granularity = 8192;
