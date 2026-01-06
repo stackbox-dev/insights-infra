@@ -1,0 +1,23 @@
+-- ClickHouse table for CCS HU Conveyor Event
+-- Event table for conveyor handling unit movements
+-- Source: samadhan_prod.wms.public.ccs_hu_conveyor_event
+
+CREATE TABLE IF NOT EXISTS wms_ccs_hu_conveyor_event
+(
+    whId Int64 DEFAULT 0,
+    sessionId String DEFAULT '',
+    sessionCreatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    id String DEFAULT '',
+    huId String DEFAULT '',
+    innerHuId String DEFAULT '',
+    nodeId String DEFAULT '',
+    timestamp DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    event String DEFAULT 'SCANNED',
+    plannedDestNodeId String DEFAULT '',
+    purpose String DEFAULT '',
+    hwTimestamp DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
+)
+ENGINE = ReplacingMergeTree(timestamp)
+PARTITION BY toYYYYMM(sessionCreatedAt)
+ORDER BY (id)
+SETTINGS index_granularity = 8192;
