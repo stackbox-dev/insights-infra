@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS wms_ccs_cnode
     cmd Int32 DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(updatedAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192
 COMMENT 'CCS CNode dimension table';

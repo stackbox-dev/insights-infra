@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS wms_ccs_ptl_chu_visit
     predictedToArriveAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     divertedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     packedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    chuFull UInt8 DEFAULT 0,
+    chuFull bool DEFAULT 0,
     predictedWorkTime Int32 DEFAULT 0,
     chuStatusId String DEFAULT '',
-    hybridExit UInt8 DEFAULT 0
+    hybridExit bool DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(assignedAt)
 PARTITION BY toYYYYMM(sessionCreatedAt)
