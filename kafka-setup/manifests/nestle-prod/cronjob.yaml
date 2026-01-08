@@ -1,0 +1,176 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kafka-connector-healthcheck
+  namespace: kafka
+spec:
+  schedule: "*/5 * * * *"  # every 5 min
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: connector-checker
+              image: alpine:3.20
+              env:
+                - name: CONNECT_URL
+                  value: "http://cp-connect.kafka"
+                - name: CONNECT_UI_URL
+                  value: "http://cp-connect-ui.kafka.nestle-prod.api.stackbox.internal/#/cluster/kafka-connect-1/connector"
+                - name: SLACK_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: bot_token
+                - name: SLACK_CHANNEL_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: channel_id
+                - name: ENVIRONMENT_NAME
+                  value: "Nestle Prod"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  apk add --no-cache curl jq bash
+                  cp /scripts/check_connectors.sh /tmp/check_connectors.sh
+                  chmod +x /tmp/check_connectors.sh
+                  /tmp/check_connectors.sh
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          restartPolicy: OnFailure
+          volumes:
+            - name: script
+              configMap:
+                name: kafka-connector-check-script
+                defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-connector-check-script
+  namespace: kafka
+data:
+  check_connectors.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    # ==== CONFIG ====
+    CONNECT_URL="${CONNECT_URL:-}"
+    CONNECT_UI_URL="${CONNECT_UI_URL:-}"
+    SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+    SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Nestle Prod}"
+    
+    log() {
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+    }
+    
+    # ==== VALIDATE ENV ====
+    if [[ -z "$SLACK_BOT_TOKEN" || -z "$SLACK_CHANNEL_ID" ]]; then
+      log "❌ ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set as env vars."
+      exit 1
+    fi
+    
+    # ==== FETCH CONNECTORS ====
+    log "Fetching connectors from $CONNECT_URL ..."
+    connectors_json=$(curl -s --insecure "${CONNECT_URL}/connectors")
+    
+    if [[ -z "$connectors_json" || "$connectors_json" == "null" ]]; then
+      log "❌ No response from Kafka Connect API."
+      exit 1
+    fi
+    
+    connectors=$(echo "$connectors_json" | jq -r '.[]' 2>/dev/null || true)
+    if [[ -z "$connectors" ]]; then
+      log "✅ No connectors found."
+      exit 0
+    fi
+    
+    alert_sent=false
+    
+    # ==== LOOP THROUGH CONNECTORS ====
+    for connector in $connectors; do
+      log "Checking connector: $connector"
+      status_json=$(curl -s --insecure "${CONNECT_URL}/connectors/${connector}/status")
+    
+      if [[ -z "$status_json" || "$status_json" == "null" ]]; then
+        log "⚠️  Skipping $connector — no status returned."
+        continue
+      fi
+    
+      connector_state=$(echo "$status_json" | jq -r '.connector.state' 2>/dev/null || echo "UNKNOWN")
+      log "  Connector state: $connector_state"
+    
+      tasks=$(echo "$status_json" | jq -c '.tasks[]' 2>/dev/null || true)
+    
+      while IFS= read -r task; do
+        [[ -z "$task" ]] && continue
+        task_state=$(echo "$task" | jq -r '.state')
+        task_id=$(echo "$task" | jq -r '.id')
+        worker_id=$(echo "$task" | jq -r '.worker_id')
+    
+        if [[ "$task_state" == "FAILED" ]]; then
+          log "  ❌ Task $task_id FAILED on $worker_id"
+    
+          trace=$(echo "$task" | jq -r '.trace' | head -n 20)
+          connector_ui_link="${CONNECT_UI_URL}/${connector}"
+    
+          # Build Slack payload
+          msg=$(jq -n \
+            --arg connector "$connector" \
+            --arg task_id "$task_id" \
+            --arg worker_id "$worker_id" \
+            --arg trace "$trace" \
+            --arg connector_ui_link "$connector_ui_link" \
+            --arg channel "$SLACK_CHANNEL_ID" \
+            --arg environment "$ENVIRONMENT_NAME" \
+            '{
+              "channel": $channel,
+              "text": ":x: *Kafka Connector Task Failed!*",
+              "attachments": [
+                {
+                  "color": "#ff0000",
+                  "fields": [
+                    {"title": "Connector", "value": ("<" + $connector_ui_link + "|" + $connector + ">"), "short": true},
+                    {"title": "Environment", "value": $environment, "short": true},
+                    {"title": "Task ID", "value": $task_id, "short": true},
+                    {"title": "Worker", "value": $worker_id, "short": false},
+                    {"title": "Connector UI", "value": $connector_ui_link, "short": false},
+                    {"title": "Error Trace (truncated)", "value": ($trace | .[0:1000]), "short": false}
+                  ]
+                }
+              ]
+            }'
+          )
+    
+          log "  Sending Slack notification for $connector (Task $task_id)..."
+    
+          response=$(curl -s -w "%{http_code}" -o /tmp/slack_response.txt \
+            -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$msg" || true)
+    
+          slack_ok=$(jq -r '.ok' /tmp/slack_response.txt 2>/dev/null || echo "false")
+          slack_err=$(jq -r '.error' /tmp/slack_response.txt 2>/dev/null || echo "")
+    
+          if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
+            log "  ✅ Slack alert sent successfully."
+          else
+            log "  ⚠️  Slack alert failed (HTTP $response): $slack_err"
+            log "  Response: $(cat /tmp/slack_response.txt)"
+          fi
+    
+          alert_sent=true
+        else
+          log "  ✅ Task $task_id is $task_state"
+        fi
+      done <<< "$tasks"
+    done
+    
+    if [[ "$alert_sent" = false ]]; then
+      log "✅ All connector tasks are healthy."
+    fi
