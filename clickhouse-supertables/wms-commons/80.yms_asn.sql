@@ -27,10 +27,9 @@ CREATE TABLE IF NOT EXISTS wms_yms_asn
     trailerNo String DEFAULT '',
     tripCode String DEFAULT '',
     truckLoadType String DEFAULT '',
-    iloc String DEFAULT '',
-    updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
+    iloc String DEFAULT ''
 )
-ENGINE = ReplacingMergeTree(updatedAt)
+ENGINE = ReplacingMergeTree(deactivatedAt)
 PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192
