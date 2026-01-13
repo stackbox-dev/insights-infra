@@ -196,7 +196,12 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'inv_line', table: 'oms_inv_line' },
       { namespace: 'public', topic: 'shipment_input', table: 'oms_shipment_input' },
       { namespace: 'public', topic: 'shipment_output', table: 'oms_shipment_output' },
-      { namespace: 'public', topic: 'wms_dock_line', table: 'oms_wms_dock_line' }
+      { namespace: 'public', topic: 'wms_dock_line', table: 'oms_wms_dock_line' },
+      { namespace: 'public', topic: 'storage_activity_zone', table: 'wms_storage_activity_zone' },
+      { namespace: 'public', topic: 'provisional_gin', table: 'wms_provisional_gin' },
+      { namespace: 'public', topic: 'yms_asn', table: 'wms_yms_asn' },
+      { namespace: 'public', topic: 'storage_bin_type_best_fit', table: 'wms_storage_bin_type_best_fit' },
+      { namespace: 'public', topic: 'storage_bin_distance', table: 'wms_storage_bin_distance' }
     ],
     dlqTopic: 'dlq-oms-clickhouse',
     performanceConfig: defaultPerformanceConfig
