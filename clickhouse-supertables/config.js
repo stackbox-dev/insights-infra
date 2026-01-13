@@ -163,7 +163,12 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'ccs_ptl_chu_visit', table: 'wms_ccs_ptl_chu_visit' },
       { namespace: 'public', topic: 'sbl_bin_chu', table: 'wms_sbl_bin_chu' },
       { namespace: 'public', topic: 'ccs_sbl_hu_visit', table: 'wms_ccs_sbl_hu_visit' },
-      { namespace: 'public', topic: 'bbulk_ptl_demand', table: 'wms_bbulk_ptl_demand' }
+      { namespace: 'public', topic: 'bbulk_ptl_demand', table: 'wms_bbulk_ptl_demand' },
+      { namespace: 'public', topic: 'storage_activity_zone', table: 'wms_storage_activity_zone' },
+      { namespace: 'public', topic: 'provisional_gin', table: 'wms_provisional_gin' },
+      { namespace: 'public', topic: 'yms_asn', table: 'wms_yms_asn' },
+      { namespace: 'public', topic: 'storage_bin_type_best_fit', table: 'wms_storage_bin_type_best_fit' },
+      { namespace: 'public', topic: 'storage_bin_distance', table: 'wms_storage_bin_distance' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
@@ -196,12 +201,7 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'inv_line', table: 'oms_inv_line' },
       { namespace: 'public', topic: 'shipment_input', table: 'oms_shipment_input' },
       { namespace: 'public', topic: 'shipment_output', table: 'oms_shipment_output' },
-      { namespace: 'public', topic: 'wms_dock_line', table: 'oms_wms_dock_line' },
-      { namespace: 'public', topic: 'storage_activity_zone', table: 'wms_storage_activity_zone' },
-      { namespace: 'public', topic: 'provisional_gin', table: 'wms_provisional_gin' },
-      { namespace: 'public', topic: 'yms_asn', table: 'wms_yms_asn' },
-      { namespace: 'public', topic: 'storage_bin_type_best_fit', table: 'wms_storage_bin_type_best_fit' },
-      { namespace: 'public', topic: 'storage_bin_distance', table: 'wms_storage_bin_distance' }
+      { namespace: 'public', topic: 'wms_dock_line', table: 'oms_wms_dock_line' }
     ],
     dlqTopic: 'dlq-oms-clickhouse',
     performanceConfig: defaultPerformanceConfig
