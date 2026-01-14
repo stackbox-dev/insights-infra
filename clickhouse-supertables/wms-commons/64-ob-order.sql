@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS wms_ob_order
     erpInvoiceCode String DEFAULT '',
     provisionalGinStatus String DEFAULT 'PENDING',
     provisionalGinTriggeredAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
-    erpInvoiceCodes String DEFAULT '[]',
+    erpInvoiceCodes String DEFAULT '[]'
 )
 ENGINE = ReplacingMergeTree(createdAt)
 ORDER BY (whId, id)
