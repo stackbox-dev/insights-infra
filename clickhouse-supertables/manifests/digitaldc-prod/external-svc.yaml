@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-proxy-svc-external
+  namespace: kafka
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: UnileverSBXWMS_DC_2
+    service.beta.kubernetes.io/azure-load-balancer-ipv4: 4.224.128.72
+    service.beta.kubernetes.io/azure-pip-name: SBXAPIGatewayIPDCPROD
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 25651
+      targetPort: 25651
+      protocol: TCP
+      name: clickhouse-https
+  selector:
+    app: clickhouse-tcp-proxy
