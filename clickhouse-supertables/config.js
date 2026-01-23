@@ -168,7 +168,9 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'provisional_gin', table: 'wms_provisional_gin' },
       { namespace: 'public', topic: 'yms_asn', table: 'wms_yms_asn' },
       { namespace: 'public', topic: 'storage_bin_type_best_fit', table: 'wms_storage_bin_type_best_fit' },
-      { namespace: 'public', topic: 'storage_bin_distance', table: 'wms_storage_bin_distance' }
+      { namespace: 'public', topic: 'storage_bin_distance', table: 'wms_storage_bin_distance' },
+      { namespace: 'public', topic: 'pd_pick_drop_item_inner_hu', table: 'wms_pd_pick_drop_item_inner_hu' },
+      { namespace: 'public', topic: 'ob_qc_chu_item', table: 'wms_ob_qc_chu_item' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
