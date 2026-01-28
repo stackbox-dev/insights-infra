@@ -1,0 +1,23 @@
+
+-- ClickHouse table for HHT Pick Group
+
+CREATE TABLE IF NOT EXISTS wms_hht_pick_group
+(
+    whId Int64 DEFAULT 0,
+    sessionId String DEFAULT '',
+    taskId String DEFAULT '',
+    id String DEFAULT '',
+    sessionCreatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    sblTaskId String DEFAULT '',
+    sblZoneId String DEFAULT '',
+    priority Int32 DEFAULT 0,
+    huId String DEFAULT '',
+    binId String DEFAULT '',
+    binAssignedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    mappedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    mappedBy String DEFAULT ''
+)
+ENGINE = ReplacingMergeTree(createdAt)
+ORDER BY (id)
+SETTINGS index_granularity = 8192;
