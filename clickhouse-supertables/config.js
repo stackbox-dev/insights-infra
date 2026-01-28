@@ -170,7 +170,10 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'storage_bin_type_best_fit', table: 'wms_storage_bin_type_best_fit' },
       { namespace: 'public', topic: 'storage_bin_distance', table: 'wms_storage_bin_distance' },
       { namespace: 'public', topic: 'pd_pick_drop_item_inner_hu', table: 'wms_pd_pick_drop_item_inner_hu' },
-      { namespace: 'public', topic: 'ob_qc_chu_item', table: 'wms_ob_qc_chu_item' }
+      { namespace: 'public', topic: 'ob_qc_chu_item', table: 'wms_ob_qc_chu_item' },
+      { namespace: 'public', topic: 'inventory', table: 'wms_inventory' },
+      { namespace: 'public', topic: 'hht_pick_item_reduction', table: 'wms_hht_pick_item_reduction' },
+      { namespace: 'public', topic: 'hht_pick_group', table: 'wms_hht_pick_group' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
