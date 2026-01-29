@@ -173,7 +173,9 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'ob_qc_chu_item', table: 'wms_ob_qc_chu_item' },
       { namespace: 'public', topic: 'inventory', table: 'wms_inventory' },
       { namespace: 'public', topic: 'hht_pick_item_reduction', table: 'wms_hht_pick_item_reduction' },
-      { namespace: 'public', topic: 'hht_pick_group', table: 'wms_hht_pick_group' }
+      { namespace: 'public', topic: 'hht_pick_group', table: 'wms_hht_pick_group' },
+      { namespace: 'public', topic: 'bbulk_ptl_bin_reduction', table: 'wms_bbulk_ptl_bin_reduction' },
+      { namespace: 'public', topic: 'sbl_chu_reduction', table: 'wms_sbl_chu_reduction' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
