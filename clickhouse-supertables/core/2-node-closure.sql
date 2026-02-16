@@ -1,7 +1,7 @@
 -- ClickHouse table for Node Closure
 -- Source: public.node_closure
 
-CREATE TABLE IF NOT EXISTS tms_node_closure
+CREATE TABLE IF NOT EXISTS backbone_node_closure
 (
     parentId Int64 DEFAULT 0,
     childId Int64 DEFAULT 0,

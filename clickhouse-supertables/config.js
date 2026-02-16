@@ -262,6 +262,17 @@ const sinkConfigurations = {
     ],
     dlqTopic: 'dlq-tms-clickhouse',
     performanceConfig: defaultPerformanceConfig
+  },
+
+  core: {
+    service: 'core',
+    topicMappings: [
+      { namespace: 'public', topic: 'node', table: 'backbone_node' },
+      { namespace: 'public', topic: 'node_closure', table: 'backbone_node_closure' },
+      { namespace: 'public', topic: 'user_account', table: 'backbone_user_account' }
+    ],
+    dlqTopic: 'dlq-core-clickhouse',
+    performanceConfig: defaultPerformanceConfig
   }
 };
 
