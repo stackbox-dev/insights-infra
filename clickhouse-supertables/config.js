@@ -177,7 +177,20 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'bbulk_ptl_bin_reduction', table: 'wms_bbulk_ptl_bin_reduction' },
       { namespace: 'public', topic: 'sbl_chu_reduction', table: 'wms_sbl_chu_reduction' },
       { namespace: 'public', topic: 'hht_pick_item', table: 'wms_inb_qc_item' },
-      { namespace: 'public', topic: 'ccs_ptl_zone_inventory', table: 'wms_ccs_ptl_zone_inventory' }
+      { namespace: 'public', topic: 'ccs_ptl_zone_inventory', table: 'wms_ccs_ptl_zone_inventory' },
+      { namespace: 'public', topic: 'ira_bin_item', table: 'wms_ira_bin_item' },
+      { namespace: 'public', topic: 'inb_unload_item', table: 'wms_inb_unload_item' },
+      { namespace: 'public', topic: 'ob_qa_lineitem', table: 'wms_ob_qa_lineitem' },
+      { namespace: 'public', topic: 'storage_bin_type', table: 'wms_storage_bin_type' },
+      { namespace: 'public', topic: 'storage_position', table: 'wms_storage_position' },
+      { namespace: 'public', topic: 'storage_dockdoor_position', table: 'wms_storage_dockdoor_position' },
+      { namespace: 'public', topic: 'storage_dockdoor', table: 'wms_storage_dockdoor' },
+      { namespace: 'public', topic: 'pd_pick_drop_mapping', table: 'wms_pd_pick_drop_mapping' }
+      { namespace: 'public', topic: 'storage_area', table: 'wms_storage_area' },
+      { namespace: 'public', topic: 'storage_zone', table: 'wms_storage_zone' },
+      { namespace: 'public', topic: 'storage_bin', table: 'wms_storage_bin' },
+      { namespace: 'public', topic: 'storage_bin_dockdoor', table: 'wms_storage_bin_dockdoor' },
+      { namespace: 'public', topic: 'storage_bin_fixed_mapping', table: 'wms_storage_bin_fixed_mapping' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
