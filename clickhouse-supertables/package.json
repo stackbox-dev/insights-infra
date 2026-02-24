@@ -1,12 +1,16 @@
 {
-  "name": "clickhouse-sink-manager",
+  "name": "sink-connector-manager",
   "version": "1.0.0",
-  "description": "Interactive manager for ClickHouse sink connectors in Kafka Connect",
+  "description": "Interactive manager for ClickHouse and StarRocks sink connectors in Kafka Connect",
   "main": "manager.js",
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "clickhouse": "node manager.js",
+    "starrocks": "node starrocks-manager.js"
+  },
   "keywords": [
     "clickhouse",
+    "starrocks",
     "kafka-connect",
     "sink",
     "connector"

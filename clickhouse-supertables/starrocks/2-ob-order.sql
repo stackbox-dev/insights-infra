@@ -1,0 +1,50 @@
+CREATE TABLE wms_ob_order (
+  id varchar(36) NOT NULL COMMENT "",
+  whId bigint(20) NOT NULL COMMENT "",
+  tripCode varchar(256) NULL COMMENT "",
+  code varchar(256) NOT NULL COMMENT "",
+  retailerId int(11) NOT NULL COMMENT "",
+  retailerCode varchar(256) NOT NULL COMMENT "",
+  retailerChannel varchar(256) NULL COMMENT "",
+  retailerName varchar(256) NOT NULL COMMENT "",
+  tripDate datetime NULL COMMENT "",
+  deliveryDate datetime NULL COMMENT "",
+  priority int(11) NOT NULL COMMENT "",
+  sessionId varchar(36) NULL COMMENT "",
+  active boolean NOT NULL COMMENT "",
+  createdAt datetime NULL COMMENT "",
+  sessionCreatedAt datetime NULL COMMENT "",
+  salesmanCode varchar(256) NOT NULL COMMENT "",
+  ginStatus varchar(64) NOT NULL COMMENT "",
+  ginTriggeredAt datetime NULL COMMENT "",
+  cancelledAt datetime NULL COMMENT "",
+  tripPriority int(11) NULL COMMENT "",
+  truckType varchar(256) NULL COMMENT "",
+  transporterCode varchar(256) NULL COMMENT "",
+  advanceReplenSessionId varchar(36) NULL COMMENT "",
+  orderType varchar(128) NULL COMMENT "",
+  loadingSeq int(11) NULL COMMENT "",
+  latestPickDate date NULL COMMENT "",
+  earliestPickDate date NULL COMMENT "",
+  documentType varchar(128) NOT NULL COMMENT "",
+  orderReferenceId varchar(36) NULL COMMENT "",
+  orderReferenceCode varchar(256) NULL COMMENT "",
+  erpChannel varchar(256) NULL COMMENT "",
+  delinkedAt datetime NULL COMMENT "",
+  relinkedAt datetime NULL COMMENT "",
+  erpInvoiceCode varchar(256) NULL COMMENT "",
+  provisionalGinStatus VARCHAR(64) NULL DEFAULT 'NEW' COMMENT "",
+  provisionalGinTriggeredAt datetime NULL COMMENT "",
+  erpInvoiceCodes json NULL COMMENT "",
+  ginDocumentUrl varchar(512) NULL COMMENT ""
+) ENGINE=OLAP 
+PRIMARY KEY(id)
+DISTRIBUTED BY HASH(id) BUCKETS 16 
+PROPERTIES (
+"compression" = "LZ4",
+"enable_persistent_index" = "true",
+"fast_schema_evolution" = "true",
+"replicated_storage" = "true",
+"replication_num" = "2"
+);
+

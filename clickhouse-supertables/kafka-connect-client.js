@@ -2,8 +2,9 @@
 // Provides methods to interact with Kafka Connect REST API
 
 export class KafkaConnectClient {
-  constructor(baseUrl) {
+  constructor(baseUrl, connectorClass = null) {
     this.baseUrl = baseUrl;
+    this.connectorClass = connectorClass;
   }
 
   async request(path, options = {}) {
@@ -107,18 +108,23 @@ export class KafkaConnectClient {
             this.getConnectorConfig(name)
           ]);
 
-          // Only include ClickHouse sink connectors
-          if (config['connector.class'] === 'com.clickhouse.kafka.connect.ClickHouseSinkConnector') {
-            return { name, ...status, config };
+          // Filter by connector class if specified
+          if (this.connectorClass) {
+            if (config['connector.class'] === this.connectorClass) {
+              return { name, ...status, config };
+            }
+            return null;
           }
-          return null;
+          
+          // No filter - return all connectors
+          return { name, ...status, config };
         } catch (error) {
           return null;
         }
       })
     );
 
-    // Filter out null values (non-ClickHouse connectors and errors)
+    // Filter out null values (filtered connectors and errors)
     return statuses.filter(s => s !== null);
   }
 

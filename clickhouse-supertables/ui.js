@@ -11,7 +11,7 @@ const VIEWS = {
   DEPLOY: 'deploy'
 };
 
-export function ConnectorManagerUI({ client, env, sinkConfigurations, buildConfig }) {
+export function ConnectorManagerUI({ client, env, sinkConfigurations, buildConfig, title, getConnectorName }) {
   const { exit } = useApp();
   const [view, setView] = useState(VIEWS.CONNECTOR_LIST);
   const [connectors, setConnectors] = useState([]);
@@ -20,15 +20,19 @@ export function ConnectorManagerUI({ client, env, sinkConfigurations, buildConfi
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [drifts, setDrifts] = useState({});
+  
+  // Use provided title or fallback to default, always append TOPIC_PREFIX
+  const displayTitle = title 
+    ? `${title} (${process.env.TOPIC_PREFIX})`
+    : `Sink Connectors (${process.env.TOPIC_PREFIX})`;
 
   // Detect configuration drift and return details
   const detectDrift = (connector) => {
     // Extract sink name from connector name
-    // Format: clickhouse-connect-{TOPIC_PREFIX}-{sink-name}
-    const prefix = `clickhouse-connect-${process.env.TOPIC_PREFIX}-`;
-    if (!connector.name.startsWith(prefix)) return null;
-
-    const sinkName = connector.name.substring(prefix.length);
+    // Format: {TOPIC_PREFIX}-{sinkType}-{sink-name}
+    const parts = connector.name.split('-');
+    if (parts.length < 3) return null;
+    const sinkName = parts.slice(2).join('-');
     const localConfig = sinkConfigurations[sinkName];
 
     if (!localConfig) return null;
@@ -136,7 +140,7 @@ export function ConnectorManagerUI({ client, env, sinkConfigurations, buildConfi
     setError(null);
     try {
       const sinkConfig = sinkConfigurations[sinkName];
-      const connectorName = `clickhouse-connect-${process.env.TOPIC_PREFIX}-${sinkName}`;
+      const connectorName = getConnectorName(sinkName);
       const config = buildConfig(sinkConfig);
 
       await client.createOrUpdateConnector(connectorName, config);
@@ -171,8 +175,8 @@ export function ConnectorManagerUI({ client, env, sinkConfigurations, buildConfi
       onAction: handleAction,
       onRedeploy: async () => {
         // Extract sink name and re-deploy
-        const prefix = `clickhouse-connect-${process.env.TOPIC_PREFIX}-`;
-        const sinkName = selectedConnector.name.substring(prefix.length);
+        const parts = selectedConnector.name.split('-');
+        const sinkName = parts.slice(2).join('-');
         await handleDeploy(sinkName);
       },
       loading,
@@ -187,7 +191,8 @@ export function ConnectorManagerUI({ client, env, sinkConfigurations, buildConfi
       onDeploy: handleDeploy,
       onBack: () => setView(VIEWS.CONNECTOR_LIST),
       loading,
-      error
+      error,
+      displayTitle
     });
   }
 
@@ -236,7 +241,7 @@ function ConnectorList({ connectors, loading, error, lastUpdate, drifts, onSelec
   const failed = connectors.filter(c => c.connector?.state === 'FAILED').length;
 
   return h(Box, { flexDirection: 'column' },
-    h(Header, { title: `ClickHouse Sink Connectors (${process.env.TOPIC_PREFIX})`, lastUpdate }),
+    h(Header, { title: `Sink Connectors (${process.env.TOPIC_PREFIX})`, lastUpdate }),
     error && h(Box, { marginBottom: 1 },
       h(Text, { color: 'red' }, `Error: ${error}`)
     ),
@@ -372,16 +377,16 @@ function ConnectorDetail({ connector, driftDetails, onBack, onAction, onRedeploy
   );
 }
 
-function DeployView({ sinkConfigurations, connectors, onDeploy, onBack, loading, error }) {
+function DeployView({ sinkConfigurations, connectors, onDeploy, onBack, loading, error, displayTitle }) {
   const [selectedSinks, setSelectedSinks] = useState(new Set());
   const [mode, setMode] = useState('select'); // 'select' or 'confirm'
 
   // Get deployed sink names
   const deployedSinkNames = new Set(
     connectors.map(c => {
-      const prefix = `clickhouse-connect-${process.env.TOPIC_PREFIX}-`;
-      if (c.name.startsWith(prefix)) {
-        return c.name.substring(prefix.length);
+      const parts = c.name.split('-');
+      if (parts.length >= 3) {
+        return parts.slice(2).join('-');
       }
       return null;
     }).filter(name => name !== null)
@@ -446,7 +451,7 @@ function DeployView({ sinkConfigurations, connectors, onDeploy, onBack, loading,
     }
   };
 
-  const title = mode === 'select' ? 'Deploy Connector - Select Sinks' : 'Deploy Connector - Confirm';
+  const title = mode === 'select' ? `${displayTitle || 'Deploy Connector'} - Select Sinks` : `${displayTitle || 'Deploy Connector'} - Confirm`;
   const description = mode === 'select'
     ? 'Select one or more sinks to deploy (press Enter to toggle selection):'
     : `Review and confirm deployment of ${selectedSinks.size} sink(s):`;

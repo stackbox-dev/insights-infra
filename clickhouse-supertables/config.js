@@ -5,7 +5,6 @@ const baseConfig = {
   'connector.class': 'com.clickhouse.kafka.connect.ClickHouseSinkConnector',
   exactlyOnce: 'false',
   ssl: 'true',
-
   // Tombstone filtering to handle ClickHouse connector bug
   transforms: 'dropNull',
   'transforms.dropNull.type': 'org.apache.kafka.connect.transforms.Filter',
@@ -185,7 +184,7 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'storage_position', table: 'wms_storage_position' },
       { namespace: 'public', topic: 'storage_dockdoor_position', table: 'wms_storage_dockdoor_position' },
       { namespace: 'public', topic: 'storage_dockdoor', table: 'wms_storage_dockdoor' },
-      { namespace: 'public', topic: 'pd_pick_drop_mapping', table: 'wms_pd_pick_drop_mapping' }
+      { namespace: 'public', topic: 'pd_pick_drop_mapping', table: 'wms_pd_pick_drop_mapping' },
       { namespace: 'public', topic: 'storage_area', table: 'wms_storage_area' },
       { namespace: 'public', topic: 'storage_zone', table: 'wms_storage_zone' },
       { namespace: 'public', topic: 'storage_bin', table: 'wms_storage_bin' },
