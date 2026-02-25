@@ -106,7 +106,7 @@ const client = new KafkaConnectClient(
 // Get connector name with StarRocks prefix
 function getConnectorName(sinkKey) {
   const topicPrefix = process.env.TOPIC_PREFIX;
-  return `${topicPrefix}-starrocks-${sinkKey}`;
+  return `starrocks-connect-${topicPrefix}-${sinkKey}`;
 }
 
 // Render the UI with StarRocks-specific configuration
