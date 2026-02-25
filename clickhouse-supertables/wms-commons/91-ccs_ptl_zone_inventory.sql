@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS wms_ccs_ptl_zone_inventory
     assigned Int32 DEFAULT 0,
     updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     price String DEFAULT ''
-
+)
 ENGINE = ReplacingMergeTree(updatedAt)
 ORDER BY (id) 
 SETTINGS index_granularity = 8192;
