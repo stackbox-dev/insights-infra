@@ -123,7 +123,7 @@ try {
 // Get connector name with ClickHouse prefix
 function getConnectorName(sinkKey) {
   const topicPrefix = process.env.TOPIC_PREFIX;
-  return `${topicPrefix}-clickhouse-${sinkKey}`;
+  return `clickhouse-connect-${topicPrefix}-${sinkKey}`;
 }
 
 // Render the UI

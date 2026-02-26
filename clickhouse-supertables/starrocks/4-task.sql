@@ -1,32 +1,34 @@
 CREATE TABLE wms_tasks (
-  id varchar(36) NOT NULL COMMENT "",
-  whId bigint(20) NOT NULL COMMENT "",
-  sessionId varchar(36) NOT NULL COMMENT "",
-  kind varchar(128) NOT NULL COMMENT "",
-  code varchar(256) NOT NULL COMMENT "",
-  seq int(11) NOT NULL COMMENT "",
-  exclusive boolean NOT NULL COMMENT "",
-  state varchar(64) NOT NULL COMMENT "",
-  attrs json NOT NULL COMMENT "",
-  progress json NOT NULL COMMENT "",
-  createdAt datetime NULL COMMENT "",
-  updatedAt datetime NULL COMMENT "",
-  active boolean NOT NULL COMMENT "",
-  allowForceComplete boolean NOT NULL COMMENT "",
-  autoComplete boolean NOT NULL COMMENT "",
-  wave int(11) NULL COMMENT "",
-  forceCompleteTaskId varchar(36) NULL COMMENT "",
-  forceCompleted boolean NOT NULL COMMENT "",
-  subKind varchar(128) NOT NULL COMMENT "",
-  label varchar(256) NOT NULL COMMENT "",
-  scope varchar(256) NULL COMMENT ""
-) ENGINE=OLAP 
-PRIMARY KEY(id)
-DISTRIBUTED BY HASH(id) BUCKETS 16 
+    id VARCHAR(255),
+    createdAt DATETIME DEFAULT "1970-01-01 00:00:00",
+    whId BIGINT DEFAULT "0",
+    sessionId VARCHAR(255) DEFAULT "",
+    kind VARCHAR(255) DEFAULT "",
+    code VARCHAR(255) DEFAULT "",
+    seq INT DEFAULT "0",
+    exclusive BOOLEAN DEFAULT "0",
+    state VARCHAR(255) DEFAULT "",
+    attrs JSON,
+    progress JSON,
+    updatedAt DATETIME DEFAULT "1970-01-01 00:00:00",
+    active BOOLEAN DEFAULT "1",
+    allowForceComplete BOOLEAN DEFAULT "1",
+    autoComplete BOOLEAN DEFAULT "0",
+    wave INT DEFAULT "0",
+    forceCompleteTaskId VARCHAR(255) DEFAULT "",
+    forceCompleted BOOLEAN DEFAULT "0",
+    subKind VARCHAR(255) DEFAULT "",
+    label VARCHAR(500) DEFAULT "",
+    scope VARCHAR(255) DEFAULT ""
+)
+ENGINE=OLAP
+DUPLICATE KEY(id, createdAt)
+PARTITION BY date_trunc('MONTH', createdAt)
+DISTRIBUTED BY HASH(id) BUCKETS 16
 PROPERTIES (
-"compression" = "LZ4",
-"enable_persistent_index" = "true",
-"fast_schema_evolution" = "true",
-"replicated_storage" = "true",
-"replication_num" = "2"
+    "compression" = "LZ4",
+    "enable_persistent_index" = "true",
+    "fast_schema_evolution" = "true",
+    "replicated_storage" = "true",
+    "replication_num" = "2"
 );
