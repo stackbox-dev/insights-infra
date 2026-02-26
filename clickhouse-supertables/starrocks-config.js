@@ -6,19 +6,23 @@ const starrocksBaseConfig = {
   
   // StarRocks Stream Load specific settings
   'sink.properties.strip_outer_array': 'true',
+  'sink.properties.format': 'json',
+  'sink.properties.strict_mode': 'false',
+  'sink.properties.max_filter_ratio': '0.1',
   
   // Avro converter settings
   'key.converter': 'io.confluent.connect.avro.AvroConverter',
   'value.converter': 'io.confluent.connect.avro.AvroConverter',
   'value.converter.schemas.enable': 'true',
-  'value.converter.use.logical.type.converters': 'true',
+  'key.converter.schemas.enable': 'true',
   'key.converter.basic.auth.credentials.source': 'USER_INFO',
   'value.converter.basic.auth.credentials.source': 'USER_INFO',
 
-  // Single Message Transforms to exclude CDC metadata columns
-  'transforms': 'dropCDCFields',
+  // Single Message Transforms to unwrap Avro unions and exclude CDC metadata columns
+  'transforms': 'unwrapUnions,dropCDCFields',
+  'transforms.unwrapUnions.type': 'xyz.stackbox.kafka.transforms.UnwrapAvroUnions$Value',
   'transforms.dropCDCFields.type': 'org.apache.kafka.connect.transforms.ReplaceField$Value',
-  'transforms.dropCDCFields.exclude': '__op,__source_ts_ms,__deleted',
+  'transforms.dropCDCFields.exclude': '__op,__source_ts_ms,__deleted,__source_snapshot',
 
   // Error handling
   'errors.tolerance': 'none',
