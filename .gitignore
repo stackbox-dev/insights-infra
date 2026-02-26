@@ -16,6 +16,7 @@ sql-queries1
 ca.pem
 *.jks
 .DS_Store
+.claude/
 
 node_modules/
 readme.md
