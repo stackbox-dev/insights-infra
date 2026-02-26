@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS wms_task_worker_assignment
     assignedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
     attrs String DEFAULT '',
     whId Int64 DEFAULT 0,
-    mheId String DEFAULT ''
+    mheId String DEFAULT '',
+    id String DEFAULT '00000000-0000-0000-0000-000000000000',
+    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3)
 )
 ENGINE = ReplacingMergeTree(assignedAt)
 ORDER BY (taskId, workerId)
