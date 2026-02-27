@@ -27,9 +27,10 @@ CREATE TABLE wms_ob_order_lineitem (
     invoicingQty INT
 )
 ENGINE=OLAP
-DUPLICATE KEY(id, createdAt)
+PRIMARY KEY(id, createdAt)
 PARTITION BY date_trunc('DAY', createdAt)
 DISTRIBUTED BY HASH(id) BUCKETS 16
+ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",
     "enable_persistent_index" = "true",

@@ -17,9 +17,10 @@ CREATE TABLE wms_trips (
     stagingBinId STRING
 )
 ENGINE=OLAP
-DUPLICATE KEY(id, sessionCreatedAt)
+PRIMARY KEY(id, sessionCreatedAt)
 PARTITION BY date_trunc('DAY', createdAt)
 DISTRIBUTED BY HASH(id) BUCKETS 16
+ORDER BY (id)   
 PROPERTIES (
     "compression" = "LZ4",
     "enable_persistent_index" = "true",
