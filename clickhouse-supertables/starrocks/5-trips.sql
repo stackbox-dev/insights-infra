@@ -18,7 +18,7 @@ CREATE TABLE wms_trips (
 )
 ENGINE=OLAP
 PRIMARY KEY(id, sessionCreatedAt)
-PARTITION BY date_trunc('DAY', createdAt)
+PARTITION BY date_trunc('DAY', sessionCreatedAt)
 DISTRIBUTED BY HASH(id) BUCKETS 16
 ORDER BY (id)   
 PROPERTIES (

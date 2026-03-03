@@ -33,7 +33,7 @@ CREATE TABLE wms_ob_order (
     delinkedAt DATETIME,
     relinkedAt DATETIME,
     erpInvoiceCode STRING,
-    provisionalGinStatus STRING NOT NULL DEFAULT 'PENDING',
+    provisionalGinStatus STRING DEFAULT 'PENDING',
     provisionalGinTriggeredAt DATETIME,
     erpInvoiceCodes JSON,
     ginDocumentUrl STRING

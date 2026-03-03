@@ -19,7 +19,7 @@ CREATE TABLE wms_tasks (
     forceCompleted BOOLEAN NOT NULL DEFAULT "false",
     subKind STRING NOT NULL DEFAULT '',
     label STRING NOT NULL DEFAULT '',
-    scope STRING NOT NULL DEFAULT ''
+    scope STRING NULL DEFAULT ''
 )
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)

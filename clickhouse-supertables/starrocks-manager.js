@@ -103,6 +103,24 @@ const client = new KafkaConnectClient(
   'com.starrocks.connector.kafka.StarRocksSinkConnector'
 );
 
+// Test connection
+console.log('Connecting to Kafka Connect...');
+console.log(`URL: ${process.env.CP_CONNECT_URL}`);
+console.log(`Environment: ${process.env.TOPIC_PREFIX}\n`);
+
+try {
+  await client.listConnectors();
+  console.log('✓ Connected successfully\n');
+} catch (error) {
+  console.error('✗ Failed to connect to Kafka Connect:');
+  console.error(`  ${error.message}\n`);
+  console.error('Please ensure:');
+  console.error('  1. CP_CONNECT_URL is correct in your env file');
+  console.error('  2. Kafka Connect is running and accessible');
+  console.error('  3. Port forwarding is active (if using localhost:8083)\n');
+  process.exit(1);
+}
+
 // Get connector name with StarRocks prefix
 function getConnectorName(sinkKey) {
   const topicPrefix = process.env.TOPIC_PREFIX;

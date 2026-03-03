@@ -9,6 +9,7 @@ const starrocksBaseConfig = {
   'sink.properties.format': 'json',
   'sink.properties.strict_mode': 'false',
   'sink.properties.max_filter_ratio': '0.1',
+  'sink.properties.ignore_json_size': 'true',
   
   // Avro converter settings
   'key.converter': 'io.confluent.connect.avro.AvroConverter',
@@ -60,6 +61,14 @@ const starrocksSinkConfigurations = {
       { namespace: 'public', topic: 'vehicle_event', table: 'wms_vehicle_event' }
     ],
     dlqTopic: 'dlq-wms-starrocks-commons',
+    performanceConfig: starrocksDefaultPerformanceConfig
+  },
+  'encarta': {
+    service: 'encarta',
+    topicMappings: [
+      { namespace: 'flink', topic: 'skus_master', table: 'encarta_skus_master' }
+    ],
+    dlqTopic: 'dlq-encarta-starrocks',
     performanceConfig: starrocksDefaultPerformanceConfig
   }
 };
