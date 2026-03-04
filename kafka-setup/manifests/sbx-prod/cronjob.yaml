@@ -4,19 +4,44 @@ metadata:
   name: kafka-connector-healthcheck
   namespace: kafka
 spec:
-  schedule: "*/5 * * * *"  # every 5 min
+  schedule: "*/10 * * * *"  # every 10 min
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 300
       template:
         spec:
           containers:
             - name: connector-checker
               image: alpine:3.20
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
               env:
                 - name: CONNECT_URL
                   value: "http://cp-connect.kafka"
                 - name: CONNECT_UI_URL
                   value: "http://cp-connect-ui.kafka.sbx-india-prod.api.stackbox.internal/#/cluster/kafka-connect-1/connector"
+                - name: KAFKA_UI_URL
+                  value: "http://kafka-ui.kafka"
+                - name: CLUSTER_NAME
+                  value: "sbx-prod-kafka"
+                - name: KAFKA_UI_CONSUMER_GROUPS_URL
+                  value: "http://kafka-ui.kafka.sbx-india-prod.api.stackbox.internal/ui/clusters/sbx-prod-kafka/consumer-groups"
+                - name: KAFKA_UI_TOPICS_URL
+                  value: "http://kafka-ui.kafka.sbx-india-prod.api.stackbox.internal/ui/clusters/sbx-prod-kafka/topics"
+                - name: LAG_THRESHOLD
+                  value: "10000"
+                - name: TOPIC_SIZE_THRESHOLD_GB
+                  value: "100"
+                - name: SKIP_GROUPS
+                  value: "connect-configs,connect-offsets,connect-status,connect-cluster"
                 - name: SLACK_BOT_TOKEN
                   valueFrom:
                     secretKeyRef:
@@ -56,121 +81,234 @@ data:
   check_connectors.sh: |
     #!/usr/bin/env bash
     set -euo pipefail
-    
+
     # ==== CONFIG ====
     CONNECT_URL="${CONNECT_URL:-}"
     CONNECT_UI_URL="${CONNECT_UI_URL:-}"
+    KAFKA_UI_URL="${KAFKA_UI_URL:-}"
+    CLUSTER_NAME="${CLUSTER_NAME:-}"
+    KAFKA_UI_CONSUMER_GROUPS_URL="${KAFKA_UI_CONSUMER_GROUPS_URL:-}"
+    KAFKA_UI_TOPICS_URL="${KAFKA_UI_TOPICS_URL:-}"
+    LAG_THRESHOLD="${LAG_THRESHOLD:-10000}"
+    TOPIC_SIZE_THRESHOLD_GB="${TOPIC_SIZE_THRESHOLD_GB:-100}"
+    SKIP_GROUPS="${SKIP_GROUPS:-connect-configs,connect-offsets,connect-status,connect-cluster}"
     SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
     SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
-    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-SBX Prod}"
-    
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
+
+    TOPIC_SIZE_THRESHOLD_BYTES=$(( TOPIC_SIZE_THRESHOLD_GB * 1024 * 1024 * 1024 ))
+
     log() {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
     }
-    
+
+    send_slack() {
+      local msg="$1"
+      local response
+      response=$(curl -s -w "%{http_code}" -o /tmp/slack_response.txt \
+        -X POST "https://slack.com/api/chat.postMessage" \
+        -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$msg" || true)
+      local slack_ok
+      slack_ok=$(jq -r '.ok' /tmp/slack_response.txt 2>/dev/null || echo "false")
+      local slack_err
+      slack_err=$(jq -r '.error' /tmp/slack_response.txt 2>/dev/null || echo "")
+      if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
+        log "    ✅ Slack alert sent."
+      else
+        log "    ⚠️  Slack alert failed (HTTP ${response}): ${slack_err}"
+      fi
+    }
+
     # ==== VALIDATE ENV ====
     if [[ -z "$SLACK_BOT_TOKEN" || -z "$SLACK_CHANNEL_ID" ]]; then
-      log "❌ ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set as env vars."
+      log "❌ ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set."
       exit 1
     fi
-    
-    # ==== FETCH CONNECTORS ====
-    log "Fetching connectors from $CONNECT_URL ..."
-    connectors_json=$(curl -s --insecure "${CONNECT_URL}/connectors")
-    
+
+    # ============================================================
+    # CHECK 1: CONNECTOR HEALTH
+    # ============================================================
+    log "===== CHECK 1: Connector Health ====="
+
+    connectors_json=$(curl -s --insecure "${CONNECT_URL}/connectors" || echo "")
+
     if [[ -z "$connectors_json" || "$connectors_json" == "null" ]]; then
       log "❌ No response from Kafka Connect API."
-      exit 1
-    fi
-    
-    connectors=$(echo "$connectors_json" | jq -r '.[]' 2>/dev/null || true)
-    if [[ -z "$connectors" ]]; then
-      log "✅ No connectors found."
-      exit 0
-    fi
-    
-    alert_sent=false
-    
-    # ==== LOOP THROUGH CONNECTORS ====
-    for connector in $connectors; do
-      log "Checking connector: $connector"
-      status_json=$(curl -s --insecure "${CONNECT_URL}/connectors/${connector}/status")
-    
-      if [[ -z "$status_json" || "$status_json" == "null" ]]; then
-        log "⚠️  Skipping $connector — no status returned."
-        continue
+    else
+      connectors=$(echo "$connectors_json" | jq -r '.[]' 2>/dev/null || true)
+      if [[ -z "$connectors" ]]; then
+        log "✅ No connectors found."
+      else
+        connector_alert_sent=false
+        for connector in $connectors; do
+          log "  Checking connector: $connector"
+          status_json=$(curl -s --insecure "${CONNECT_URL}/connectors/${connector}/status" || echo "")
+
+          [[ -z "$status_json" || "$status_json" == "null" ]] && log "  ⚠️  Skipping $connector — no status." && continue
+
+          connector_state=$(echo "$status_json" | jq -r '.connector.state' 2>/dev/null || echo "UNKNOWN")
+          log "    State: $connector_state"
+
+          tasks=$(echo "$status_json" | jq -c '.tasks[]' 2>/dev/null || true)
+          while IFS= read -r task; do
+            [[ -z "$task" ]] && continue
+            task_state=$(echo "$task" | jq -r '.state')
+            task_id=$(echo "$task" | jq -r '.id')
+            worker_id=$(echo "$task" | jq -r '.worker_id')
+
+            if [[ "$task_state" == "FAILED" ]]; then
+              log "    ❌ Task $task_id FAILED on $worker_id"
+              trace=$(echo "$task" | jq -r '.trace' | head -n 20)
+              msg=$(jq -n \
+                --arg connector "$connector" \
+                --arg task_id "$task_id" \
+                --arg worker_id "$worker_id" \
+                --arg trace "$trace" \
+                --arg connector_ui_link "${CONNECT_UI_URL}/${connector}" \
+                --arg channel "$SLACK_CHANNEL_ID" \
+                --arg environment "$ENVIRONMENT_NAME" \
+                '{
+                  "channel": $channel,
+                  "text": ":x: *Kafka Connector Task Failed!*",
+                  "attachments": [{
+                    "color": "#ff0000",
+                    "fields": [
+                      {"title": "Connector", "value": ("<" + $connector_ui_link + "|" + $connector + ">"), "short": true},
+                      {"title": "Environment", "value": $environment, "short": true},
+                      {"title": "Task ID", "value": $task_id, "short": true},
+                      {"title": "Worker", "value": $worker_id, "short": false},
+                      {"title": "Error Trace (truncated)", "value": ($trace | .[0:1000]), "short": false}
+                    ]
+                  }]
+                }')
+              send_slack "$msg"
+              connector_alert_sent=true
+            else
+              log "    ✅ Task $task_id is $task_state"
+            fi
+          done <<< "$tasks"
+        done
+
+        [[ "$connector_alert_sent" == "false" ]] && log "✅ All connector tasks are healthy."
       fi
-    
-      connector_state=$(echo "$status_json" | jq -r '.connector.state' 2>/dev/null || echo "UNKNOWN")
-      log "  Connector state: $connector_state"
-    
-      tasks=$(echo "$status_json" | jq -c '.tasks[]' 2>/dev/null || true)
-    
-      while IFS= read -r task; do
-        [[ -z "$task" ]] && continue
-        task_state=$(echo "$task" | jq -r '.state')
-        task_id=$(echo "$task" | jq -r '.id')
-        worker_id=$(echo "$task" | jq -r '.worker_id')
-    
-        if [[ "$task_state" == "FAILED" ]]; then
-          log "  ❌ Task $task_id FAILED on $worker_id"
-    
-          trace=$(echo "$task" | jq -r '.trace' | head -n 20)
-          connector_ui_link="${CONNECT_UI_URL}/${connector}"
-    
-          # Build Slack payload
-          msg=$(jq -n \
-            --arg connector "$connector" \
-            --arg task_id "$task_id" \
-            --arg worker_id "$worker_id" \
-            --arg trace "$trace" \
-            --arg connector_ui_link "$connector_ui_link" \
-            --arg channel "$SLACK_CHANNEL_ID" \
-            --arg environment "$ENVIRONMENT_NAME" \
-            '{
-              "channel": $channel,
-              "text": ":x: *Kafka Connector Task Failed!*",
-              "attachments": [
-                {
+    fi
+
+    # ============================================================
+    # CHECK 2: CONSUMER LAG
+    # ============================================================
+    log "===== CHECK 2: Consumer Lag (threshold: ${LAG_THRESHOLD}) ====="
+
+    if [[ -z "$KAFKA_UI_URL" || -z "$CLUSTER_NAME" ]]; then
+      log "⚠️  KAFKA_UI_URL or CLUSTER_NAME not set — skipping consumer lag check."
+    else
+      groups_json=$(curl -s --fail "${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/consumer-groups/paged?perPage=1000" || echo "")
+
+      if [[ -z "$groups_json" || "$groups_json" == "null" ]]; then
+        log "❌ No response from Kafka UI consumer groups API."
+      else
+        group_count=$(echo "$groups_json" | jq '.consumerGroups | length' 2>/dev/null || echo "0")
+        log "Found ${group_count} consumer groups."
+        lag_alert_sent=false
+
+        while IFS= read -r group; do
+          [[ -z "$group" ]] && continue
+          group_id=$(echo "$group" | jq -r '.groupId')
+          messages_behind=$(echo "$group" | jq -r '.consumerLag // 0')
+
+          skip=false
+          IFS=',' read -ra skip_list <<< "$SKIP_GROUPS"
+          for skip_group in "${skip_list[@]}"; do
+            [[ "$group_id" == "$skip_group" ]] && skip=true && break
+          done
+          [[ "$skip" == "true" ]] && log "  ⏭️  Skipping: ${group_id}" && continue
+
+          log "  Group: ${group_id} | Lag: ${messages_behind}"
+
+          if [[ "$messages_behind" -gt "$LAG_THRESHOLD" ]]; then
+            log "  ⚠️  LAG ALERT: ${group_id} is ${messages_behind} messages behind"
+            msg=$(jq -n \
+              --arg group_id "$group_id" \
+              --arg messages_behind "$messages_behind" \
+              --arg threshold "$LAG_THRESHOLD" \
+              --arg group_ui_link "$KAFKA_UI_CONSUMER_GROUPS_URL" \
+              --arg channel "$SLACK_CHANNEL_ID" \
+              --arg environment "$ENVIRONMENT_NAME" \
+              '{
+                "channel": $channel,
+                "text": ":warning: *Kafka Consumer Lag Alert!*",
+                "attachments": [{
+                  "color": "#ff9900",
+                  "fields": [
+                    {"title": "Consumer Group", "value": ("<" + $group_ui_link + "|" + $group_id + ">"), "short": true},
+                    {"title": "Environment", "value": $environment, "short": true},
+                    {"title": "Lag (messages behind)", "value": $messages_behind, "short": true},
+                    {"title": "Threshold", "value": $threshold, "short": true}
+                  ]
+                }]
+              }')
+            send_slack "$msg"
+            lag_alert_sent=true
+          else
+            log "  ✅ ${group_id} is healthy (lag: ${messages_behind})"
+          fi
+        done < <(echo "$groups_json" | jq -c '.consumerGroups[]')
+
+        [[ "$lag_alert_sent" == "false" ]] && log "✅ All consumer groups are within the lag threshold."
+      fi
+    fi
+
+    # ============================================================
+    # CHECK 3: TOPIC SIZE
+    # ============================================================
+    log "===== CHECK 3: Topic Size (threshold: ${TOPIC_SIZE_THRESHOLD_GB}GB) ====="
+
+    if [[ -z "$KAFKA_UI_URL" || -z "$CLUSTER_NAME" ]]; then
+      log "⚠️  KAFKA_UI_URL or CLUSTER_NAME not set — skipping topic size check."
+    else
+      topics_json=$(curl -s --fail "${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/topics?perPage=1000" || echo "")
+
+      if [[ -z "$topics_json" || "$topics_json" == "null" ]]; then
+        log "❌ No response from Kafka UI topics API."
+      else
+        topic_count=$(echo "$topics_json" | jq '.topics | length' 2>/dev/null || echo "0")
+        log "Found ${topic_count} topics."
+        size_alert_sent=false
+
+        while IFS= read -r topic; do
+          [[ -z "$topic" ]] && continue
+          topic_name=$(echo "$topic" | jq -r '.name')
+          segment_size=$(echo "$topic" | jq -r '.segmentSize // 0')
+
+          if [[ "$segment_size" -gt "$TOPIC_SIZE_THRESHOLD_BYTES" ]]; then
+            size_gb=$(awk "BEGIN {printf \"%.1f\", $segment_size / 1073741824}")
+            log "  ⚠️  TOPIC SIZE ALERT: ${topic_name} is ${size_gb}GB"
+            msg=$(jq -n \
+              --arg topic_name "$topic_name" \
+              --arg size_gb "${size_gb}GB" \
+              --arg threshold "${TOPIC_SIZE_THRESHOLD_GB}GB" \
+              --arg topic_ui_link "${KAFKA_UI_TOPICS_URL}/${topic_name}" \
+              --arg channel "$SLACK_CHANNEL_ID" \
+              --arg environment "$ENVIRONMENT_NAME" \
+              '{
+                "channel": $channel,
+                "text": ":red_circle: *Kafka Topic Size Alert!*",
+                "attachments": [{
                   "color": "#ff0000",
                   "fields": [
-                    {"title": "Connector", "value": ("<" + $connector_ui_link + "|" + $connector + ">"), "short": true},
+                    {"title": "Topic", "value": ("<" + $topic_ui_link + "|" + $topic_name + ">"), "short": true},
                     {"title": "Environment", "value": $environment, "short": true},
-                    {"title": "Task ID", "value": $task_id, "short": true},
-                    {"title": "Worker", "value": $worker_id, "short": false},
-                    {"title": "Connector UI", "value": $connector_ui_link, "short": false},
-                    {"title": "Error Trace (truncated)", "value": ($trace | .[0:1000]), "short": false}
+                    {"title": "Size", "value": $size_gb, "short": true},
+                    {"title": "Threshold", "value": $threshold, "short": true}
                   ]
-                }
-              ]
-            }'
-          )
-    
-          log "  Sending Slack notification for $connector (Task $task_id)..."
-    
-          response=$(curl -s -w "%{http_code}" -o /tmp/slack_response.txt \
-            -X POST "https://slack.com/api/chat.postMessage" \
-            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "$msg" || true)
-    
-          slack_ok=$(jq -r '.ok' /tmp/slack_response.txt 2>/dev/null || echo "false")
-          slack_err=$(jq -r '.error' /tmp/slack_response.txt 2>/dev/null || echo "")
-    
-          if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
-            log "  ✅ Slack alert sent successfully."
-          else
-            log "  ⚠️  Slack alert failed (HTTP $response): $slack_err"
-            log "  Response: $(cat /tmp/slack_response.txt)"
+                }]
+              }')
+            send_slack "$msg"
+            size_alert_sent=true
           fi
-    
-          alert_sent=true
-        else
-          log "  ✅ Task $task_id is $task_state"
-        fi
-      done <<< "$tasks"
-    done
-    
-    if [[ "$alert_sent" = false ]]; then
-      log "✅ All connector tasks are healthy."
+        done < <(echo "$topics_json" | jq -c '.topics[]')
+
+        [[ "$size_alert_sent" == "false" ]] && log "✅ All topics are within the size threshold."
+      fi
     fi
