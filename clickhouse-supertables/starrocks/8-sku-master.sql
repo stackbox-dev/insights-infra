@@ -121,8 +121,7 @@ CREATE TABLE encarta_skus_master (
 	updated_at DATETIME NOT NULL DEFAULT "1970-01-01 00:00:00"
 )
 ENGINE=OLAP
-PRIMARY KEY(id, created_at)
-PARTITION BY date_trunc('DAY', created_at)
+PRIMARY KEY(id)
 DISTRIBUTED BY HASH(id) BUCKETS 16
 ORDER BY (id)
 PROPERTIES (
