@@ -1,0 +1,255 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kafka-consumer-lag-alert
+  namespace: kafka
+spec:
+  schedule: "*/10 * * * *"  # every 10 min
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          containers:
+            - name: lag-checker
+              image: alpine:3.20
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              env:
+                - name: KAFKA_UI_URL
+                  value: "http://kafka-ui.kafka"
+                - name: CLUSTER_NAME
+                  value: "samadhan-kafka"
+                - name: KAFKA_UI_CONSUMER_GROUPS_URL
+                  value: "http://kafka-ui.kafka.api.prod.unilever/ui/clusters/samadhan-kafka/consumer-groups"
+                - name: KAFKA_UI_TOPICS_URL
+                  value: "http://kafka-ui.kafka.api.prod.unilever/ui/clusters/samadhan-kafka/topics"
+                - name: LAG_THRESHOLD
+                  value: "10000"
+                - name: TOPIC_SIZE_THRESHOLD_GB
+                  value: "100"
+                - name: SKIP_GROUPS
+                  value: "connect-configs,connect-offsets,connect-status,connect-cluster"
+                - name: SLACK_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: bot_token
+                - name: SLACK_CHANNEL_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: channel_id
+                - name: ENVIRONMENT_NAME
+                  value: "Samadhan Prod"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  apk add --no-cache curl jq bash
+                  cp /scripts/check_kafka_alerts.sh /tmp/check_kafka_alerts.sh
+                  chmod +x /tmp/check_kafka_alerts.sh
+                  /tmp/check_kafka_alerts.sh
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          restartPolicy: OnFailure
+          volumes:
+            - name: script
+              configMap:
+                name: kafka-consumer-lag-script
+                defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-consumer-lag-script
+  namespace: kafka
+data:
+  check_kafka_alerts.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # ==== CONFIG ====
+    KAFKA_UI_URL="${KAFKA_UI_URL:-}"
+    CLUSTER_NAME="${CLUSTER_NAME:-}"
+    KAFKA_UI_CONSUMER_GROUPS_URL="${KAFKA_UI_CONSUMER_GROUPS_URL:-}"
+    KAFKA_UI_TOPICS_URL="${KAFKA_UI_TOPICS_URL:-}"
+    LAG_THRESHOLD="${LAG_THRESHOLD:-10000}"
+    TOPIC_SIZE_THRESHOLD_GB="${TOPIC_SIZE_THRESHOLD_GB:-100}"
+    SKIP_GROUPS="${SKIP_GROUPS:-connect-configs,connect-offsets,connect-status,connect-cluster}"
+    SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+    SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
+
+    TOPIC_SIZE_THRESHOLD_BYTES=$(( TOPIC_SIZE_THRESHOLD_GB * 1024 * 1024 * 1024 ))
+
+    log() {
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+    }
+
+    send_slack() {
+      local msg="$1"
+      local response
+      response=$(curl -s -w "%{http_code}" -o /tmp/slack_response.txt \
+        -X POST "https://slack.com/api/chat.postMessage" \
+        -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$msg" || true)
+      local slack_ok
+      slack_ok=$(jq -r '.ok' /tmp/slack_response.txt 2>/dev/null || echo "false")
+      local slack_err
+      slack_err=$(jq -r '.error' /tmp/slack_response.txt 2>/dev/null || echo "")
+      if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
+        log "    ✅ Slack alert sent."
+      else
+        log "    ⚠️  Slack alert failed (HTTP ${response}): ${slack_err}"
+      fi
+    }
+
+    # ==== VALIDATE ENV ====
+    if [[ -z "$SLACK_BOT_TOKEN" || -z "$SLACK_CHANNEL_ID" ]]; then
+      log "❌ ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set."
+      exit 1
+    fi
+
+    if [[ -z "$KAFKA_UI_URL" || -z "$CLUSTER_NAME" ]]; then
+      log "❌ ERROR: KAFKA_UI_URL and CLUSTER_NAME must be set."
+      exit 1
+    fi
+
+    # ============================================================
+    # CHECK 1: CONSUMER LAG
+    # ============================================================
+    log "===== CHECK 1: Consumer Lag (threshold: ${LAG_THRESHOLD}) ====="
+
+    GROUPS_API_URL="${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/consumer-groups/paged?perPage=1000"
+    groups_json=$(curl -s --fail "${GROUPS_API_URL}" || echo "")
+
+    if [[ -z "$groups_json" || "$groups_json" == "null" ]]; then
+      log "❌ No response from Kafka UI API at ${GROUPS_API_URL}"
+    else
+      group_count=$(echo "$groups_json" | jq '.consumerGroups | length' 2>/dev/null || echo "0")
+      log "Found ${group_count} consumer groups."
+
+      lag_alert_sent=false
+
+      while IFS= read -r group; do
+        [[ -z "$group" ]] && continue
+
+        group_id=$(echo "$group" | jq -r '.groupId')
+        messages_behind=$(echo "$group" | jq -r '.consumerLag // 0')
+
+        # Skip internal groups
+        skip=false
+        IFS=',' read -ra skip_list <<< "$SKIP_GROUPS"
+        for skip_group in "${skip_list[@]}"; do
+          if [[ "$group_id" == "$skip_group" ]]; then
+            skip=true
+            break
+          fi
+        done
+        [[ "$skip" == "true" ]] && log "  ⏭️  Skipping: ${group_id}" && continue
+
+        log "  Group: ${group_id} | Lag: ${messages_behind}"
+
+        if [[ "$messages_behind" -gt "$LAG_THRESHOLD" ]]; then
+          log "  ⚠️  LAG ALERT: ${group_id} is ${messages_behind} messages behind"
+
+          msg=$(jq -n \
+            --arg group_id "$group_id" \
+            --arg messages_behind "$messages_behind" \
+            --arg threshold "$LAG_THRESHOLD" \
+            --arg group_ui_link "$KAFKA_UI_CONSUMER_GROUPS_URL" \
+            --arg channel "$SLACK_CHANNEL_ID" \
+            --arg environment "$ENVIRONMENT_NAME" \
+            '{
+              "channel": $channel,
+              "text": ":warning: *Kafka Consumer Lag Alert!*",
+              "attachments": [{
+                "color": "#ff9900",
+                "fields": [
+                  {"title": "Consumer Group", "value": ("<" + $group_ui_link + "|" + $group_id + ">"), "short": true},
+                  {"title": "Environment", "value": $environment, "short": true},
+                  {"title": "Lag (messages behind)", "value": $messages_behind, "short": true},
+                  {"title": "Threshold", "value": $threshold, "short": true}
+                ]
+              }]
+            }')
+
+          send_slack "$msg"
+          lag_alert_sent=true
+        else
+          log "  ✅ ${group_id} is healthy (lag: ${messages_behind})"
+        fi
+      done < <(echo "$groups_json" | jq -c '.consumerGroups[]')
+
+      if [[ "$lag_alert_sent" == "false" ]]; then
+        log "✅ All consumer groups are within the lag threshold."
+      fi
+    fi
+
+    # ============================================================
+    # CHECK 2: TOPIC SIZE
+    # ============================================================
+    log "===== CHECK 2: Topic Size (threshold: ${TOPIC_SIZE_THRESHOLD_GB}GB) ====="
+
+    TOPICS_API_URL="${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/topics?perPage=1000"
+    topics_json=$(curl -s --fail "${TOPICS_API_URL}" || echo "")
+
+    if [[ -z "$topics_json" || "$topics_json" == "null" ]]; then
+      log "❌ No response from Kafka UI topics API at ${TOPICS_API_URL}"
+    else
+      topic_count=$(echo "$topics_json" | jq '.topics | length' 2>/dev/null || echo "0")
+      log "Found ${topic_count} topics."
+
+      size_alert_sent=false
+
+      while IFS= read -r topic; do
+        [[ -z "$topic" ]] && continue
+
+        topic_name=$(echo "$topic" | jq -r '.name')
+        segment_size=$(echo "$topic" | jq -r '.segmentSize // 0')
+
+        if [[ "$segment_size" -gt "$TOPIC_SIZE_THRESHOLD_BYTES" ]]; then
+          size_gb=$(awk "BEGIN {printf \"%.1f\", $segment_size / 1073741824}")
+          log "  ⚠️  TOPIC SIZE ALERT: ${topic_name} is ${size_gb}GB (threshold: ${TOPIC_SIZE_THRESHOLD_GB}GB)"
+
+          msg=$(jq -n \
+            --arg topic_name "$topic_name" \
+            --arg size_gb "${size_gb}GB" \
+            --arg threshold "${TOPIC_SIZE_THRESHOLD_GB}GB" \
+            --arg topic_ui_link "${KAFKA_UI_TOPICS_URL}/${topic_name}" \
+            --arg channel "$SLACK_CHANNEL_ID" \
+            --arg environment "$ENVIRONMENT_NAME" \
+            '{
+              "channel": $channel,
+              "text": ":red_circle: *Kafka Topic Size Alert!*",
+              "attachments": [{
+                "color": "#ff0000",
+                "fields": [
+                  {"title": "Topic", "value": ("<" + $topic_ui_link + "|" + $topic_name + ">"), "short": true},
+                  {"title": "Environment", "value": $environment, "short": true},
+                  {"title": "Size", "value": $size_gb, "short": true},
+                  {"title": "Threshold", "value": $threshold, "short": true}
+                ]
+              }]
+            }')
+
+          send_slack "$msg"
+          size_alert_sent=true
+        fi
+      done < <(echo "$topics_json" | jq -c '.topics[]')
+
+      if [[ "$size_alert_sent" == "false" ]]; then
+        log "✅ All topics are within the size threshold."
+      fi
+    fi

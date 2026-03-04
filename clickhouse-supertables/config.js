@@ -221,7 +221,8 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'inv_line', table: 'oms_inv_line' },
       { namespace: 'public', topic: 'shipment_input', table: 'oms_shipment_input' },
       { namespace: 'public', topic: 'shipment_output', table: 'oms_shipment_output' },
-      { namespace: 'public', topic: 'wms_dock_line', table: 'oms_wms_dock_line' }
+      { namespace: 'public', topic: 'wms_dock_line', table: 'oms_wms_dock_line' },
+      { namespace: 'public', topic: 'inv_allocation', table: 'oms_inv_allocation' }
     ],
     dlqTopic: 'dlq-oms-clickhouse',
     performanceConfig: defaultPerformanceConfig
