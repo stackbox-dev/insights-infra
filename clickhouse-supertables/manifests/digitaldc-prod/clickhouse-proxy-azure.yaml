@@ -7,15 +7,19 @@ data:
   haproxy.cfg: |
     defaults
       mode tcp
-      timeout connect 5s
-      timeout client  1m
-      timeout server  1m
+      timeout connect 10s
+      timeout client  10m
+      timeout server  10m
+      timeout tunnel  1h
+      retries 3
+      option redispatch
 
     frontend clickhouse_native
       bind *:25650
       default_backend clickhouse_native_backend
 
     backend clickhouse_native_backend
+      option tcp-check
       server clickhouse digitaldc-clickhouse-hul-samadhan.l.aivencloud.com:25650 check
 
     frontend clickhouse_https
@@ -25,6 +29,7 @@ data:
 
     backend clickhouse_https_backend
       mode tcp
+      option tcp-check
       server clickhouse digitaldc-clickhouse-hul-samadhan.l.aivencloud.com:25651 check
 
     frontend clickhouse_mysql
@@ -34,6 +39,7 @@ data:
 
     backend clickhouse_mysql_backend
       mode tcp
+      option tcp-check
       server clickhouse digitaldc-clickhouse-hul-samadhan.l.aivencloud.com:25652 check
     
     frontend starrocks_mysql
@@ -43,6 +49,7 @@ data:
 
     backend starrocks_mysql_backend
       mode tcp
+      option tcp-check
       server starrocks kube-starrocks-fe-service.starrocks:9030 check
 ---
 apiVersion: apps/v1
