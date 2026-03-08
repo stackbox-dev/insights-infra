@@ -51,7 +51,6 @@ This integration adds **StarRocks** as a sink connector option alongside the exi
 
 9. **`package.json`** - Added npm scripts
    - `npm run starrocks` - Launch StarRocks manager
-   - `npm run manage` - Launch unified manager
    - Updated description
 
 ## 🚀 How to Use
@@ -77,12 +76,6 @@ cp .sample.env .my-env.env
 
 # Edit with credentials for both databases
 vim .my-env.env
-
-# Launch for StarRocks
-npm run manage -- --env .my-env.env --sink starrocks
-
-# Launch for ClickHouse
-npm run manage -- --env .my-env.env --sink clickhouse
 ```
 
 ### Option 3: Direct Execution
@@ -93,9 +86,6 @@ npm run manage -- --env .my-env.env --sink clickhouse
 
 # ClickHouse (existing)
 ./manager.js --env .my-clickhouse.env
-
-# Unified
-./unified-manager.js --env .my-env.env --sink starrocks
 ```
 
 ## 🎯 Pre-configured StarRocks Sinks

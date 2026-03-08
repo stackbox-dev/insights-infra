@@ -10,7 +10,10 @@ const starrocksBaseConfig = {
   'sink.properties.strict_mode': 'false',
   'sink.properties.max_filter_ratio': '0.1',
   'sink.properties.ignore_json_size': 'true',
-  
+  'sink.label-prefix': 'kafka_starrocks_sink',
+  'sink.flush.interval.ms': '10000',
+  'sink.flush.rows': '50000',
+
   // Avro converter settings
   'key.converter': 'io.confluent.connect.avro.AvroConverter',
   'value.converter': 'io.confluent.connect.avro.AvroConverter',
