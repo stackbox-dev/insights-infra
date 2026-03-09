@@ -1,0 +1,231 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pg-replication-lag-alert
+  namespace: kafka
+spec:
+  schedule: "0 * * * *"  # every hour
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          containers:
+            - name: pg-replication-checker
+              image: postgres:15-alpine
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              env:
+                - name: PG_HOSTS
+                  value: "wms-main-db-2.postgres.database.azure.com,setu-db-2.postgres.database.azure.com,encarta-db-2.postgres.database.azure.com"
+                - name: PG_PORT
+                  value: "5432"
+                - name: PG_USER
+                  value: "debezium"
+                - name: PG_DB
+                  value: "postgres"
+                - name: PG_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: debezium-pg-pass
+                      key: password
+                - name: LAG_THRESHOLD_GB
+                  value: "15"
+                - name: ENVIRONMENT_NAME
+                  value: "Samadhan Prod"
+                - name: SLACK_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: bot_token
+                - name: SLACK_CHANNEL_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: channel_id
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  apk add --no-cache curl jq bash
+                  cp /scripts/check_pg_replication_lag.sh /tmp/check_pg_replication_lag.sh
+                  chmod +x /tmp/check_pg_replication_lag.sh
+                  /tmp/check_pg_replication_lag.sh
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          restartPolicy: OnFailure
+          volumes:
+            - name: script
+              configMap:
+                name: pg-replication-lag-script
+                defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pg-replication-lag-script
+  namespace: kafka
+data:
+  check_pg_replication_lag.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # ==== CONFIG ====
+    PG_HOSTS="${PG_HOSTS:-}"
+    PG_PORT="${PG_PORT:-5432}"
+    PG_USER="${PG_USER:-}"
+    PG_DB="${PG_DB:-postgres}"
+    PG_SSL_MODE="${PG_SSL_MODE:-require}"
+    PGPASSWORD="${PG_PASSWORD:-}"
+    export PGPASSWORD
+
+    LAG_THRESHOLD_GB="${LAG_THRESHOLD_GB:-15}"
+    SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+    SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
+
+    log() {
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+    }
+
+    send_slack() {
+      local msg="$1"
+      local response
+      response=$(curl -s -w "%{http_code}" -o /tmp/slack_response.txt \
+        -X POST "https://slack.com/api/chat.postMessage" \
+        -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$msg" || true)
+      local slack_ok
+      slack_ok=$(jq -r '.ok' /tmp/slack_response.txt 2>/dev/null || echo "false")
+      local slack_err
+      slack_err=$(jq -r '.error' /tmp/slack_response.txt 2>/dev/null || echo "")
+      if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
+        log "    ✅ Slack alert sent."
+      else
+        log "    ⚠️  Slack alert failed (HTTP ${response}): ${slack_err}"
+      fi
+    }
+
+    # ==== VALIDATE ENV ====
+    if [[ -z "$SLACK_BOT_TOKEN" || -z "$SLACK_CHANNEL_ID" ]]; then
+      log "❌ ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set."
+      exit 1
+    fi
+
+    if [[ -z "$PG_HOSTS" || -z "$PG_USER" ]]; then
+      log "❌ ERROR: PG_HOSTS and PG_USER must be set."
+      exit 1
+    fi
+
+    QUERY="
+      SELECT slot_name,
+             pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag,
+             pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes,
+             active,
+             slot_type,
+             coalesce(database, 'N/A')
+      FROM pg_replication_slots
+      WHERE pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) > ${LAG_THRESHOLD_GB}::bigint * 1024 * 1024 * 1024
+      ORDER BY lag_bytes DESC;
+    "
+
+    # ==== LOOP OVER ALL HOSTS ====
+    IFS=',' read -ra HOST_LIST <<< "$PG_HOSTS"
+    for PG_HOST in "${HOST_LIST[@]}"; do
+      PG_HOST=$(echo "$PG_HOST" | xargs)
+      log "===== Checking PG Replication Slot Lag (threshold: ${LAG_THRESHOLD_GB}GB) on ${PG_HOST} ====="
+
+      result=$(psql \
+        "host=${PG_HOST} port=${PG_PORT} dbname=${PG_DB} user=${PG_USER} sslmode=${PG_SSL_MODE}" \
+        --tuples-only --no-align --field-separator='|' \
+        -c "$QUERY" 2>/dev/null || echo "ERROR")
+
+      if [[ "$result" == "ERROR" ]]; then
+        log "❌ Failed to connect to Postgres at ${PG_HOST}"
+        msg=$(jq -n \
+          --arg host "$PG_HOST" \
+          --arg channel "$SLACK_CHANNEL_ID" \
+          --arg environment "$ENVIRONMENT_NAME" \
+          '{
+            "channel": $channel,
+            "text": ":x: *PG Replication Lag Check Failed!*",
+            "attachments": [{
+              "color": "#ff0000",
+              "fields": [
+                {"title": "Environment", "value": $environment, "short": true},
+                {"title": "Host", "value": $host, "short": true},
+                {"title": "Error", "value": "Could not connect to Postgres to check replication slots", "short": false}
+              ]
+            }]
+          }')
+        send_slack "$msg"
+        continue
+      fi
+
+      if [[ -z "$result" ]]; then
+        log "✅ No replication slots exceed ${LAG_THRESHOLD_GB}GB lag on ${PG_HOST}."
+        continue
+      fi
+
+      log "⚠️  Found replication slots exceeding ${LAG_THRESHOLD_GB}GB lag on ${PG_HOST}:"
+
+      declare -A alerted_slots
+
+      while IFS='|' read -r slot_name lag lag_bytes active slot_type database; do
+        [[ -z "$slot_name" ]] && continue
+
+        slot_name=$(echo "$slot_name" | xargs)
+        lag=$(echo "$lag" | xargs)
+        active=$(echo "$active" | xargs)
+        slot_type=$(echo "$slot_type" | xargs)
+        database=$(echo "$database" | xargs)
+
+        # Deduplicate
+        if [[ -n "${alerted_slots[$slot_name]+x}" ]]; then
+          log "  ⏭️  Duplicate slot skipped: ${slot_name}"
+          continue
+        fi
+        alerted_slots[$slot_name]=1
+
+        log "  ❌ Slot: ${slot_name} | Lag: ${lag} | Active: ${active} | DB: ${database}"
+
+        msg=$(jq -n \
+          --arg slot_name "$slot_name" \
+          --arg lag "$lag" \
+          --arg threshold "${LAG_THRESHOLD_GB} GB" \
+          --arg active "$active" \
+          --arg slot_type "$slot_type" \
+          --arg database "$database" \
+          --arg host "$PG_HOST" \
+          --arg channel "$SLACK_CHANNEL_ID" \
+          --arg environment "$ENVIRONMENT_NAME" \
+          '{
+            "channel": $channel,
+            "text": ":rotating_light: *PG Replication Slot Lag Alert!*",
+            "attachments": [{
+              "color": "#ff0000",
+              "fields": [
+                {"title": "Environment", "value": $environment, "short": true},
+                {"title": "Host", "value": $host, "short": true},
+                {"title": "Slot Name", "value": $slot_name, "short": true},
+                {"title": "Lag", "value": $lag, "short": true},
+                {"title": "Threshold", "value": $threshold, "short": true},
+                {"title": "Active", "value": $active, "short": true},
+                {"title": "Slot Type", "value": $slot_type, "short": true},
+                {"title": "Database", "value": $database, "short": true}
+              ]
+            }]
+          }')
+        send_slack "$msg"
+      done <<< "$result"
+    done
