@@ -52,3 +52,5 @@ PROPERTIES (
     "replicated_storage" = "true",
     "replication_num" = "2"
 );
+
+

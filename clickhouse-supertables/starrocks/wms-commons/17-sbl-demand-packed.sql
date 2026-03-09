@@ -1,0 +1,35 @@
+CREATE TABLE wms_sbl_demand_packed (
+    id VARCHAR(36) NOT NULL,
+    sessionCreatedAt DATETIME NOT NULL,
+    whId BIGINT NOT NULL,
+    sessionId VARCHAR(36) NOT NULL,
+    taskId VARCHAR(36) NOT NULL,
+    zoneId VARCHAR(36) NOT NULL,
+    demandId VARCHAR(36) NOT NULL,
+    inventoryHUId VARCHAR(36),
+    visitId VARCHAR(36),
+    chuAssignmentId VARCHAR(36),
+    chuId VARCHAR(36) NOT NULL,
+    chuKindId VARCHAR(36),
+    chuKind STRING,
+    skuId VARCHAR(36) NOT NULL,
+    batch STRING NOT NULL DEFAULT '',
+    uom STRING NOT NULL DEFAULT '',
+    qty INT NOT NULL,
+    packedAt DATETIME,
+    packedBy VARCHAR(36),
+    binAssignmentId VARCHAR(36),
+    visitItemId VARCHAR(36)
+)
+ENGINE=OLAP
+PRIMARY KEY(id, sessionCreatedAt)
+PARTITION BY date_trunc('DAY', sessionCreatedAt)
+DISTRIBUTED BY HASH(id) BUCKETS 16
+ORDER BY (id)
+PROPERTIES (
+    "compression" = "LZ4",
+    "enable_persistent_index" = "true",
+    "fast_schema_evolution" = "true",
+    "replicated_storage" = "true",
+    "replication_num" = "2"
+);
