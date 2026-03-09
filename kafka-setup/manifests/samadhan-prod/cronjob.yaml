@@ -37,7 +37,7 @@ spec:
                 - name: KAFKA_UI_TOPICS_URL
                   value: "http://kafka-ui.kafka.api.prod.unilever/ui/clusters/samadhan-kafka/topics"
                 - name: LAG_THRESHOLD
-                  value: "10000"
+                  value: "50000"
                 - name: TOPIC_SIZE_THRESHOLD_GB
                   value: "100"
                 - name: SKIP_GROUPS
@@ -89,7 +89,7 @@ data:
     CLUSTER_NAME="${CLUSTER_NAME:-}"
     KAFKA_UI_CONSUMER_GROUPS_URL="${KAFKA_UI_CONSUMER_GROUPS_URL:-}"
     KAFKA_UI_TOPICS_URL="${KAFKA_UI_TOPICS_URL:-}"
-    LAG_THRESHOLD="${LAG_THRESHOLD:-10000}"
+    LAG_THRESHOLD="${LAG_THRESHOLD:-50000}"
     TOPIC_SIZE_THRESHOLD_GB="${TOPIC_SIZE_THRESHOLD_GB:-100}"
     SKIP_GROUPS="${SKIP_GROUPS:-connect-configs,connect-offsets,connect-status,connect-cluster}"
     SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"

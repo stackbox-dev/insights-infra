@@ -4,7 +4,7 @@ metadata:
   name: pg-replication-lag-alert
   namespace: kafka
 spec:
-  schedule: "0 * * * *"  # every hour
+  schedule: "0 */6 * * *"  # every 6 hours
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -38,7 +38,7 @@ spec:
                       name: debezium-pg-pass
                       key: password
                 - name: LAG_THRESHOLD_GB
-                  value: "15"
+                  value: "1"
                 - name: PG_SSL_MODE
                   value: "disable"
                 - name: ENVIRONMENT_NAME
@@ -90,7 +90,7 @@ data:
     PGPASSWORD="${PG_PASSWORD:-}"
     export PGPASSWORD
 
-    LAG_THRESHOLD_GB="${LAG_THRESHOLD_GB:-15}"
+    LAG_THRESHOLD_GB="${LAG_THRESHOLD_GB:-1}"
     SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
     SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
     ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
