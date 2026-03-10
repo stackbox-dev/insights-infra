@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS tms_picklistRetailer
    volume Float64 DEFAULT 0.0,
    `weight` Float64 DEFAULT 0.0,
    serviceTime Float64 DEFAULT 0.0,
+   pitstop String DEFAULT '',
+   transitTime Int32 DEFAULT 0,
    node_retailer String DEFAULT '',
    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
    updatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
