@@ -15,7 +15,8 @@
  */
 
 import React from 'react';
-import { render } from 'ink';
+import { render, Box, Text, useApp } from 'ink';
+import SelectInput from 'ink-select-input';
 import fs from 'fs';
 import { KafkaConnectClient } from './kafka-connect-client.js';
 import { ConnectorManagerUI } from './ui.js';
@@ -58,13 +59,14 @@ function loadEnvFile(filePath) {
 
     const [key, ...valueParts] = line.split('=');
     if (key && valueParts.length > 0) {
-      process.env[key.trim()] = valueParts.join('=').trim();
+      const raw = valueParts.join('=').trim();
+      process.env[key.trim()] = raw.replace(/^["'](.*)["']$/, '$1');
     }
   });
 }
 
-// Validate required environment variables
-function validateEnv() {
+// Validate required environment variables for the common base vars
+function validateBaseEnv() {
   const required = [
     'TOPIC_PREFIX',
     'CLICKHOUSE_HOSTNAME',
@@ -73,11 +75,6 @@ function validateEnv() {
     'CLICKHOUSE_DATABASE',
     'SCHEMA_REGISTRY_URL',
     'CP_CONNECT_URL',
-    'CLICKHOUSE_ADMIN_PASSWORD',
-    'SCHEMA_REGISTRY_AUTH',
-    'CLUSTER_USER_NAME',
-    'CLUSTER_PASSWORD',
-    'AIVEN_TRUSTSTORE_PASSWORD'
   ];
 
   const missing = required.filter(key => !process.env[key]);
@@ -89,12 +86,73 @@ function validateEnv() {
   }
 }
 
-// Load and validate environment
+// Validate Aiven-specific environment variables
+function validateAivenEnv() {
+  const required = [
+    'CLICKHOUSE_ADMIN_PASSWORD',
+    'SCHEMA_REGISTRY_AUTH',
+    'CLUSTER_USER_NAME',
+    'CLUSTER_PASSWORD',
+    'AIVEN_TRUSTSTORE_PASSWORD',
+  ];
+
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    console.error('Error: Missing required Aiven environment variables:');
+    missing.forEach(key => console.error(`  - ${key}`));
+    console.error('\nPlease check your environment file and ensure all Aiven credentials are set.');
+    process.exit(1);
+  }
+}
+
+// Mode selector component — shown before the main UI
+function ModeSelector({ env, onSelect }) {
+  const { exit } = useApp();
+  const items = [
+    { label: 'Self Hosted', value: 'self_hosted' },
+    { label: 'Aiven', value: 'aiven' },
+  ];
+
+  return React.createElement(Box, { flexDirection: 'column', padding: 1 },
+    React.createElement(Text, { bold: true, color: 'cyan' }, `Sink Connectors (${env})`),
+    React.createElement(Text, { dimColor: true }, 'Select deployment mode:'),
+    React.createElement(Box, { marginTop: 1 },
+      React.createElement(SelectInput, {
+        items,
+        onSelect: (item) => {
+          if (item.value === '__quit__') { exit(); return; }
+          onSelect(item.value);
+        }
+      })
+    )
+  );
+}
+
+// Load environment and validate base vars
 loadEnvFile(envFile);
-validateEnv();
+validateBaseEnv();
+
+// Phase 1: Ask user to select Self Hosted or Aiven mode
+const isSelfHosted = await new Promise((resolve) => {
+  const { unmount } = render(
+    React.createElement(ModeSelector, {
+      env: process.env.TOPIC_PREFIX,
+      onSelect: (mode) => {
+        unmount();
+        resolve(mode === 'self_hosted');
+      }
+    })
+  );
+});
+
+// Validate Aiven-specific vars only when Aiven mode is selected
+if (!isSelfHosted) {
+  validateAivenEnv();
+}
 
 // Import config after environment is loaded
-const { sinkConfigurations, buildConfig } = await import('./config.js');
+const { sinkConfigurations, buildConfig, buildConfigSelfHosted } = await import('./config.js');
+const activeBuildConfig = isSelfHosted ? buildConfigSelfHosted : buildConfig;
 
 // Create Kafka Connect client with ClickHouse filter
 const client = new KafkaConnectClient(
@@ -126,13 +184,13 @@ function getConnectorName(sinkKey) {
   return `clickhouse-connect-${topicPrefix}-${sinkKey}`;
 }
 
-// Render the UI
+// Render the main UI
 render(
   React.createElement(ConnectorManagerUI, {
     client: client,
     env: process.env.TOPIC_PREFIX,
     sinkConfigurations: sinkConfigurations,
-    buildConfig: buildConfig,
+    buildConfig: activeBuildConfig,
     title: 'ClickHouse Sink Connector Manager 🚀',
     getConnectorName: getConnectorName
   })

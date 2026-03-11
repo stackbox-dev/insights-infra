@@ -1,6 +1,7 @@
 // ClickHouse Sink Connector Configurations
 // This file defines all the connector configurations with common base settings
 
+// Base config for Aiven-managed Kafka (external, requires SASL_SSL + schema registry auth)
 const baseConfig = {
   'connector.class': 'com.clickhouse.kafka.connect.ClickHouseSinkConnector',
   exactlyOnce: 'false',
@@ -31,6 +32,32 @@ const baseConfig = {
   'consumer.sasl.mechanism': 'SCRAM-SHA-512',
   'consumer.ssl.truststore.location': '/etc/kafka/secrets/kafka.truststore.jks',
   'consumer.ssl.endpoint.identification.algorithm': ''
+};
+
+// Base config for self-hosted/in-cluster ClickHouse + Kafka (AKS deployment)
+// No consumer security (plain Kafka), no Aiven creds, SSL disabled for in-cluster HTTP
+const baseConfigSelfHosted = {
+  'connector.class': 'com.clickhouse.kafka.connect.ClickHouseSinkConnector',
+  exactlyOnce: 'false',
+  ssl: 'false',
+  // Tombstone filtering to handle ClickHouse connector bug
+  transforms: 'dropNull',
+  'transforms.dropNull.type': 'org.apache.kafka.connect.transforms.Filter',
+  'transforms.dropNull.predicate': 'isNullRecord',
+  predicates: 'isNullRecord',
+  'predicates.isNullRecord.type': 'org.apache.kafka.connect.transforms.predicates.RecordIsTombstone',
+
+  // Avro converter settings
+  'key.converter': 'io.confluent.connect.avro.AvroConverter',
+  'value.converter': 'io.confluent.connect.avro.AvroConverter',
+  'value.converter.schemas.enable': 'true',
+  'value.converter.use.logical.type.converters': 'true',
+
+  // Error handling
+  'errors.tolerance': 'none',
+  'errors.log.enable': 'true',
+  'errors.log.include.messages': 'true',
+  'errors.deadletterqueue.topic.replication.factor': '1',
 };
 
 const defaultPerformanceConfig = {
@@ -316,7 +343,7 @@ function generateTopicMappings(sinkConfig) {
   };
 }
 
-// Build complete connector configuration using process.env
+// Build complete connector configuration for Aiven-managed Kafka
 function buildConfig(sinkConfig) {
   const { topics, topic2TableMap } = generateTopicMappings(sinkConfig);
 
@@ -354,9 +381,44 @@ function buildConfig(sinkConfig) {
   return config;
 }
 
+// Build complete connector configuration for self-hosted/in-cluster ClickHouse + Kafka (AKS)
+function buildConfigSelfHosted(sinkConfig) {
+  const { topics, topic2TableMap } = generateTopicMappings(sinkConfig);
+
+  const config = {
+    ...baseConfigSelfHosted,
+    ...sinkConfig.performanceConfig,
+
+    // Connection settings from process.env
+    hostname: process.env.CLICKHOUSE_HOSTNAME,
+    port: process.env.CLICKHOUSE_HTTP_PORT,
+    username: process.env.CLICKHOUSE_USER,
+    // Only include password if set — default user has no password in self-hosted ClickHouse
+    ...(process.env.CLICKHOUSE_ADMIN_PASSWORD ? { password: process.env.CLICKHOUSE_ADMIN_PASSWORD } : {}),
+    database: process.env.CLICKHOUSE_DATABASE,
+
+    // Topics
+    topics,
+    topic2TableMap,
+
+    // Schema Registry from process.env (no auth for in-cluster registry)
+    'key.converter.schema.registry.url': process.env.SCHEMA_REGISTRY_URL,
+    'value.converter.schema.registry.url': process.env.SCHEMA_REGISTRY_URL,
+  };
+
+  // Add DLQ topic if specified
+  if (sinkConfig.dlqTopic) {
+    config['errors.deadletterqueue.topic.name'] = sinkConfig.dlqTopic;
+  }
+
+  return config;
+}
+
 export {
   baseConfig,
+  baseConfigSelfHosted,
   defaultPerformanceConfig,
   sinkConfigurations,
-  buildConfig
+  buildConfig,
+  buildConfigSelfHosted
 };
