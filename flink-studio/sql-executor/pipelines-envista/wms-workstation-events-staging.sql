@@ -1,0 +1,559 @@
+-- Pipeline to combine multiple WMS workstation events into a unified basic view
+-- This is the basic pipeline that reads from CDC source tables and creates a unified event stream
+
+SET 'pipeline.name' = 'WMS Workstation Events Basic Processing';
+SET 'table.exec.sink.not-null-enforcer' = 'drop';
+SET 'parallelism.default' = '2';
+SET 'table.optimizer.join-reorder-enabled' = 'true';
+SET 'table.exec.resource.default-parallelism' = '2';
+-- Minimal TTL since this is a simple UNION ALL without joins
+SET 'table.exec.state.ttl' = '60000'; -- 1 minute
+
+-- Performance optimizations
+SET 'taskmanager.memory.managed.fraction' = '0.8';
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '1s';
+SET 'table.exec.mini-batch.size' = '5000';
+SET 'execution.checkpointing.interval' = '600000';
+SET 'execution.checkpointing.timeout' = '1800000';
+SET 'state.backend.incremental' = 'true';
+SET 'state.backend.rocksdb.compression.type' = 'LZ4';
+
+-- 1. Source Table: Receiving Events (inb_receive_item)
+CREATE TABLE inb_receive_item (
+    whId BIGINT NOT NULL,
+    sessionId STRING NOT NULL,
+    taskId STRING NOT NULL,
+    id STRING NOT NULL,
+    skuId STRING NOT NULL,
+    uom STRING NOT NULL,
+    batch STRING NOT NULL,
+    price STRING NOT NULL,
+    overallQty INT NOT NULL,
+    qty INT NOT NULL,
+    parentItemId STRING,
+    createdAt TIMESTAMP(3) NOT NULL,
+    asnVehicleId STRING,
+    stagingBinId STRING,
+    stagingBinHUId STRING,
+    groupId STRING,
+    receivedAt TIMESTAMP(3),
+    receivedBy STRING,
+    receivedQty INT,
+    damagedQty INT,
+    deactivatedAt TIMESTAMP(3),
+    qcPercentage INT,
+    huId STRING,
+    huCode STRING,
+    reason STRING,
+    bucket STRING,
+    movedAt TIMESTAMP(3),
+    movedBy STRING,
+    processedAt TIMESTAMP(3),
+    huKind STRING,
+    receivedHuKind STRING,
+    totalHuWeight DOUBLE,
+    receivedHuWeight DOUBLE,
+    subReason STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.public.inb_receive_item',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = '${KAFKA_ENV}-wms-workstation-events-staging',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- 2. Source Table: Loading Events (ob_load_item)
+CREATE TABLE ob_load_item (
+    whId BIGINT NOT NULL,
+    id STRING NOT NULL,
+    sessionId STRING NOT NULL,
+    taskId STRING NOT NULL,
+    tripId STRING NOT NULL,
+    skuId STRING NOT NULL,
+    skuClass STRING NOT NULL,
+    uom STRING NOT NULL,
+    qty INT NOT NULL,
+    seq BIGINT NOT NULL,
+    loadedQty INT,
+    loadedAt TIMESTAMP(3),
+    loadedBy STRING,
+    createdAt TIMESTAMP(3) NOT NULL,
+    invoiceId STRING,
+    skuCategory STRING,
+    originalSkuId STRING,
+    batch STRING,
+    huId STRING,
+    huCode STRING,
+    mmTripId STRING,
+    innerHUId STRING,
+    innerHUCode STRING,
+    innerHUKind STRING,
+    binId STRING,
+    binHUId STRING,
+    binCode STRING,
+    parentItemId STRING,
+    classificationType STRING,
+    originalQty INT,
+    originalUOM STRING,
+    repicked BOOLEAN,
+    invoiceCode STRING,
+    retailerId STRING,
+    retailerCode STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.public.ob_load_item',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = '${KAFKA_ENV}-wms-workstation-events-staging',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- 3. Source Table: Palletization Events (inb_palletization_item)
+CREATE TABLE inb_palletization_item (
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    sessionId STRING,
+    taskId STRING,
+    skuId STRING,
+    batch STRING,
+    price STRING,
+    uom STRING,
+    bucket STRING,
+    qty INT,
+    huId STRING,
+    huCode STRING,
+    outerHUId STRING,
+    outerHUCode STRING,
+    serializationItemId STRING,
+    createdAt TIMESTAMP(3),
+    updatedAt TIMESTAMP(3),
+    mappedAt TIMESTAMP(3),
+    mappedBy STRING,
+    reason STRING,
+    stagingBinId STRING,
+    stagingBinHuId STRING,
+    asnId STRING,
+    asnNo STRING,
+    initialBucket STRING,
+    qtyInside INT,
+    uomInside STRING,
+    subReason STRING,
+    deactivatedAt TIMESTAMP(3),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.public.inb_palletization_item',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = '${KAFKA_ENV}-wms-workstation-events-staging',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- 4. Source Table: Serialization Events (inb_serialization_item)
+CREATE TABLE inb_serialization_item (
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    sessionId STRING,
+    taskId STRING,
+    skuId STRING,
+    batch STRING,
+    uom STRING,
+    qty INT,
+    huId STRING,
+    huCode STRING,
+    createdAt TIMESTAMP(3),
+    serializedAt TIMESTAMP(3),
+    serializedBy STRING,
+    bucket STRING,
+    stagingBinId STRING,
+    stagingBinHuId STRING,
+    qtyInside INT,
+    printLabel STRING,
+    preparedAt TIMESTAMP(3),
+    preparedBy STRING,
+    uomInside STRING,
+    reason STRING,
+    subReason STRING,
+    reasonUpdatedAt TIMESTAMP(3),
+    reasonUpdatedBy STRING,
+    mode STRING,
+    rejected BOOLEAN,
+    deactivatedAt TIMESTAMP(3),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.public.inb_serialization_item',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = '${KAFKA_ENV}-wms-workstation-events-staging',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- 5. Source Table: QC Events (inb_qc_item_v2)
+CREATE TABLE inb_qc_item_v2 (
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    sessionId STRING,
+    taskId STRING,
+    skuId STRING,
+    uom STRING,
+    batch STRING,
+    bucket STRING,
+    price STRING,
+    qty INT,
+    receivedQty INT,
+    sampleSize INT,
+    inspectionLevel STRING,
+    acceptableIssueSize INT,
+    actualSkuId STRING,
+    actualUom STRING,
+    actualBatch STRING,
+    actualPrice STRING,
+    actualBucket STRING,
+    actualQty INT,
+    actualQtyInside INT,
+    parentItemId STRING,
+    createdAt TIMESTAMP(3),
+    createdBy STRING,
+    deactivatedAt TIMESTAMP(3),
+    deactivatedBy STRING,
+    updatedAt TIMESTAMP(3),
+    movedAt TIMESTAMP(3),
+    movedBy STRING,
+    movedQty INT,
+    processedAt TIMESTAMP(3),
+    uomInside STRING,
+    reason STRING,
+    subReason STRING,
+    batchOverridden STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.public.inb_qc_item_v2',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = '${KAFKA_ENV}-wms-workstation-events-staging',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- 6. Source Table: Inventory Adjustment Events (ira_bin_items)
+CREATE TABLE ira_bin_items (
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    sessionId STRING,
+    taskId STRING,
+    binId STRING,
+    skuId STRING,
+    uom STRING,
+    systemQty INT,
+    systemDamagedQty INT,
+    physicalQty INT,
+    physicalDamagedQty INT,
+    finalQty INT,
+    finalDamagedQty INT,
+    issue STRING,
+    state STRING,
+    createdAt TIMESTAMP(3),
+    scannedAt TIMESTAMP(3),
+    scannedBy STRING,
+    approvedAt TIMESTAMP(3),
+    approvedBy STRING,
+    batch STRING,
+    processedAt TIMESTAMP(3),
+    sourceHUId STRING,
+    sourceHUCode STRING,
+    transactionId STRING,
+    binStorageHUType STRING,
+    deactivatedAt TIMESTAMP(3),
+    updatedAt TIMESTAMP(3),
+    updatedBy STRING,
+    huSameBinBeforeIRA STRING,
+    recordNo INT,
+    hlrStatus STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.public.ira_bin_items',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = '${KAFKA_ENV}-wms-workstation-events-staging',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- 7. Source Table: Outbound QA Events (ob_qa_lineitem)
+CREATE TABLE ob_qa_lineitem (
+    id STRING NOT NULL,
+    whId BIGINT NOT NULL,
+    sessionId STRING,
+    taskId STRING,
+    invoiceId STRING,
+    invoiceCode STRING,
+    skuId STRING,
+    skuClass STRING,
+    skuCategory STRING,
+    uom STRING,
+    orderedQty INT,
+    pickedQty INT,
+    packedQty INT,
+    createdAt TIMESTAMP(3),
+    updatedAt TIMESTAMP(3),
+    updatedBy STRING,
+    tripId STRING,
+    tripCode STRING,
+    batch STRING,
+    retailerId STRING,
+    retailerCode STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.public.ob_qa_lineitem',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.group.id' = '${KAFKA_ENV}-wms-workstation-events-staging',
+    'properties.auto.offset.reset' = 'earliest',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- Sink Table: Unified workstation events (basic)
+CREATE TABLE workstation_events_staging (
+    event_type STRING NOT NULL,
+    event_source_id STRING NOT NULL,
+    event_timestamp TIMESTAMP(3) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL,
+    wh_id BIGINT,
+    sku_id STRING,
+    hu_id STRING,
+    hu_code STRING,
+    batch_id STRING,
+    user_id STRING,
+    task_id STRING,
+    session_id STRING,
+    bin_id STRING,
+    primary_quantity BIGINT,
+    secondary_quantity BIGINT,
+    tertiary_quantity BIGINT,
+    price STRING,
+    status_or_bucket STRING,
+    reason STRING,
+    sub_reason STRING,
+    deactivated_at TIMESTAMP(3),
+    PRIMARY KEY (event_source_id, event_type) NOT ENFORCED
+) WITH (
+    'connector' = 'upsert-kafka',
+    'topic' = '${KAFKA_ENV}.wms.flink.workstation_events_staging',
+    'properties.bootstrap.servers' = '${KAFKA_BOOTSTRAP_SERVERS}',
+    'properties.auto.offset.reset' = 'earliest',
+    'sink.parallelism' = '2',
+    'sink.buffer-flush.max-rows' = '2000',
+    'sink.buffer-flush.interval' = '5s',
+    'key.format' = 'avro-confluent',
+    'key.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}',
+    'value.format' = 'avro-confluent',
+    'value.avro-confluent.url' = '${SCHEMA_REGISTRY_URL}'
+);
+
+-- Insert data into sink table
+INSERT INTO workstation_events_staging
+-- 1. Receiving Events
+SELECT 'RECEIVING' AS event_type,
+    iri.id AS event_source_id,
+    COALESCE(iri.receivedAt, iri.createdAt) AS event_timestamp,
+    iri.createdAt AS created_at,
+    iri.whId AS wh_id,
+    iri.skuId AS sku_id,
+    iri.huId AS hu_id,
+    iri.huCode AS hu_code,
+    iri.batch AS batch_id,
+    iri.receivedBy AS user_id,
+    iri.taskId AS task_id,
+    iri.sessionId AS session_id,
+    iri.stagingBinId AS bin_id,
+    CAST(iri.receivedQty AS BIGINT) AS primary_quantity,
+    CAST(iri.overallQty AS BIGINT) AS secondary_quantity,
+    CAST(iri.damagedQty AS BIGINT) AS tertiary_quantity,
+    iri.price AS price,
+    iri.reason AS status_or_bucket,
+    iri.reason AS reason,
+    iri.subReason AS sub_reason,
+    iri.deactivatedAt AS deactivated_at
+FROM inb_receive_item iri
+
+UNION ALL
+
+-- 2. Loading Events
+SELECT 'LOADING' AS event_type,
+    oli.id AS event_source_id,
+    COALESCE(oli.loadedAt, oli.createdAt) AS event_timestamp,
+    oli.createdAt AS created_at,
+    oli.whId AS wh_id,
+    oli.skuId AS sku_id,
+    oli.huId AS hu_id,
+    oli.huCode AS hu_code,
+    oli.batch AS batch_id,
+    oli.loadedBy AS user_id,
+    oli.taskId AS task_id,
+    oli.sessionId AS session_id,
+    oli.binId AS bin_id,
+    CAST(oli.loadedQty AS BIGINT) AS primary_quantity,
+    CAST(oli.qty AS BIGINT) AS secondary_quantity,
+    CAST(0 AS BIGINT) AS tertiary_quantity,
+    CAST(NULL AS STRING) AS price,
+    oli.classificationType AS status_or_bucket,
+    CAST(NULL AS STRING) AS reason,
+    CAST(NULL AS STRING) AS sub_reason,
+    CAST(NULL AS TIMESTAMP(3)) AS deactivated_at
+FROM ob_load_item oli
+
+UNION ALL
+
+-- 3. Palletization Events
+SELECT 'PALLETIZATION' AS event_type,
+    ipi.id AS event_source_id,
+    COALESCE(ipi.mappedAt, ipi.updatedAt, ipi.createdAt) AS event_timestamp,
+    ipi.createdAt AS created_at,
+    ipi.whId AS wh_id,
+    ipi.skuId AS sku_id,
+    ipi.huId AS hu_id,
+    ipi.huCode AS hu_code,
+    ipi.batch AS batch_id,
+    ipi.mappedBy AS user_id,
+    ipi.taskId AS task_id,
+    ipi.sessionId AS session_id,
+    ipi.stagingBinId AS bin_id,
+    CAST(ipi.qty AS BIGINT) AS primary_quantity,
+    CAST(ipi.qtyInside AS BIGINT) AS secondary_quantity,
+    CAST(0 AS BIGINT) AS tertiary_quantity,
+    ipi.price AS price,
+    ipi.bucket AS status_or_bucket,
+    ipi.reason AS reason,
+    ipi.subReason AS sub_reason,
+    ipi.deactivatedAt AS deactivated_at
+FROM inb_palletization_item ipi
+
+UNION ALL
+
+-- 4. Serialization Events
+SELECT 'INBOUND_SERIALIZATION' AS event_type,
+    isi.id AS event_source_id,
+    COALESCE(isi.serializedAt, isi.createdAt) AS event_timestamp,
+    isi.createdAt AS created_at,
+    isi.whId AS wh_id,
+    isi.skuId AS sku_id,
+    isi.huId AS hu_id,
+    isi.huCode AS hu_code,
+    isi.batch AS batch_id,
+    isi.serializedBy AS user_id,
+    isi.taskId AS task_id,
+    isi.sessionId AS session_id,
+    isi.stagingBinId AS bin_id,
+    CAST(isi.qty AS BIGINT) AS primary_quantity,
+    CAST(isi.qtyInside AS BIGINT) AS secondary_quantity,
+    CAST(0 AS BIGINT) AS tertiary_quantity,
+    CAST(NULL AS STRING) AS price,
+    isi.bucket AS status_or_bucket,
+    isi.reason AS reason,
+    isi.subReason AS sub_reason,
+    isi.deactivatedAt AS deactivated_at
+FROM inb_serialization_item isi
+
+UNION ALL
+
+-- 5. QC Events
+SELECT 'INBOUND_QC' AS event_type,
+    iqci2.id AS event_source_id,
+    COALESCE(iqci2.updatedAt, iqci2.createdAt) AS event_timestamp,
+    iqci2.createdAt AS created_at,
+    iqci2.whId AS wh_id,
+    iqci2.skuId AS sku_id,
+    iqci2.parentItemId AS hu_id,
+    CAST(NULL AS STRING) AS hu_code,
+    iqci2.batch AS batch_id,
+    iqci2.createdBy AS user_id,
+    iqci2.taskId AS task_id,
+    iqci2.sessionId AS session_id,
+    CAST(NULL AS STRING) AS bin_id,
+    CAST(iqci2.actualQty AS BIGINT) AS primary_quantity,
+    CAST(iqci2.receivedQty AS BIGINT) AS secondary_quantity,
+    CAST(0 AS BIGINT) AS tertiary_quantity,
+    iqci2.price AS price,
+    iqci2.bucket AS status_or_bucket,
+    iqci2.reason AS reason,
+    iqci2.subReason AS sub_reason,
+    iqci2.deactivatedAt AS deactivated_at
+FROM inb_qc_item_v2 iqci2
+
+UNION ALL
+
+-- 6. Inventory Adjustment Events
+SELECT 'INVENTORY_ADJUSTMENT' AS event_type,
+    ibi.id AS event_source_id,
+    COALESCE(ibi.scannedAt, ibi.approvedAt, ibi.updatedAt, ibi.createdAt) AS event_timestamp,
+    ibi.createdAt AS created_at,
+    ibi.whId AS wh_id,
+    ibi.skuId AS sku_id,
+    ibi.sourceHUId AS hu_id,
+    ibi.sourceHUCode AS hu_code,
+    ibi.batch AS batch_id,
+    ibi.scannedBy AS user_id,
+    ibi.taskId AS task_id,
+    ibi.sessionId AS session_id,
+    ibi.binId AS bin_id,
+    CAST(ibi.physicalQty AS BIGINT) AS primary_quantity,
+    CAST(ibi.systemQty AS BIGINT) AS secondary_quantity,
+    CAST(ibi.physicalDamagedQty AS BIGINT) AS tertiary_quantity,
+    CAST(NULL AS STRING) AS price,
+    ibi.state AS status_or_bucket,
+    ibi.issue AS reason,
+    CAST(NULL AS STRING) AS sub_reason,
+    ibi.deactivatedAt AS deactivated_at
+FROM ira_bin_items ibi
+
+UNION ALL
+
+-- 7. Outbound QA Events
+SELECT 'OUTBOUND_QA' AS event_type,
+    oq.id AS event_source_id,
+    COALESCE(oq.updatedAt, oq.createdAt) AS event_timestamp,
+    oq.createdAt AS created_at,
+    oq.whId AS wh_id,
+    oq.skuId AS sku_id,
+    CAST(NULL AS STRING) AS hu_id,
+    CAST(NULL AS STRING) AS hu_code,
+    oq.batch AS batch_id,
+    oq.updatedBy AS user_id,
+    oq.taskId AS task_id,
+    oq.sessionId AS session_id,
+    CAST(NULL AS STRING) AS bin_id,
+    CAST(oq.pickedQty AS BIGINT) AS primary_quantity,
+    CAST(oq.packedQty AS BIGINT) AS secondary_quantity,
+    CAST(oq.orderedQty AS BIGINT) AS tertiary_quantity,
+    CAST(NULL AS STRING) AS price,
+    oq.skuCategory AS status_or_bucket,
+    oq.skuClass AS reason,
+    oq.uom AS sub_reason,
+    CAST(NULL AS TIMESTAMP(3)) AS deactivated_at
+FROM ob_qa_lineitem oq;

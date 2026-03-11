@@ -29,6 +29,47 @@ print_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
+load_env_file(){
+
+    #Load environment variables from .env file
+    
+    print_status "Loading environment configuration..."
+    
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    DEPLOYMENT_DIR="$(dirname "$SCRIPT_DIR")"
+    # List available .env files
+    ENV_FILES=($(ls "$DEPLOYMENT_DIR"/.*.env 2>/dev/null | xargs -n1 basename))
+    if [ ${#ENV_FILES[@]} -eq 0 ]; then
+        print_error "No environment files found in $DEPLOYMENT_DIR"
+        print_error "Expected files like .samadhan-prod.env, .sbx-uat.env, etc."
+        exit 1
+    fi
+    
+    echo ""
+    echo "Available environment configurations:"
+    for i in "${!ENV_FILES[@]}"; do
+        ENV_NAME=$(echo "${ENV_FILES[$i]}" | sed 's/^\.//' | sed 's/\.env$//')
+        echo "$((i+1))) $ENV_NAME"
+    done
+    
+    echo ""
+    read -p "Select environment (1-${#ENV_FILES[@]}): " env_choice
+    if [ "$env_choice" -lt 1 ] || [ "$env_choice" -gt ${#ENV_FILES[@]} ]; then
+        print_error "Invalid choice. Please select a number between 1 and ${#ENV_FILES[@]}"
+        exit 1
+    fi
+    
+    SELECTED_ENV_FILE="${ENV_FILES[$((env_choice-1))]}"
+    ENV_FILE_PATH="$DEPLOYMENT_DIR/$SELECTED_ENV_FILE"
+    ENV_NAME=$(echo "$SELECTED_ENV_FILE" | sed 's/^\.//' | sed 's/\.env$//')
+    print_status "Selected environment: $ENV_NAME"
+    print_status "Loading configuration from: $SELECTED_ENV_FILE"
+    # Load environment variables
+    set -a
+    source "$ENV_FILE_PATH"
+    set +a
+}
+
 VALIDATION_FAILED=false
 CLOUD_PROVIDER=""
 
@@ -40,7 +81,7 @@ echo "=========================================="
 print_status "Checking required tools..."
 
 if command -v kubectl >/dev/null 2>&1; then
-    KUBECTL_VERSION=$(kubectl version --client --short 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
+    KUBECTL_VERSION=$(kubectl version --client -o yaml 2>/dev/null | grep gitVersion | awk '{print $2}' || echo "unknown")
     print_success "kubectl found: $KUBECTL_VERSION"
 else
     print_error "kubectl is not installed or not in PATH"
@@ -84,6 +125,7 @@ read -p "Enter your choice (1 or 2): " cloud_choice
 case $cloud_choice in
     1)
         CLOUD_PROVIDER="gcp"
+        load_env_file
         print_status "Selected: Google Cloud Platform (GCP/GKE)"
         
         # GCP-specific validations
@@ -117,10 +159,10 @@ case $cloud_choice in
         
         # Check GCS bucket access (if gcloud available)
         if command -v gsutil >/dev/null 2>&1; then
-            if gsutil ls gs://sbx-stag-flink-storage/ >/dev/null 2>&1; then
-                print_success "GCS bucket gs://sbx-stag-flink-storage/ is accessible"
+            if gsutil ls gs://${PROJECT_ENVIRONMENT}-flink-storage/ >/dev/null 2>&1; then
+                print_success "GCS bucket gs://${PROJECT_ENVIRONMENT}-flink-storage/ is accessible"
             else
-                print_error "Cannot access GCS bucket gs://sbx-stag-flink-storage/"
+                print_error "Cannot access GCS bucket gs://${PROJECT_ENVIRONMENT}-flink-storage/"
                 print_error "Please ensure the bucket exists and you have access"
                 VALIDATION_FAILED=true
             fi
@@ -130,8 +172,8 @@ case $cloud_choice in
         
         # Check Workload Identity setup
         print_status "Checking Workload Identity configuration..."
-        if kubectl get serviceaccount flink -n flink-studio >/dev/null 2>&1; then
-            WI_ANNOTATION=$(kubectl get serviceaccount flink -n flink-studio -o jsonpath='{.metadata.annotations.iam\.gke\.io/gcp-service-account}' 2>/dev/null || echo "")
+    if kubectl get serviceaccount ${K8S_SERVICE_ACCOUNT} -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
+            WI_ANNOTATION=$(kubectl get serviceaccount ${K8S_SERVICE_ACCOUNT} -n ${K8S_NAMESPACE} -o jsonpath='{.metadata.annotations.iam\.gke\.io/gcp-service-account}' 2>/dev/null || echo "")
             if [ -n "$WI_ANNOTATION" ]; then
                 print_success "Workload Identity annotation found: $WI_ANNOTATION"
             else
@@ -144,6 +186,7 @@ case $cloud_choice in
         
     2)
         CLOUD_PROVIDER="azure"
+        load_env_file
         print_status "Selected: Microsoft Azure (AKS)"
         
         # Azure-specific validations
@@ -168,16 +211,16 @@ case $cloud_choice in
         
         # Check Azure Storage Account access
         if command -v az >/dev/null 2>&1 && az account show >/dev/null 2>&1; then
-            if az storage account show --name sbxstagflinkstorage --resource-group YOUR_RESOURCE_GROUP >/dev/null 2>&1; then
-                print_success "Azure Storage Account sbxstagflinkstorage is accessible"
+            if az storage account show --name ${AZURE_STORAGE_ACCOUNT_NAME} --resource-group ${AZURE_RESOURCE_GROUP} >/dev/null 2>&1; then
+                print_success "Azure Storage Account ${AZURE_STORAGE_ACCOUNT_NAME} is accessible"
             else
                 print_warning "Cannot validate Azure Storage Account access"
-                print_warning "Please ensure storage account 'sbxstagflinkstorage' exists"
+                print_warning "Please ensure storage account '${AZURE_STORAGE_ACCOUNT_NAME}' exists"
             fi
         fi
         
         # Check if Azure storage secret exists
-        if kubectl get secret azure-storage-secret -n flink-studio >/dev/null 2>&1; then
+        if kubectl get secret azure-storage-secret -n ${K8S_NAMESPACE} >/dev/null 2>&1; then
             print_success "Azure storage secret exists"
         else
             print_error "Azure storage secret not found!"

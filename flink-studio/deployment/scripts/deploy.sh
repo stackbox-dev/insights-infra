@@ -175,20 +175,20 @@ if [ "$CLOUD_PROVIDER" = "gcp" ]; then
     print_status "Setting up GCP Workload Identity..."
     
     # Create service account if it doesn't exist
-    if ! gcloud iam service-accounts describe flink-gcs@sbx-stag.iam.gserviceaccount.com >/dev/null 2>&1; then
-        print_status "Creating Google Service Account: flink-gcs"
-        gcloud iam service-accounts create flink-gcs \
+    if ! gcloud iam service-accounts describe ${FLINK_GCS_SERVICE_ACCOUNT}@${GCP_PROJECTT}.iam.gserviceaccount.com >/dev/null 2>&1; then
+        print_status "Creating Google Service Account: ${FLINK_GCS_SERVICE_ACCOUNT}"
+        gcloud iam service-accounts create ${FLINK_GCS_SERVICE_ACCOUNT} \
             --display-name="Flink GCS Service Account" \
             --description="Service account for Flink to access GCS" \
-            --project=sbx-stag
+            --project=${GCP_PROJECT}
     else
-        print_status "Google Service Account flink-gcs already exists"
+        print_status "Google Service Account ${FLINK_GCS_SERVICE_ACCOUNT} already exists"
     fi
     
     # Grant storage permissions
     print_status "Granting Storage Admin permissions..."
-    gsutil iam ch serviceAccount:flink-gcs@sbx-stag.iam.gserviceaccount.com:roles/storage.admin \
-        gs://sbx-stag-flink-storage/
+    gsutil iam ch serviceAccount:${FLINK_GCS_SERVICE_ACCOUNT}@${GCP_PROJECT}.iam.gserviceaccount.com:roles/storage.admin \
+        gs://${GCP_PROJECT}-flink-storage/
         
     print_status "Google Service Account permissions configured successfully"
 elif [ "$CLOUD_PROVIDER" = "azure" ]; then
@@ -201,39 +201,41 @@ elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_status "Setting up Azure Workload Identity..."
     
     # Check if managed identity exists
-    if ! az identity show --name flink-identity --resource-group UnileverSBXWMS_2 >/dev/null 2>&1; then
-        print_error "Azure Managed Identity 'flink-identity' not found!"
+    if ! az identity show --name ${AZURE_MANAGED_IDENTITY_NAME} --resource-group ${AZURE_RESOURCE_GROUP} >/dev/null 2>&1; then
+        print_error "Azure Managed Identity '${AZURE_MANAGED_IDENTITY_NAME}' not found!"
         print_error "Please create it first:"
-        print_error "az identity create --name flink-identity --resource-group UnileverSBXWMS_2"
+        print_error "az identity create --name ${AZURE_MANAGED_IDENTITY_NAME} --resource-group ${AZURE_RESOURCE_GROUP}"
         exit 1
     else
-        print_status "Azure Managed Identity 'flink-identity' found"
+        print_status "Azure Managed Identity '${AZURE_MANAGED_IDENTITY_NAME}' found"
     fi
     
     # Verify storage container exists
     print_status "Verifying Azure storage container exists..."
-    if ! az storage container show --name flink --account-name sbxunileverflinkstorage1 >/dev/null 2>&1; then
-        print_warning "Storage container 'flink' not found. Creating it..."
+    if ! az storage container show --name ${AZURE_STORAGE_CONTAINER_NAME} --account-name ${AZURE_STORAGE_ACCOUNT_NAME} >/dev/null 2>&1; then
+        print_warning "Storage container '${AZURE_STORAGE_CONTAINER_NAME}' not found. Creating it..."
         az storage container create \
-            --name flink \
-            --account-name sbxunileverflinkstorage1 \
-            --resource-group UnileverSBXWMS_2
-        print_status "Storage container 'flink' created successfully"
+            --name ${AZURE_STORAGE_CONTAINER_NAME} \
+            --account-name ${AZURE_STORAGE_ACCOUNT_NAME} \
+            --resource-group ${AZURE_RESOURCE_GROUP}
+        print_status "Storage container '${AZURE_STORAGE_CONTAINER_NAME}' created successfully"
     else
-        print_status "Storage container 'flink' exists"
+        print_status "Storage container '${AZURE_STORAGE_CONTAINER_NAME}' exists"
     fi
+
+    AKS_OIDC_ISSUER="$(az aks show -n "${CURRENT_CONTEXT}" -g "${AZURE_RESOURCE_GROUP}" --query "oidcIssuerProfile.issuerUrl" -otsv)"
     
     # Verify federated credential exists
     if ! az identity federated-credential show \
-        --identity-name flink-identity \
-        --resource-group UnileverSBXWMS_2 \
+        --identity-name ${AZURE_MANAGED_IDENTITY_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
         --name flink-federated-credential >/dev/null 2>&1; then
         print_warning "Federated credential not found. Creating it..."
         az identity federated-credential create \
             --name flink-federated-credential \
-            --identity-name flink-identity \
-            --resource-group UnileverSBXWMS_2 \
-            --issuer "https://centralindia.oic.prod-aks.azure.com/f66fae02-5d36-495b-bfe0-78a6ff9f8e6e/e2b8aeab-2ec7-4529-8541-b03b12297935/" \
+            --identity-name ${AZURE_MANAGED_IDENTITY_NAME} \
+            --resource-group ${AZURE_RESOURCE_GROUP} \
+            --issuer "${AKS_OIDC_ISSUER}" \
             --subject system:serviceaccount:flink-studio:flink
         print_status "Federated credential created successfully"
     else
@@ -455,11 +457,11 @@ elif [ "$CLOUD_PROVIDER" = "azure" ]; then
     print_status "Authentication: Azure Workload Identity"
     print_status ""
     print_status "Workload Identity Configuration:"
-    print_status "- Managed Identity: flink-identity"
+    print_status "- Managed Identity: ${AZURE_MANAGED_IDENTITY_NAME}"
     print_status "- Client ID: 911d60a1-3770-40cb-978b-8b7342bf02b8"
     print_status "- Kubernetes Service Account: flink-studio/flink"
     print_status "- Storage Account: sbxunileverflinkstorage1"
-    print_status "- Resource Group: UnileverSBXWMS_2"
+    print_status "- Resource Group: ${AZURE_RESOURCE_GROUP}"
     print_status ""
     print_status "Security Benefits:"
     print_status "✅ No storage account keys stored in cluster"
