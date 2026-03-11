@@ -17,7 +17,7 @@ CREATE TABLE wms_ira_bin_items_scanned_hu (
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
 PARTITION BY date_trunc('DAY', createdAt)
-DISTRIBUTED BY HASH(id) BUCKETS 16
+DISTRIBUTED BY HASH(id)
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",

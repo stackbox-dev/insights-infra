@@ -162,9 +162,59 @@ const starrocksSinkConfigurations = {
   'encarta': {
     service: 'encarta',
     topicMappings: [
-      { namespace: 'flink', topic: 'skus_master', table: 'encarta_skus_master' }
+      { namespace: 'flink', topic: 'skus_master', table: 'encarta_skus_master' },
+      { namespace: 'flink', topic: 'skus_overrides', table: 'encarta_skus_overrides' },
+      { namespace: 'public', topic: 'batches', table: 'encarta_batches' },
+      { namespace: 'public', topic: 'products', table: 'encarta_products' },
+      { namespace: 'public', topic: 'uoms', table: 'encarta_uoms' }
     ],
     dlqTopic: 'dlq-encarta-starrocks',
+    performanceConfig: starrocksDefaultPerformanceConfig
+  },
+  'core': {
+    service: 'core',
+    topicMappings: [
+      { namespace: 'public', topic: 'node', table: 'backbone_node' },
+      { namespace: 'public', topic: 'node_closure', table: 'backbone_node_closure' },
+      { namespace: 'public', topic: 'user_account', table: 'backbone_user_account' }
+    ],
+    dlqTopic: 'dlq-core-starrocks',
+    performanceConfig: starrocksDefaultPerformanceConfig
+  },
+  'wms-pick-drop': {
+    service: 'wms',
+    topicMappings: [
+      { namespace: 'public', topic: 'pd_pick_item', table: 'wms_pd_pick_item' },
+      { namespace: 'public', topic: 'pd_drop_item', table: 'wms_pd_drop_item' },
+      { namespace: 'flink', topic: 'pick_drop_staging', table: 'wms_pick_drop_staging' }
+    ],
+    dlqTopic: 'dlq-wms-starrocks-pick-drop',
+    performanceConfig: starrocksDefaultPerformanceConfig
+  },
+  'wms-storage': {
+    service: 'wms',
+    topicMappings: [
+      { namespace: 'public', topic: 'storage_area_sloc', table: 'wms_storage_area_sloc' },
+      { namespace: 'flink', topic: 'storage_bin_master', table: 'wms_storage_bin_master' },
+      { namespace: 'flink', topic: 'storage_bin_dockdoor_master', table: 'wms_storage_bin_dockdoor_master' }
+    ],
+    dlqTopic: 'dlq-wms-starrocks-storage',
+    performanceConfig: starrocksDefaultPerformanceConfig
+  },
+  'wms-inventory': {
+    service: 'wms',
+    topicMappings: [
+      { namespace: 'flink', topic: 'inventory_events_staging', table: 'wms_inventory_events_staging' }
+    ],
+    dlqTopic: 'dlq-wms-starrocks-inventory',
+    performanceConfig: starrocksDefaultPerformanceConfig
+  },
+  'wms-workstation': {
+    service: 'wms',
+    topicMappings: [
+      { namespace: 'flink', topic: 'workstation_events_staging', table: 'wms_workstation_events_staging' }
+    ],
+    dlqTopic: 'dlq-wms-starrocks-workstation',
     performanceConfig: starrocksDefaultPerformanceConfig
   }
 };

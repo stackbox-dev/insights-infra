@@ -8,7 +8,7 @@ CREATE TABLE wms_pl_inv_cnt_plan_seq (
 )
 ENGINE=OLAP
 PRIMARY KEY(id)
-DISTRIBUTED BY HASH(id) BUCKETS 16
+DISTRIBUTED BY HASH(id)
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",

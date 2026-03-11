@@ -34,7 +34,7 @@ CREATE TABLE wms_ob_order_progress (
 )
 ENGINE=OLAP
 PRIMARY KEY(id)
-DISTRIBUTED BY HASH(id) BUCKETS 16
+DISTRIBUTED BY HASH(id)
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",

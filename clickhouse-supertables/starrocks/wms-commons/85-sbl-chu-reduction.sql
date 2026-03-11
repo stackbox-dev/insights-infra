@@ -18,7 +18,7 @@ CREATE TABLE wms_sbl_chu_reduction (
 ENGINE=OLAP
 PRIMARY KEY(id, sessionCreatedAt)
 PARTITION BY date_trunc('DAY', sessionCreatedAt)
-DISTRIBUTED BY HASH(id) BUCKETS 16
+DISTRIBUTED BY HASH(id)
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",
