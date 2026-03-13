@@ -34,12 +34,8 @@ spec:
                   value: "nestle-prod-kafka"
                 - name: KAFKA_UI_CONSUMER_GROUPS_URL
                   value: "http://kafka-ui.kafka.nestle-prod.api.stackbox.internal/ui/clusters/nestle-prod-kafka/consumer-groups"
-                - name: KAFKA_UI_TOPICS_URL
-                  value: "http://kafka-ui.kafka.nestle-prod.api.stackbox.internal/ui/clusters/nestle-prod-kafka/topics"
                 - name: LAG_THRESHOLD
-                  value: "10000"
-                - name: TOPIC_SIZE_THRESHOLD_GB
-                  value: "100"
+                  value: "50000"
                 - name: SKIP_GROUPS
                   value: "connect-configs,connect-offsets,connect-status,connect-cluster"
                 - name: SLACK_BOT_TOKEN
@@ -88,15 +84,12 @@ data:
     KAFKA_UI_URL="${KAFKA_UI_URL:-}"
     CLUSTER_NAME="${CLUSTER_NAME:-}"
     KAFKA_UI_CONSUMER_GROUPS_URL="${KAFKA_UI_CONSUMER_GROUPS_URL:-}"
-    KAFKA_UI_TOPICS_URL="${KAFKA_UI_TOPICS_URL:-}"
-    LAG_THRESHOLD="${LAG_THRESHOLD:-10000}"
-    TOPIC_SIZE_THRESHOLD_GB="${TOPIC_SIZE_THRESHOLD_GB:-100}"
+    LAG_THRESHOLD="${LAG_THRESHOLD:-50000}"
     SKIP_GROUPS="${SKIP_GROUPS:-connect-configs,connect-offsets,connect-status,connect-cluster}"
     SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
     SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
     ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
 
-    TOPIC_SIZE_THRESHOLD_BYTES=$(( TOPIC_SIZE_THRESHOLD_GB * 1024 * 1024 * 1024 ))
 
     log() {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
@@ -256,59 +249,5 @@ data:
         done < <(echo "$groups_json" | jq -c '.consumerGroups[]')
 
         [[ "$lag_alert_sent" == "false" ]] && log "✅ All consumer groups are within the lag threshold."
-      fi
-    fi
-
-    # ============================================================
-    # CHECK 3: TOPIC SIZE
-    # ============================================================
-    log "===== CHECK 3: Topic Size (threshold: ${TOPIC_SIZE_THRESHOLD_GB}GB) ====="
-
-    if [[ -z "$KAFKA_UI_URL" || -z "$CLUSTER_NAME" ]]; then
-      log "⚠️  KAFKA_UI_URL or CLUSTER_NAME not set — skipping topic size check."
-    else
-      topics_json=$(curl -s --fail "${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/topics?perPage=1000" || echo "")
-
-      if [[ -z "$topics_json" || "$topics_json" == "null" ]]; then
-        log "❌ No response from Kafka UI topics API."
-      else
-        topic_count=$(echo "$topics_json" | jq '.topics | length' 2>/dev/null || echo "0")
-        log "Found ${topic_count} topics."
-        size_alert_sent=false
-
-        while IFS= read -r topic; do
-          [[ -z "$topic" ]] && continue
-          topic_name=$(echo "$topic" | jq -r '.name')
-          segment_size=$(echo "$topic" | jq -r '.segmentSize // 0')
-
-          if [[ "$segment_size" -gt "$TOPIC_SIZE_THRESHOLD_BYTES" ]]; then
-            size_gb=$(awk "BEGIN {printf \"%.1f\", $segment_size / 1073741824}")
-            log "  ⚠️  TOPIC SIZE ALERT: ${topic_name} is ${size_gb}GB"
-            msg=$(jq -n \
-              --arg topic_name "$topic_name" \
-              --arg size_gb "${size_gb}GB" \
-              --arg threshold "${TOPIC_SIZE_THRESHOLD_GB}GB" \
-              --arg topic_ui_link "${KAFKA_UI_TOPICS_URL}/${topic_name}" \
-              --arg channel "$SLACK_CHANNEL_ID" \
-              --arg environment "$ENVIRONMENT_NAME" \
-              '{
-                "channel": $channel,
-                "text": ":red_circle: *Kafka Topic Size Alert!*",
-                "attachments": [{
-                  "color": "#ff0000",
-                  "fields": [
-                    {"title": "Topic", "value": ("<" + $topic_ui_link + "|" + $topic_name + ">"), "short": true},
-                    {"title": "Environment", "value": $environment, "short": true},
-                    {"title": "Size", "value": $size_gb, "short": true},
-                    {"title": "Threshold", "value": $threshold, "short": true}
-                  ]
-                }]
-              }')
-            send_slack "$msg"
-            size_alert_sent=true
-          fi
-        done < <(echo "$topics_json" | jq -c '.topics[]')
-
-        [[ "$size_alert_sent" == "false" ]] && log "✅ All topics are within the size threshold."
       fi
     fi

@@ -12,7 +12,7 @@ CREATE TABLE wms_task_worker_assignment (
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
 PARTITION BY date_trunc('DAY', createdAt)
-DISTRIBUTED BY HASH(id) BUCKETS 16
+DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",

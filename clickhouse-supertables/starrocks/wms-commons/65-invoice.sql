@@ -24,7 +24,7 @@ CREATE TABLE wms_invoices (
 ENGINE=OLAP
 PRIMARY KEY(id, sessionCreatedAt)
 PARTITION BY date_trunc('DAY', sessionCreatedAt)
-DISTRIBUTED BY HASH(id) BUCKETS 16
+DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",
