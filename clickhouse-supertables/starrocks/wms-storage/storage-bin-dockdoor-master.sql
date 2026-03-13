@@ -26,7 +26,7 @@ CREATE TABLE wms_storage_bin_dockdoor_master (
 )
 ENGINE=OLAP
 PRIMARY KEY(wh_id, bin_code, dockdoor_code)
-DISTRIBUTED BY HASH(wh_id)
+DISTRIBUTED BY HASH(wh_id) BUCKETS 2
 ORDER BY (wh_id, bin_code, dockdoor_code)
 PROPERTIES (
     "compression" = "LZ4",

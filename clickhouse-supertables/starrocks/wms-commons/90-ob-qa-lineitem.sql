@@ -24,7 +24,7 @@ CREATE TABLE wms_ob_qa_lineitem (
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
 PARTITION BY date_trunc('DAY', createdAt)
-DISTRIBUTED BY HASH(id)
+DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",

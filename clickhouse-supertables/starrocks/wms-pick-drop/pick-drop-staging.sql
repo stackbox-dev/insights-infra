@@ -146,7 +146,7 @@ CREATE TABLE wms_pick_drop_staging (
 )
 ENGINE=OLAP
 PRIMARY KEY(pick_item_id, drop_item_id)
-DISTRIBUTED BY HASH(pick_item_id)
+DISTRIBUTED BY HASH(pick_item_id) BUCKETS 2
 ORDER BY (pick_item_id, drop_item_id)
 PROPERTIES (
     "compression" = "LZ4",

@@ -5,7 +5,7 @@ CREATE TABLE backbone_node_closure (
 )
 ENGINE=OLAP
 PRIMARY KEY(parentId, childId)
-DISTRIBUTED BY HASH(parentId)
+DISTRIBUTED BY HASH(parentId) BUCKETS 2
 ORDER BY (parentId, childId)
 PROPERTIES (
     "compression" = "LZ4",

@@ -27,7 +27,7 @@ CREATE TABLE wms_inventory_events_staging (
 )
 ENGINE=OLAP
 PRIMARY KEY(event_id, quant_event_id)
-DISTRIBUTED BY HASH(event_id)
+DISTRIBUTED BY HASH(event_id) BUCKETS 2
 ORDER BY (event_id, quant_event_id)
 PROPERTIES (
     "compression" = "LZ4",

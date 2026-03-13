@@ -23,7 +23,7 @@ CREATE TABLE wms_workstation_events_staging (
 )
 ENGINE=OLAP
 PRIMARY KEY(event_type, event_source_id)
-DISTRIBUTED BY HASH(event_source_id)
+DISTRIBUTED BY HASH(event_source_id) BUCKETS 2
 ORDER BY (event_type, event_source_id)
 PROPERTIES (
     "compression" = "LZ4",

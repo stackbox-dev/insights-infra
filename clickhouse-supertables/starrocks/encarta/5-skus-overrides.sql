@@ -123,7 +123,7 @@ CREATE TABLE encarta_skus_overrides (
 )
 ENGINE=OLAP
 PRIMARY KEY(sku_id, node_id)
-DISTRIBUTED BY HASH(sku_id)
+DISTRIBUTED BY HASH(sku_id) BUCKETS 2
 ORDER BY (sku_id, node_id)
 PROPERTIES (
     "compression" = "LZ4",

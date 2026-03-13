@@ -15,7 +15,7 @@ CREATE TABLE wms_storage_area_sloc (
 )
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
-DISTRIBUTED BY HASH(id)
+DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",

@@ -29,7 +29,7 @@ CREATE TABLE encarta_products (
 )
 ENGINE=OLAP
 PRIMARY KEY(id)
-DISTRIBUTED BY HASH(id)
+DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
     "compression" = "LZ4",
