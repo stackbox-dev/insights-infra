@@ -1,6 +1,7 @@
 CREATE TABLE wms_pick_drop_staging (
     pick_item_id STRING NOT NULL,
     drop_item_id STRING NOT NULL,
+    pick_item_created_at DATETIME NOT NULL,
     wh_id BIGINT NULL,
     session_id STRING NULL,
     task_id STRING NULL,
@@ -13,7 +14,6 @@ CREATE TABLE wms_pick_drop_staging (
     qty INT NULL,
     hu_code STRING NULL,
     destination_bin_code STRING NULL,
-    pick_item_created_at DATETIME NULL,
     picked_qty INT NULL,
     picked_at DATETIME NULL,
     picked_by_worker_id STRING NULL,
@@ -145,13 +145,15 @@ CREATE TABLE wms_pick_drop_staging (
     event_time DATETIME NULL
 )
 ENGINE=OLAP
-PRIMARY KEY(pick_item_id, drop_item_id)
+PRIMARY KEY(pick_item_id, drop_item_id, pick_item_created_at)
+PARTITION BY date_trunc('MONTH', pick_item_created_at)
 DISTRIBUTED BY HASH(pick_item_id) BUCKETS 2
-ORDER BY (pick_item_id, drop_item_id)
+ORDER BY (wh_id, pick_item_created_at)
 PROPERTIES (
-    "compression" = "LZ4",
+    "compression" = "ZSTD",
     "enable_persistent_index" = "true",
     "fast_schema_evolution" = "true",
     "replicated_storage" = "true",
-    "replication_num" = "2"
+    "replication_num" = "2",
+    "partition_live_number" = "90"
 );

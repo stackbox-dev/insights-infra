@@ -4,7 +4,7 @@ metadata:
   name: kafka-connector-healthcheck
   namespace: kafka
 spec:
-  schedule: "*/10 * * * *"  # every 10 min
+  schedule: "*/30 * * * *"  # every 30 min
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

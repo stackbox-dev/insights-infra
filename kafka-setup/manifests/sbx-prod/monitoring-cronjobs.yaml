@@ -1,0 +1,568 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kafka-disk-usage-alert
+  namespace: kafka
+spec:
+  schedule: "0 */6 * * *"  # every 6 hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 120
+      template:
+        spec:
+          containers:
+            - name: disk-usage-checker
+              image: alpine:3.20
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              env:
+                - name: AIVEN_PROJECT
+                  value: "stackbox"
+                - name: AIVEN_SERVICE
+                  value: "sbx-prod-kafka"
+                - name: WARN_THRESHOLD_PCT
+                  value: "70"
+                - name: CRITICAL_THRESHOLD_PCT
+                  value: "80"
+                - name: ENVIRONMENT_NAME
+                  value: "SBX Prod"
+                - name: AIVEN_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: aiven-api-token
+                      key: token
+                - name: SLACK_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: bot_token
+                - name: SLACK_CHANNEL_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: channel_id
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  apk add --no-cache curl jq bash bc
+                  cp /scripts/check_disk_usage.sh /tmp/check_disk_usage.sh
+                  chmod +x /tmp/check_disk_usage.sh
+                  /tmp/check_disk_usage.sh
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          restartPolicy: OnFailure
+          volumes:
+            - name: script
+              configMap:
+                name: kafka-disk-usage-script
+                defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-disk-usage-script
+  namespace: kafka
+data:
+  check_disk_usage.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # ==== CONFIG ====
+    AIVEN_PROJECT="${AIVEN_PROJECT:-}"
+    AIVEN_SERVICE="${AIVEN_SERVICE:-}"
+    AIVEN_TOKEN="${AIVEN_TOKEN:-}"
+    WARN_THRESHOLD_PCT="${WARN_THRESHOLD_PCT:-70}"
+    CRITICAL_THRESHOLD_PCT="${CRITICAL_THRESHOLD_PCT:-80}"
+    SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+    SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
+
+    log() {
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+    }
+
+    send_slack() {
+      local msg="$1"
+      local response
+      response=$(curl -s -w "%{http_code}" -o /tmp/slack_response.txt \
+        -X POST "https://slack.com/api/chat.postMessage" \
+        -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$msg" || true)
+      local slack_ok
+      slack_ok=$(jq -r '.ok' /tmp/slack_response.txt 2>/dev/null || echo "false")
+      local slack_err
+      slack_err=$(jq -r '.error' /tmp/slack_response.txt 2>/dev/null || echo "")
+      if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
+        log "    ✅ Slack alert sent."
+      else
+        log "    ⚠️  Slack alert failed (HTTP ${response}): ${slack_err}"
+      fi
+    }
+
+    # ==== VALIDATE ENV ====
+    if [[ -z "$SLACK_BOT_TOKEN" || -z "$SLACK_CHANNEL_ID" ]]; then
+      log "❌ ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set."
+      exit 1
+    fi
+
+    if [[ -z "$AIVEN_TOKEN" || -z "$AIVEN_PROJECT" || -z "$AIVEN_SERVICE" ]]; then
+      log "❌ ERROR: AIVEN_TOKEN, AIVEN_PROJECT and AIVEN_SERVICE must be set."
+      exit 1
+    fi
+
+    log "===== Checking Kafka Disk Usage for ${AIVEN_SERVICE} (${AIVEN_PROJECT}) ====="
+
+    # ==== FETCH REAL DISK USAGE FROM AIVEN METRICS API ====
+    # Get total disk size from service info (for display)
+    service_json=$(curl -s \
+      -H "Authorization: Bearer ${AIVEN_TOKEN}" \
+      "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}" 2>/dev/null || echo "")
+
+    total_disk_gb="N/A"
+    if [[ -n "$service_json" ]]; then
+      total_disk_mb=$(echo "$service_json" | jq -r '.service.disk_space_mb // 0')
+      [[ "$total_disk_mb" != "0" && "$total_disk_mb" != "null" ]] && \
+        total_disk_gb=$(echo "scale=1; $total_disk_mb / 1024" | bc)
+    fi
+
+    # Get real per-broker disk % from metrics API
+    metrics_json=$(curl -s -X POST \
+      -H "Authorization: Bearer ${AIVEN_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d '{"period": "hour"}' \
+      "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}/metrics" 2>/dev/null || echo "")
+
+    if [[ -z "$metrics_json" ]]; then
+      log "❌ Failed to fetch metrics from Aiven API."
+      exit 1
+    fi
+
+    # Max broker disk usage from latest data point
+    max_val=$(echo "$metrics_json" | jq -r '
+      .metrics.disk_usage.data.rows[-1][1:] |
+      map(select(. != null and . > 0)) |
+      max // 0' 2>/dev/null || echo "0")
+
+    if [[ "$max_val" == "0" || "$max_val" == "null" ]]; then
+      log "⚠️  Could not get disk usage from Aiven metrics. Skipping check."
+      exit 0
+    fi
+
+    # Auto-detect: fraction (0-1) vs percentage (0-100)
+    is_fraction=$(echo "$max_val < 2" | bc)
+    if [[ "$is_fraction" == "1" ]]; then
+      used_pct=$(echo "($max_val * 100 + 0.5) / 1" | bc)
+    else
+      used_pct=$(echo "($max_val + 0.5) / 1" | bc)
+    fi
+
+    log "Per-Node Disk : ${total_disk_gb} GB"
+    log "Max Broker    : ${used_pct}%"
+    log "Warning at    : ${WARN_THRESHOLD_PCT}%"
+    log "Critical at   : ${CRITICAL_THRESHOLD_PCT}%"
+
+    # ==== ALERT LOGIC ====
+    if [[ "$used_pct" -ge "$CRITICAL_THRESHOLD_PCT" ]]; then
+      log "🔴 CRITICAL: Disk usage ${used_pct}% exceeds critical threshold ${CRITICAL_THRESHOLD_PCT}%!"
+      color="#ff0000"
+      emoji=":rotating_light:"
+      level="CRITICAL"
+    elif [[ "$used_pct" -ge "$WARN_THRESHOLD_PCT" ]]; then
+      log "🟡 WARNING: Disk usage ${used_pct}% exceeds warning threshold ${WARN_THRESHOLD_PCT}%!"
+      color="#ff9900"
+      emoji=":warning:"
+      level="WARNING"
+    else
+      log "✅ Disk usage ${used_pct}% is within safe limits. No alert needed."
+      exit 0
+    fi
+
+    msg=$(jq -n \
+      --arg channel "$SLACK_CHANNEL_ID" \
+      --arg emoji "$emoji" \
+      --arg level "$level" \
+      --arg service "$AIVEN_SERVICE" \
+      --arg project "$AIVEN_PROJECT" \
+      --arg environment "$ENVIRONMENT_NAME" \
+      --arg total_gb "$total_disk_gb" \
+      --arg used_pct "$used_pct" \
+      --arg warn_pct "$WARN_THRESHOLD_PCT" \
+      --arg crit_pct "$CRITICAL_THRESHOLD_PCT" \
+      --arg color "$color" \
+      '{
+        "channel": $channel,
+        "text": ($emoji + " *Kafka Disk Usage " + $level + " — " + $environment + "*"),
+        "attachments": [{
+          "color": $color,
+          "fields": [
+            {"title": "Environment", "value": $environment, "short": true},
+            {"title": "Aiven Service", "value": $service, "short": true},
+            {"title": "Per-Node Disk", "value": ($total_gb + " GB"), "short": true},
+            {"title": "Max Broker Usage", "value": ($used_pct + "%"), "short": true},
+            {"title": "Critical Threshold", "value": ($crit_pct + "%"), "short": true},
+            {"title": "Action Required", "value": "Increase Aiven disk size OR set retention policies on large topics to free space. Aiven readonly mode triggers at ~90%.", "short": false}
+          ],
+          "footer": "Aiven Kafka Disk Monitor | SBX Prod | Checks every 6 hours"
+        }]
+      }')
+
+    send_slack "$msg"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kafka-daily-health-report
+  namespace: kafka
+spec:
+  schedule: "30 3,15 * * *"  # 9 AM and 9 PM IST (3:30 and 15:30 UTC)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          containers:
+            - name: health-reporter
+              image: postgres:15-alpine
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              env:
+                - name: ENVIRONMENT_NAME
+                  value: "SBX Prod"
+                # Connector check
+                - name: CONNECT_URL
+                  value: "http://cp-connect.kafka"
+                - name: CONNECT_UI_URL
+                  value: "http://cp-connect-ui.kafka.sbx-india-prod.api.stackbox.internal/#/cluster/kafka-connect-1/connector"
+                # Consumer lag check
+                - name: KAFKA_UI_URL
+                  value: "http://kafka-ui.kafka"
+                - name: CLUSTER_NAME
+                  value: "sbx-prod-kafka"
+                - name: KAFKA_UI_CONSUMER_GROUPS_URL
+                  value: "http://kafka-ui.kafka.sbx-india-prod.api.stackbox.internal/ui/clusters/sbx-prod-kafka/consumer-groups"
+                - name: LAG_THRESHOLD
+                  value: "50000"
+                - name: SKIP_GROUPS
+                  value: "connect-configs,connect-offsets,connect-status,connect-cluster"
+                # Disk check (Aiven)
+                - name: AIVEN_PROJECT
+                  value: "stackbox"
+                - name: AIVEN_SERVICE
+                  value: "sbx-prod-kafka"
+                - name: AIVEN_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: aiven-api-token
+                      key: token
+                # PG replication slot check
+                - name: PG_HOSTS
+                  value: "192.168.32.28,192.168.32.25"
+                - name: PG_PORT
+                  value: "5432"
+                - name: PG_USER
+                  value: "debezium"
+                - name: PG_DB
+                  value: "postgres"
+                - name: PG_SSL_MODE
+                  value: "require"
+                - name: PG_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: debezium-pg-pass
+                      key: password
+                # Slack
+                - name: SLACK_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: bot_token
+                - name: SLACK_CHANNEL_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: slack-secret
+                      key: channel_id
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  apk add --no-cache curl jq bash bc
+                  cp /scripts/daily_health_report.sh /tmp/daily_health_report.sh
+                  chmod +x /tmp/daily_health_report.sh
+                  /tmp/daily_health_report.sh
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          restartPolicy: OnFailure
+          volumes:
+            - name: script
+              configMap:
+                name: daily-health-report-script
+                defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: daily-health-report-script
+  namespace: kafka
+data:
+  daily_health_report.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
+    CONNECT_URL="${CONNECT_URL:-}"
+    CONNECT_UI_URL="${CONNECT_UI_URL:-}"
+    KAFKA_UI_URL="${KAFKA_UI_URL:-}"
+    CLUSTER_NAME="${CLUSTER_NAME:-}"
+    KAFKA_UI_CONSUMER_GROUPS_URL="${KAFKA_UI_CONSUMER_GROUPS_URL:-}"
+    LAG_THRESHOLD="${LAG_THRESHOLD:-50000}"
+    SKIP_GROUPS="${SKIP_GROUPS:-}"
+    AIVEN_PROJECT="${AIVEN_PROJECT:-}"
+    AIVEN_SERVICE="${AIVEN_SERVICE:-}"
+    AIVEN_TOKEN="${AIVEN_TOKEN:-}"
+    PG_HOSTS="${PG_HOSTS:-}"
+    PG_PORT="${PG_PORT:-5432}"
+    PG_USER="${PG_USER:-}"
+    PG_DB="${PG_DB:-postgres}"
+    PG_SSL_MODE="${PG_SSL_MODE:-require}"
+    PGPASSWORD="${PG_PASSWORD:-}"
+    export PGPASSWORD
+    SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+    SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
+
+    log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
+
+    # ==== CHECK 1: CONNECTORS ====
+    log "Checking connectors..."
+    total_connectors=0; running_connectors=0; failed_connectors=0
+    failed_connector_names=""
+
+    connectors_json=$(curl -s --insecure "${CONNECT_URL}/connectors" 2>/dev/null || echo "[]")
+    connectors=$(echo "$connectors_json" | jq -r '.[]' 2>/dev/null || true)
+
+    if [[ -n "$connectors" ]]; then
+      while IFS= read -r connector; do
+        [[ -z "$connector" ]] && continue
+        total_connectors=$((total_connectors + 1))
+        status_json=$(curl -s --insecure "${CONNECT_URL}/connectors/${connector}/status" 2>/dev/null || echo "{}")
+        has_failed=$(echo "$status_json" | jq '[.tasks[]?.state] | any(. == "FAILED")' 2>/dev/null || echo "false")
+        if [[ "$has_failed" == "true" ]]; then
+          failed_connectors=$((failed_connectors + 1))
+          failed_connector_names="${failed_connector_names}${connector}, "
+        else
+          running_connectors=$((running_connectors + 1))
+        fi
+      done <<< "$connectors"
+    fi
+
+    if [[ $failed_connectors -eq 0 && $total_connectors -gt 0 ]]; then
+      connector_status="✅ ${running_connectors}/${total_connectors} RUNNING"
+      connector_color="good"
+    elif [[ $total_connectors -eq 0 ]]; then
+      connector_status="⚠️  No connectors found"
+      connector_color="warning"
+    else
+      connector_status="❌ ${failed_connectors}/${total_connectors} FAILED: ${failed_connector_names%, }"
+      connector_color="danger"
+    fi
+    log "Connectors: $connector_status"
+
+    # ==== CHECK 2: CONSUMER LAG ====
+    log "Checking consumer lag..."
+    lag_groups_above=0; lag_details=""
+
+    groups_json=$(curl -s --fail "${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/consumer-groups/paged?perPage=1000" 2>/dev/null || echo "")
+
+    if [[ -n "$groups_json" ]]; then
+      while IFS= read -r group; do
+        [[ -z "$group" ]] && continue
+        group_id=$(echo "$group" | jq -r '.groupId')
+        lag=$(echo "$group" | jq -r '.consumerLag // 0')
+
+        skip=false
+        IFS=',' read -ra skip_list <<< "$SKIP_GROUPS"
+        for sg in "${skip_list[@]}"; do [[ "$group_id" == "$sg" ]] && skip=true && break; done
+        [[ "$skip" == "true" ]] && continue
+
+        if [[ "$lag" -gt "$LAG_THRESHOLD" ]]; then
+          lag_groups_above=$((lag_groups_above + 1))
+          lag_details="${lag_details}${group_id}: ${lag}, "
+        fi
+      done < <(echo "$groups_json" | jq -c '.consumerGroups[]' 2>/dev/null || true)
+    fi
+
+    if [[ $lag_groups_above -eq 0 ]]; then
+      lag_status="✅ All groups within threshold (${LAG_THRESHOLD})"
+      lag_color="good"
+    else
+      lag_status="❌ ${lag_groups_above} group(s) above threshold: ${lag_details%, }"
+      lag_color="danger"
+    fi
+    log "Consumer lag: $lag_status"
+
+    # ==== CHECK 3: DISK USAGE (Aiven Metrics API - real broker disk) ====
+    log "Checking disk usage..."
+    disk_status="⚠️  N/A"; disk_color="warning"; disk_pct=0
+
+    if [[ -n "$AIVEN_TOKEN" && -n "$AIVEN_PROJECT" && -n "$AIVEN_SERVICE" ]]; then
+      metrics_json=$(curl -s -X POST \
+        -H "Authorization: Bearer ${AIVEN_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"period": "hour"}' \
+        "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}/metrics" 2>/dev/null || echo "")
+
+      if [[ -n "$metrics_json" ]]; then
+        max_val=$(echo "$metrics_json" | jq -r '
+          .metrics.disk_usage.data.rows[-1][1:] |
+          map(select(. != null and . > 0)) |
+          max // 0' 2>/dev/null || echo "0")
+
+        if [[ "$max_val" != "0" && "$max_val" != "null" ]]; then
+          is_fraction=$(echo "$max_val < 2" | bc)
+          if [[ "$is_fraction" == "1" ]]; then
+            disk_pct=$(echo "($max_val * 100 + 0.5) / 1" | bc)
+          else
+            disk_pct=$(echo "($max_val + 0.5) / 1" | bc)
+          fi
+
+          if [[ $disk_pct -ge 80 ]]; then
+            disk_status="🔴 ${disk_pct}% (max broker) — CRITICAL"
+            disk_color="danger"
+          elif [[ $disk_pct -ge 70 ]]; then
+            disk_status="🟡 ${disk_pct}% (max broker) — WARNING"
+            disk_color="warning"
+          else
+            disk_status="✅ ${disk_pct}% (max broker)"
+            disk_color="good"
+          fi
+        fi
+      fi
+    fi
+    log "Disk: $disk_status"
+
+    # ==== CHECK 4: PG REPLICATION SLOTS ====
+    log "Checking PG replication slots..."
+    total_slots=0; inactive_slots=0; slot_details=""
+
+    if [[ -n "$PG_HOSTS" && -n "$PG_USER" ]]; then
+      IFS=',' read -ra HOST_LIST <<< "$PG_HOSTS"
+      for PG_HOST in "${HOST_LIST[@]}"; do
+        PG_HOST=$(echo "$PG_HOST" | xargs)
+        result=$(psql \
+          "host=${PG_HOST} port=${PG_PORT} dbname=${PG_DB} user=${PG_USER} sslmode=${PG_SSL_MODE}" \
+          --tuples-only --no-align --field-separator='|' \
+          -c "SELECT slot_name, active FROM pg_replication_slots WHERE slot_name LIKE 'dbz_%';" \
+          2>/dev/null || echo "ERROR")
+
+        [[ "$result" == "ERROR" || -z "$result" ]] && continue
+
+        while IFS='|' read -r slot_name active; do
+          slot_name=$(echo "$slot_name" | xargs)
+          active=$(echo "$active" | xargs)
+          [[ -z "$slot_name" ]] && continue
+          total_slots=$((total_slots + 1))
+          if [[ "$active" != "t" ]]; then
+            inactive_slots=$((inactive_slots + 1))
+            slot_details="${slot_details}${slot_name} (${PG_HOST}), "
+          fi
+        done <<< "$result"
+      done
+    fi
+
+    if [[ $total_slots -eq 0 ]]; then
+      slot_status="⚠️  Could not connect to PG"
+      slot_color="warning"
+    elif [[ $inactive_slots -eq 0 ]]; then
+      slot_status="✅ All ${total_slots} slots ACTIVE"
+      slot_color="good"
+    else
+      slot_status="❌ ${inactive_slots}/${total_slots} slots INACTIVE: ${slot_details%, }"
+      slot_color="danger"
+    fi
+    log "PG Slots: $slot_status"
+
+    # ==== OVERALL STATUS ====
+    overall_ok=true
+    [[ "$connector_color" == "danger" ]] && overall_ok=false
+    [[ "$lag_color" == "danger" ]] && overall_ok=false
+    [[ "$disk_color" == "danger" ]] && overall_ok=false
+    [[ "$slot_color" == "danger" ]] && overall_ok=false
+
+    if [[ "$overall_ok" == "true" ]]; then
+      header_emoji=":white_check_mark:"
+      overall_color="#36a64f"
+    else
+      header_emoji=":rotating_light:"
+      overall_color="#ff0000"
+    fi
+
+    # IST time
+    ist_time=$(date -u -d '+330 minutes' '+%I:%M %p IST, %B %d %Y' 2>/dev/null || \
+               python3 -c "from datetime import datetime,timezone,timedelta; print((datetime.now(timezone.utc)+timedelta(hours=5,minutes=30)).strftime('%I:%M %p IST, %B %d %Y'))" 2>/dev/null || \
+               date -u '+%H:%M UTC')
+
+    # ==== SEND SLACK ====
+    msg=$(jq -n \
+      --arg channel "$SLACK_CHANNEL_ID" \
+      --arg header_emoji "$header_emoji" \
+      --arg env "$ENVIRONMENT_NAME" \
+      --arg time "$ist_time" \
+      --arg connector_status "$connector_status" \
+      --arg connector_color "$connector_color" \
+      --arg lag_status "$lag_status" \
+      --arg lag_color "$lag_color" \
+      --arg disk_status "$disk_status" \
+      --arg disk_color "$disk_color" \
+      --arg slot_status "$slot_status" \
+      --arg slot_color "$slot_color" \
+      --arg overall_color "$overall_color" \
+      '{
+        "channel": $channel,
+        "text": ($header_emoji + " *Daily Kafka Health Report — " + $env + "*"),
+        "attachments": [
+          {
+            "color": $overall_color,
+            "fields": [
+              {"title": "🕘 Report Time", "value": $time, "short": false},
+              {"title": "🔌 Connectors", "value": $connector_status, "short": false},
+              {"title": "📊 Consumer Lag", "value": $lag_status, "short": false},
+              {"title": "💾 Kafka Disk", "value": $disk_status, "short": false},
+              {"title": "🗄️ PG Replication Slots", "value": $slot_status, "short": false}
+            ],
+            "footer": "Kafka Daily Health Monitor | SBX Prod"
+          }
+        ]
+      }')
+
+    response=$(curl -s -w "%{http_code}" -o /tmp/slack_resp.txt \
+      -X POST "https://slack.com/api/chat.postMessage" \
+      -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "$msg" || true)
+
+    slack_ok=$(jq -r '.ok' /tmp/slack_resp.txt 2>/dev/null || echo "false")
+    if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
+      log "✅ Daily health report sent to Slack successfully."
+    else
+      log "❌ Failed to send Slack message."
+      exit 1
+    fi
