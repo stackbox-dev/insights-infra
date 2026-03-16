@@ -129,13 +129,14 @@ data:
 
     QUERY="
       SELECT slot_name,
-             pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag,
-             pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes,
+             pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag,
+             pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes,
              active,
              slot_type,
              coalesce(database, 'N/A')
       FROM pg_replication_slots
-      WHERE pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) > ${LAG_THRESHOLD_GB}::bigint * 1024 * 1024 * 1024
+      WHERE slot_name LIKE 'dbz_%'
+      AND pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) > ${LAG_THRESHOLD_GB}::bigint * 1024 * 1024 * 1024
       ORDER BY lag_bytes DESC;
     "
 
@@ -143,7 +144,7 @@ data:
     IFS=',' read -ra HOST_LIST <<< "$PG_HOSTS"
     for PG_HOST in "${HOST_LIST[@]}"; do
       PG_HOST=$(echo "$PG_HOST" | xargs)
-      log "===== Checking PG Replication Slot Confirmed Lag (threshold: ${LAG_THRESHOLD_GB}GB) on ${PG_HOST} ====="
+      log "===== Checking PG Replication Slot Lag (threshold: ${LAG_THRESHOLD_GB}GB) on ${PG_HOST} ====="
 
       result=$(psql \
         "host=${PG_HOST} port=${PG_PORT} dbname=${PG_DB} user=${PG_USER} sslmode=${PG_SSL_MODE}" \
@@ -173,11 +174,11 @@ data:
       fi
 
       if [[ -z "$result" ]]; then
-        log "✅ No replication slots exceed ${LAG_THRESHOLD_GB}GB confirmed lag on ${PG_HOST}."
+        log "✅ No replication slots exceed ${LAG_THRESHOLD_GB}GB lag on ${PG_HOST}."
         continue
       fi
 
-      log "⚠️  Found replication slots exceeding ${LAG_THRESHOLD_GB}GB confirmed lag on ${PG_HOST}:"
+      log "⚠️  Found replication slots exceeding ${LAG_THRESHOLD_GB}GB lag on ${PG_HOST}:"
 
       declare -A alerted_slots
 

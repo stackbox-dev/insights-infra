@@ -123,43 +123,54 @@ data:
 
     log "===== Checking Kafka Disk Usage for ${AIVEN_SERVICE} (${AIVEN_PROJECT}) ====="
 
-    # ==== FETCH SERVICE INFO FROM AIVEN API ====
+    # ==== FETCH REAL DISK USAGE FROM AIVEN METRICS API ====
+    # Get total disk size from service info (for display)
     service_json=$(curl -s \
       -H "Authorization: Bearer ${AIVEN_TOKEN}" \
-      "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}" || echo "")
+      "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}" 2>/dev/null || echo "")
 
-    if [[ -z "$service_json" ]]; then
-      log "❌ Failed to fetch service info from Aiven API."
+    total_disk_gb="N/A"
+    if [[ -n "$service_json" ]]; then
+      total_disk_mb=$(echo "$service_json" | jq -r '.service.disk_space_mb // 0')
+      [[ "$total_disk_mb" != "0" && "$total_disk_mb" != "null" ]] && \
+        total_disk_gb=$(echo "scale=1; $total_disk_mb / 1024" | bc)
+    fi
+
+    # Get real per-broker disk % from metrics API
+    metrics_json=$(curl -s -X POST \
+      -H "Authorization: Bearer ${AIVEN_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d '{"period": "hour"}' \
+      "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}/metrics" 2>/dev/null || echo "")
+
+    if [[ -z "$metrics_json" ]]; then
+      log "❌ Failed to fetch metrics from Aiven API."
       exit 1
     fi
 
-    # Total disk in MB
-    total_disk_mb=$(echo "$service_json" | jq -r '.service.disk_space_mb // 0')
-    if [[ "$total_disk_mb" == "0" || "$total_disk_mb" == "null" ]]; then
-      log "❌ Could not retrieve disk_space_mb from Aiven API."
-      exit 1
-    fi
+    # Max broker disk usage from latest data point
+    max_val=$(echo "$metrics_json" | jq -r '
+      .metrics.disk_usage.data.rows[-1][1:] |
+      map(select(. != null and . > 0)) |
+      max // 0' 2>/dev/null || echo "0")
 
-    total_disk_gb=$(echo "scale=1; $total_disk_mb / 1024" | bc)
-
-    # Used disk from latest backup data_size (best available approximation via Aiven API)
-    used_disk_mb=$(echo "$service_json" | jq -r '[.service.backups[]?.data_size // 0] | max // 0')
-
-    if [[ "$used_disk_mb" == "0" || "$used_disk_mb" == "null" ]]; then
-      log "⚠️  Could not get used disk from backups. Skipping check."
+    if [[ "$max_val" == "0" || "$max_val" == "null" ]]; then
+      log "⚠️  Could not get disk usage from Aiven metrics. Skipping check."
       exit 0
     fi
 
-    used_disk_gb=$(echo "scale=1; $used_disk_mb / 1024" | bc)
+    # Auto-detect: fraction (0-1) vs percentage (0-100)
+    is_fraction=$(echo "$max_val < 2" | bc)
+    if [[ "$is_fraction" == "1" ]]; then
+      used_pct=$(echo "($max_val * 100 + 0.5) / 1" | bc)
+    else
+      used_pct=$(echo "($max_val + 0.5) / 1" | bc)
+    fi
 
-    # Calculate usage percentage (integer)
-    used_pct=$(echo "$used_disk_mb * 100 / $total_disk_mb" | bc)
-
-    log "Total Disk : ${total_disk_gb} GB"
-    log "Used Disk  : ${used_disk_gb} GB"
-    log "Usage      : ${used_pct}%"
-    log "Warning at : ${WARN_THRESHOLD_PCT}%"
-    log "Critical at: ${CRITICAL_THRESHOLD_PCT}%"
+    log "Per-Node Disk : ${total_disk_gb} GB"
+    log "Max Broker    : ${used_pct}%"
+    log "Warning at    : ${WARN_THRESHOLD_PCT}%"
+    log "Critical at   : ${CRITICAL_THRESHOLD_PCT}%"
 
     # ==== ALERT LOGIC ====
     if [[ "$used_pct" -ge "$CRITICAL_THRESHOLD_PCT" ]]; then
@@ -184,7 +195,6 @@ data:
       --arg service "$AIVEN_SERVICE" \
       --arg project "$AIVEN_PROJECT" \
       --arg environment "$ENVIRONMENT_NAME" \
-      --arg used_gb "$used_disk_gb" \
       --arg total_gb "$total_disk_gb" \
       --arg used_pct "$used_pct" \
       --arg warn_pct "$WARN_THRESHOLD_PCT" \
@@ -198,9 +208,8 @@ data:
           "fields": [
             {"title": "Environment", "value": $environment, "short": true},
             {"title": "Aiven Service", "value": $service, "short": true},
-            {"title": "Used Disk", "value": ($used_gb + " GB"), "short": true},
-            {"title": "Total Disk", "value": ($total_gb + " GB"), "short": true},
-            {"title": "Usage %", "value": ($used_pct + "%"), "short": true},
+            {"title": "Per-Node Disk", "value": ($total_gb + " GB"), "short": true},
+            {"title": "Max Broker Usage", "value": ($used_pct + "%"), "short": true},
             {"title": "Critical Threshold", "value": ($crit_pct + "%"), "short": true},
             {"title": "Action Required", "value": "Increase Aiven disk size OR set retention policies on large topics to free space. Aiven readonly mode triggers at ~90%.", "short": false}
           ],
@@ -410,31 +419,39 @@ data:
     fi
     log "Consumer lag: $lag_status"
 
-    # ==== CHECK 3: DISK USAGE (Aiven) ====
+    # ==== CHECK 3: DISK USAGE (Aiven Metrics API - real broker disk) ====
     log "Checking disk usage..."
     disk_status="⚠️  N/A"; disk_color="warning"; disk_pct=0
 
     if [[ -n "$AIVEN_TOKEN" && -n "$AIVEN_PROJECT" && -n "$AIVEN_SERVICE" ]]; then
-      service_json=$(curl -s -H "Authorization: Bearer ${AIVEN_TOKEN}" \
-        "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}" 2>/dev/null || echo "")
+      metrics_json=$(curl -s -X POST \
+        -H "Authorization: Bearer ${AIVEN_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"period": "hour"}' \
+        "https://api.aiven.io/v1/project/${AIVEN_PROJECT}/service/${AIVEN_SERVICE}/metrics" 2>/dev/null || echo "")
 
-      if [[ -n "$service_json" ]]; then
-        total_mb=$(echo "$service_json" | jq -r '.service.disk_space_mb // 0')
-        used_mb=$(echo "$service_json" | jq -r '[.service.backups[]?.data_size // 0] | max // 0')
+      if [[ -n "$metrics_json" ]]; then
+        max_val=$(echo "$metrics_json" | jq -r '
+          .metrics.disk_usage.data.rows[-1][1:] |
+          map(select(. != null and . > 0)) |
+          max // 0' 2>/dev/null || echo "0")
 
-        if [[ "$total_mb" -gt 0 && "$used_mb" -gt 0 ]]; then
-          total_gb=$(echo "scale=1; $total_mb / 1024" | bc)
-          used_gb=$(echo "scale=1; $used_mb / 1024" | bc)
-          disk_pct=$(echo "$used_mb * 100 / $total_mb" | bc)
+        if [[ "$max_val" != "0" && "$max_val" != "null" ]]; then
+          is_fraction=$(echo "$max_val < 2" | bc)
+          if [[ "$is_fraction" == "1" ]]; then
+            disk_pct=$(echo "($max_val * 100 + 0.5) / 1" | bc)
+          else
+            disk_pct=$(echo "($max_val + 0.5) / 1" | bc)
+          fi
 
           if [[ $disk_pct -ge 80 ]]; then
-            disk_status="🔴 ${disk_pct}% (${used_gb}GB / ${total_gb}GB) — CRITICAL"
+            disk_status="🔴 ${disk_pct}% (max broker) — CRITICAL"
             disk_color="danger"
           elif [[ $disk_pct -ge 70 ]]; then
-            disk_status="🟡 ${disk_pct}% (${used_gb}GB / ${total_gb}GB) — WARNING"
+            disk_status="🟡 ${disk_pct}% (max broker) — WARNING"
             disk_color="warning"
           else
-            disk_status="✅ ${disk_pct}% (${used_gb}GB / ${total_gb}GB)"
+            disk_status="✅ ${disk_pct}% (max broker)"
             disk_color="good"
           fi
         fi
