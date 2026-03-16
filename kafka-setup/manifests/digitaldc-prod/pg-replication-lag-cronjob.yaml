@@ -135,7 +135,8 @@ data:
              slot_type,
              coalesce(database, 'N/A')
       FROM pg_replication_slots
-      WHERE pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) > ${LAG_THRESHOLD_GB}::bigint * 1024 * 1024 * 1024
+      WHERE slot_name LIKE 'dbz_%'
+      AND pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) > ${LAG_THRESHOLD_GB}::bigint * 1024 * 1024 * 1024
       ORDER BY lag_bytes DESC;
     "
 
