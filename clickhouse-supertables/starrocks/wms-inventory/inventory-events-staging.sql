@@ -1,11 +1,11 @@
 CREATE TABLE wms_inventory_events_staging (
     event_id STRING NOT NULL,
     quant_event_id STRING NOT NULL,
+    timestamp DATETIME NOT NULL,
     wh_id BIGINT NULL,
     seq BIGINT NULL,
     hu_id STRING NULL,
     event_type STRING NULL,
-    timestamp DATETIME NULL,
     payload STRING NULL,
     attrs STRING NULL,
     session_id STRING NULL,
@@ -26,13 +26,15 @@ CREATE TABLE wms_inventory_events_staging (
     quant_iloc STRING NULL
 )
 ENGINE=OLAP
-PRIMARY KEY(event_id, quant_event_id)
+PRIMARY KEY(event_id, quant_event_id, timestamp)
+PARTITION BY date_trunc('MONTH', timestamp)
 DISTRIBUTED BY HASH(event_id) BUCKETS 2
-ORDER BY (event_id, quant_event_id)
+ORDER BY (wh_id, timestamp)
 PROPERTIES (
-    "compression" = "LZ4",
+    "compression" = "ZSTD",
     "enable_persistent_index" = "true",
     "fast_schema_evolution" = "true",
     "replicated_storage" = "true",
-    "replication_num" = "2"
+    "replication_num" = "2",
+    "partition_live_number" = "90"
 );
