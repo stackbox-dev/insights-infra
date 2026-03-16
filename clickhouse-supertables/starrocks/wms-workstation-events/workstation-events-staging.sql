@@ -1,8 +1,8 @@
 CREATE TABLE wms_workstation_events_staging (
     event_type STRING NOT NULL,
     event_source_id STRING NOT NULL,
+    event_timestamp DATETIME NOT NULL,
     wh_id BIGINT NULL,
-    event_timestamp DATETIME NULL,
     created_at DATETIME NULL,
     sku_id STRING NULL,
     hu_id STRING NULL,
@@ -22,13 +22,15 @@ CREATE TABLE wms_workstation_events_staging (
     deactivated_at DATETIME NULL
 )
 ENGINE=OLAP
-PRIMARY KEY(event_type, event_source_id)
+PRIMARY KEY(event_type, event_source_id, event_timestamp)
+PARTITION BY date_trunc('MONTH', event_timestamp)
 DISTRIBUTED BY HASH(event_source_id) BUCKETS 2
-ORDER BY (event_type, event_source_id)
+ORDER BY (wh_id, event_timestamp)
 PROPERTIES (
-    "compression" = "LZ4",
+    "compression" = "ZSTD",
     "enable_persistent_index" = "true",
     "fast_schema_evolution" = "true",
     "replicated_storage" = "true",
-    "replication_num" = "2"
+    "replication_num" = "2",
+    "partition_live_number" = "90"
 );
