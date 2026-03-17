@@ -32,5 +32,5 @@ PROPERTIES (
     "fast_schema_evolution" = "true",
     "replicated_storage" = "true",
     "replication_num" = "2",
-    "partition_live_number" = "90"
+    "partition_live_number" = "36"
 );
