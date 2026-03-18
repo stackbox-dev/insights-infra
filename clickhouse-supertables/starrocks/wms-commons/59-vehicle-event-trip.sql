@@ -13,11 +13,12 @@ ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
 PARTITION BY date_trunc('DAY', createdAt)
 DISTRIBUTED BY HASH(id) BUCKETS 2
-ORDER BY (id)
+ORDER BY (tripCode, id)
 PROPERTIES (
     "compression" = "LZ4",
     "enable_persistent_index" = "true",
     "fast_schema_evolution" = "true",
     "replicated_storage" = "true",
-    "replication_num" = "2"
+    "replication_num" = "2",
+    "bloom_filter_columns" = "tripCode,vehicleEventId"
 );
