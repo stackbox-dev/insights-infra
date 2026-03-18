@@ -159,13 +159,8 @@ data:
       exit 0
     fi
 
-    # Auto-detect: fraction (0-1) vs percentage (0-100)
-    is_fraction=$(echo "$max_val < 2" | bc)
-    if [[ "$is_fraction" == "1" ]]; then
-      used_pct=$(echo "($max_val * 100 + 0.5) / 1" | bc)
-    else
-      used_pct=$(echo "($max_val + 0.5) / 1" | bc)
-    fi
+    # Aiven API always returns disk_usage as a percentage directly
+    used_pct=$(echo "($max_val + 0.5) / 1" | bc)
 
     log "Per-Node Disk : ${total_disk_gb} GB"
     log "Max Broker    : ${used_pct}%"
@@ -437,12 +432,8 @@ data:
           max // 0' 2>/dev/null || echo "0")
 
         if [[ "$max_val" != "0" && "$max_val" != "null" ]]; then
-          is_fraction=$(echo "$max_val < 2" | bc)
-          if [[ "$is_fraction" == "1" ]]; then
-            disk_pct=$(echo "($max_val * 100 + 0.5) / 1" | bc)
-          else
-            disk_pct=$(echo "($max_val + 0.5) / 1" | bc)
-          fi
+          # Aiven API always returns disk_usage as a percentage directly
+          disk_pct=$(echo "($max_val + 0.5) / 1" | bc)
 
           if [[ $disk_pct -ge 80 ]]; then
             disk_status="🔴 ${disk_pct}% (max broker) — CRITICAL"
