@@ -36,5 +36,6 @@ PROPERTIES (
     "enable_persistent_index" = "true",
     "fast_schema_evolution" = "true",
     "replicated_storage" = "true",
-    "replication_num" = "2"
+    "replication_num" = "2",
+    "bloom_filter_columns" = "orderId"
 );
