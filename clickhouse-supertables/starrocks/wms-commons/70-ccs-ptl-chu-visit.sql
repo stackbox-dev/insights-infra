@@ -18,7 +18,7 @@ CREATE TABLE wms_ccs_ptl_chu_visit (
 )
 ENGINE=OLAP
 PRIMARY KEY(id, sessionCreatedAt)
-PARTITION BY date_trunc('DAY', sessionCreatedAt)
+PARTITION BY date_trunc('MONTH', sessionCreatedAt)
 DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (

@@ -9,7 +9,7 @@ CREATE TABLE wms_pd_pick_drop_mapping (
 )
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
-PARTITION BY date_trunc('DAY', createdAt)
+PARTITION BY date_trunc('WEEK', createdAt)
 DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (

@@ -16,7 +16,7 @@ CREATE TABLE wms_hht_pick_group (
 )
 ENGINE=OLAP
 PRIMARY KEY(id, sessionCreatedAt)
-PARTITION BY date_trunc('DAY', sessionCreatedAt)
+PARTITION BY date_trunc('MONTH', sessionCreatedAt)
 DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (

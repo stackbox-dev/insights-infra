@@ -10,7 +10,7 @@ CREATE TABLE wms_ira_manual_update (
 )
 ENGINE=OLAP
 PRIMARY KEY(id, timestamp)
-PARTITION BY date_trunc('DAY', timestamp)
+PARTITION BY date_trunc('MONTH', timestamp)
 DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
