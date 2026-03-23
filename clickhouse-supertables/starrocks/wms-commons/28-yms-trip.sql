@@ -30,7 +30,7 @@ CREATE TABLE wms_yms_trip (
 )
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
-PARTITION BY date_trunc('DAY', createdAt)
+PARTITION BY date_trunc('MONTH', createdAt)
 DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
