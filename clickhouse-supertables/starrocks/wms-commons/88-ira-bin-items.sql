@@ -7,12 +7,12 @@ CREATE TABLE wms_ira_bin_items (
     binId VARCHAR(36) NOT NULL,
     skuId VARCHAR(36) NOT NULL,
     uom STRING NOT NULL DEFAULT '',
-    systemQty INT NOT NULL DEFAULT "0",
-    systemDamagedQty INT NOT NULL DEFAULT "0",
-    physicalQty INT NOT NULL DEFAULT "0",
-    physicalDamagedQty INT NOT NULL DEFAULT "0",
-    finalQty INT NOT NULL DEFAULT "0",
-    finalDamagedQty INT NOT NULL DEFAULT "0",
+    systemQty INT NULL,
+    systemDamagedQty INT NULL,
+    physicalQty INT NULL,
+    physicalDamagedQty INT NULL,
+    finalQty INT NULL,
+    finalDamagedQty INT NULL,
     issue STRING,
     state STRING NOT NULL,
     scannedAt DATETIME,
@@ -26,13 +26,13 @@ CREATE TABLE wms_ira_bin_items (
     transactionId VARCHAR(36),
     binStorageHUType STRING,
     deactivatedAt DATETIME,
-    updatedAt DATETIME NOT NULL DEFAULT "1970-01-01 00:00:00",
+    updatedAt DATETIME NULL,
     updatedBy VARCHAR(36),
     huSameBinBeforeIRA STRING,
     recordNo INT NOT NULL DEFAULT "1",
     hlrStatus STRING,
     outerHUId VARCHAR(36),
-    outerHuSameBinBeforeIRA BOOLEAN NOT NULL DEFAULT "false"
+    outerHuSameBinBeforeIRA BOOLEAN NULL
 )
 ENGINE=OLAP
 PRIMARY KEY(id, createdAt)
