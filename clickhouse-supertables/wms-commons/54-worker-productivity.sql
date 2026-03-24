@@ -16,5 +16,6 @@ CREATE TABLE IF NOT EXISTS wms_worker_productivity
 
 )
 ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

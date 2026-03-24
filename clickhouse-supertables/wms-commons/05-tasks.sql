@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS wms_tasks
     INDEX idx_wave wave TYPE minmax GRANULARITY 1
 )
 ENGINE = ReplacingMergeTree(updatedAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)  -- id is globally unique
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',

@@ -19,5 +19,6 @@ CREATE TABLE IF NOT EXISTS wms_hht_pick_group
     mappedBy String DEFAULT ''
 )
 ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

@@ -22,5 +22,6 @@ CREATE TABLE IF NOT EXISTS wms_sbl_chu_reduction
 
 )
 ENGINE = ReplacingMergeTree(reducedAt)
+PARTITION BY toYYYYMM(sessionCreatedAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

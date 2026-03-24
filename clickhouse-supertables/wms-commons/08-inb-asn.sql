@@ -17,5 +17,6 @@ CREATE TABLE IF NOT EXISTS wms_inb_asn
     asnType String DEFAULT ''
 )
 ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

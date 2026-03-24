@@ -25,5 +25,6 @@ CREATE TABLE IF NOT EXISTS wms_hht_pick_item
     reductionApplied Bool DEFAULT false
 )
 ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

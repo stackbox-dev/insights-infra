@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS wms_sessions
     INDEX idx_state state TYPE bloom_filter(0.01) GRANULARITY 1
 )
 ENGINE = ReplacingMergeTree(updatedAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)  -- id is globally unique
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',

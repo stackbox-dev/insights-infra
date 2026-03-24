@@ -1,19 +1,19 @@
 CREATE TABLE wms_inb_asn (
     id VARCHAR(36) NOT NULL,
-    sessionCreatedAt DATETIME NOT NULL,
+    createdAt DATETIME NOT NULL DEFAULT "1970-01-01 00:00:00",
     whId BIGINT NOT NULL,
     asnNo STRING NOT NULL,
-    sessionId VARCHAR(36) NOT NULL,
+    sessionId VARCHAR(36) NULL,
+    sessionCreatedAt DATETIME NULL,
     active BOOLEAN NOT NULL DEFAULT "true",
-    createdAt DATETIME NOT NULL DEFAULT "1970-01-01 00:00:00",
-    shipmentDate DATE,
-    deliveryNo STRING,
-    priority INT NOT NULL,
+    shipmentDate DATE NULL,
+    deliveryNo STRING NULL,
+    priority INT NULL,
     asnType STRING NOT NULL DEFAULT ''
 )
 ENGINE=OLAP
-PRIMARY KEY(id, sessionCreatedAt)
-PARTITION BY date_trunc('MONTH', sessionCreatedAt)
+PRIMARY KEY(id, createdAt)
+PARTITION BY date_trunc('MONTH', createdAt)
 DISTRIBUTED BY HASH(id) BUCKETS 2
 ORDER BY (id)
 PROPERTIES (
