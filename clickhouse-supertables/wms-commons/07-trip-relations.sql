@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS wms_trip_relations
     INDEX idx_childTripId childTripId TYPE bloom_filter(0.01) GRANULARITY 1
 )
 ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)  -- id is the unique identifier from source
 SETTINGS index_granularity = 8192,
          min_age_to_force_merge_seconds = 180

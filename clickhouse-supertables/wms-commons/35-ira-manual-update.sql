@@ -14,5 +14,6 @@ CREATE TABLE IF NOT EXISTS wms_ira_manual_update
     whId Int64 DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(timestamp)
+PARTITION BY toYYYYMM(timestamp)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

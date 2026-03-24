@@ -4,7 +4,7 @@ CREATE TABLE wms_task_worker_assignment (
     whId BIGINT NOT NULL,
     taskId VARCHAR(36) NOT NULL,
     workerId VARCHAR(36) NOT NULL,
-    assignedAt DATETIME NOT NULL DEFAULT "1970-01-01 00:00:00",
+    assignedAt DATETIME NULL DEFAULT "1970-01-01 00:00:00",
     attrs JSON,
     mheId VARCHAR(36),
     updatedAt DATETIME NOT NULL DEFAULT "1970-01-01 00:00:00"

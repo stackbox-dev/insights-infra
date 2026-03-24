@@ -19,5 +19,6 @@ CREATE TABLE IF NOT EXISTS wms_ccs_ptl_zone_inventory
     price String DEFAULT ''
 )
 ENGINE = ReplacingMergeTree(updatedAt)
-ORDER BY (id) 
+PARTITION BY toYYYYMM(sessionCreatedAt)
+ORDER BY (id)
 SETTINGS index_granularity = 8192;

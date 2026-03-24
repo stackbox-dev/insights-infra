@@ -22,5 +22,6 @@ CREATE TABLE IF NOT EXISTS wms_bbulk_ptl_bin_reduction
     reducedBy String DEFAULT ''
 )
 ENGINE = ReplacingMergeTree(reducedAt)
+PARTITION BY toYYYYMM(sessionCreatedAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

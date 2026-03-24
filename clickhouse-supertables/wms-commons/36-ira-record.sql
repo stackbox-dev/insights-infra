@@ -22,5 +22,6 @@ CREATE TABLE IF NOT EXISTS wms_ira_record
     recordNo Int32 DEFAULT 0
 )
 ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)
 SETTINGS index_granularity = 8192;

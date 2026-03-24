@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS wms_trips
     INDEX idx_deliveryDate deliveryDate TYPE minmax GRANULARITY 1
 )
 ENGINE = ReplacingMergeTree(createdAt)
+PARTITION BY toYYYYMM(createdAt)
 ORDER BY (id)  -- id is globally unique
 SETTINGS index_granularity = 8192,
          deduplicate_merge_projection_mode = 'drop',
