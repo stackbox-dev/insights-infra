@@ -1,20 +1,276 @@
+
+# ============================================================
+# PART 1: Connector Watcher (Deployment — always running)
+# Watches ALL connectors every 30 min
+#   - Transient failure (network/restart) → auto-restart silently
+#   - Real failure (missing table, schema, auth) → ONE Slack alert + restart
+#   - Deduplication: only alerts once per failure, not every 30 min
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-connector-watcher
+  namespace: kafka
+  labels:
+    app: kafka-connector-watcher
+    environment: nestle-prod
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kafka-connector-watcher
+      environment: nestle-prod
+  template:
+    metadata:
+      labels:
+        app: kafka-connector-watcher
+        environment: nestle-prod
+    spec:
+      containers:
+        - name: watcher
+          image: alpine:3.20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          env:
+            - name: CONNECT_URL
+              value: "http://cp-connect.kafka"
+            - name: CONNECT_UI_URL
+              value: "http://cp-connect-ui.kafka.nestle-prod.api.stackbox.internal/#/cluster/kafka-connect-1/connector"
+            - name: ENVIRONMENT_NAME
+              value: "Nestle Prod"
+            - name: WATCH_INTERVAL
+              value: "1800"  # 30 minutes
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-secret
+                  key: bot_token
+            - name: SLACK_CHANNEL_ID
+              valueFrom:
+                secretKeyRef:
+                  name: slack-secret
+                  key: channel_id
+          command:
+            - /bin/sh
+            - -c
+            - |
+              apk add --no-cache curl jq
+              cp /scripts/connector-watcher.sh /tmp/connector-watcher.sh
+              chmod +x /tmp/connector-watcher.sh
+              /tmp/connector-watcher.sh
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      restartPolicy: Always
+      volumes:
+        - name: script
+          configMap:
+            name: kafka-connector-watcher-script
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-connector-watcher-script
+  namespace: kafka
+data:
+  connector-watcher.sh: |
+    #!/usr/bin/env sh
+    set -e
+
+    CONNECT_URL="${CONNECT_URL:-http://cp-connect.kafka}"
+    CONNECT_UI_URL="${CONNECT_UI_URL:-}"
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
+    WATCH_INTERVAL="${WATCH_INTERVAL:-1800}"
+    SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
+    SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
+
+    # State file to track already-alerted connectors (deduplication)
+    ALERTED_FILE="/tmp/alerted_connectors"
+    touch "$ALERTED_FILE"
+
+    log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] [${ENVIRONMENT_NAME}] [$1] $2"; }
+
+    already_alerted() { grep -qxF "$1" "$ALERTED_FILE" 2>/dev/null; }
+    mark_alerted()    { echo "$1" >> "$ALERTED_FILE"; }
+    clear_alerted()   { sed -i "/^${1}$/d" "$ALERTED_FILE" 2>/dev/null || true; }
+
+    # ── Transient patterns → restart silently ────────────────────────────────
+    is_transient() {
+      echo "$1" | grep -qiE \
+        "Connection (refused|reset|timed.?out)|SocketException|IOException|Broken pipe|ECONNREFUSED|ETIMEDOUT|End of stream"
+    }
+
+    # ── Classify real error type ──────────────────────────────────────────────
+    extract_error_type() {
+      trace="$1"
+      if   echo "$trace" | grep -qiE "does not exist";              then echo "Missing table"
+      elif echo "$trace" | grep -qiE "Column.*not found";           then echo "Missing column"
+      elif echo "$trace" | grep -qiE "NOT_FOUND_COLUMN_IN_BLOCK";   then echo "Column mapping error"
+      elif echo "$trace" | grep -qiE "Schema Registry.*not found";  then echo "Schema not found"
+      elif echo "$trace" | grep -qiE "Avro.*schema|Cannot parse.*schema"; then echo "Schema error"
+      elif echo "$trace" | grep -qiE "Authentication failed|WRONG_PASSWORD|Access denied"; then echo "Auth failure"
+      elif echo "$trace" | grep -qiE "Data type mismatch|Unrecognized field"; then echo "Type/field mismatch"
+      else echo "Unknown error"
+      fi
+    }
+
+    extract_error_detail() {
+      trace="$1"
+      # 1) ClickHouse "doesn't exist" — extract the table/column name
+      result=$(echo "$trace" | grep -oiE "Table [a-zA-Z0-9_.-]+\.[a-zA-Z0-9_-]+ doesn" \
+        | head -1 | sed "s/ doesn$//" | cut -c1-300)
+      # 2) Quoted table/column patterns like Table 'db'.'tbl'
+      [ -z "$result" ] && result=$(echo "$trace" | grep -oiE "Table '[^']+'\.'[^']+'" \
+        | head -1 | cut -c1-300)
+      # 3) Column not found
+      [ -z "$result" ] && result=$(echo "$trace" | grep -oiE "Column [a-zA-Z0-9_]+ (doesn|not found)[^.]*" \
+        | head -1 | cut -c1-300)
+      # 4) Strip Java class prefix to avoid Slack auto-linking
+      [ -z "$result" ] && result=$(echo "$trace" | grep -oE "Caused by:.*" \
+        | head -1 | sed 's/Caused by: [a-zA-Z.]*Exception: //' | cut -c1-300)
+      # 5) Fallback: first line of trace
+      [ -z "$result" ] && result=$(echo "$trace" | head -1 | cut -c1-300)
+      echo "$result"
+    }
+
+    # ── Send ONE Slack alert ──────────────────────────────────────────────────
+    send_slack_alert() {
+      connector="$1"; task_label="$2"; error_type="$3"; detail="$4"
+      [ -z "$SLACK_BOT_TOKEN" ] && return
+
+      conn_link="${CONNECT_UI_URL}/${connector}"
+      [ -n "$CONNECT_UI_URL" ] && conn_display="<${conn_link}|${connector}>" || conn_display="$connector"
+
+      msg=$(jq -n \
+        --arg channel   "$SLACK_CHANNEL_ID" \
+        --arg env       "$ENVIRONMENT_NAME" \
+        --arg conn      "$conn_display" \
+        --arg task      "$task_label" \
+        --arg etype     "$error_type" \
+        --arg detail    "$detail" \
+        '{
+          "channel": $channel,
+          "text": ("🚨 *Kafka Connector Failure — " + $env + "*"),
+          "attachments": [{
+            "color": "#FF0000",
+            "fields": [
+              {"title": "Connector",  "value": $conn,                 "short": false},
+              {"title": "Failed",     "value": $task,                 "short": true},
+              {"title": "Error Type", "value": $etype,                "short": true},
+              {"title": "Detail",     "value": ("`" + $detail + "`"), "short": false},
+              {"title": "⚡ Auto-restart attempted", "value": "Connector has been restarted automatically.", "short": false},
+              {"title": "Steps to Fix",
+               "value": "1. Check *Error Type* and *Detail* above\n2. Fix root cause (create missing table / fix schema / reset auth)\n3. Verify connector is *RUNNING* in Kafka Connect UI\n4. If still failing — manually restart:\n`POST /connectors/{name}/tasks/{id}/restart`",
+               "short": false}
+            ],
+            "footer": ("kafka-connector-watcher | " + $env)
+          }]
+        }')
+
+      curl -s -X POST "https://slack.com/api/chat.postMessage" \
+        -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$msg" > /dev/null
+      log "INFO" "Slack alert sent | type=${error_type} | ${connector}"
+    }
+
+    restart_connector() { curl -s -X POST "${CONNECT_URL}/connectors/$1/restart" > /dev/null; }
+    restart_task()      { curl -s -X POST "${CONNECT_URL}/connectors/$1/tasks/$2/restart" > /dev/null; }
+
+    # ── Main watch loop ───────────────────────────────────────────────────────
+    log "INFO" "Watcher started | connect=${CONNECT_URL} | interval=${WATCH_INTERVAL}s"
+
+    while true; do
+      connectors=$(curl -s "${CONNECT_URL}/connectors" 2>/dev/null | jq -r '.[]' 2>/dev/null || true)
+
+      for connector in $connectors; do
+        status_json=$(curl -s "${CONNECT_URL}/connectors/${connector}/status" 2>/dev/null || echo "{}")
+
+        # ── Connector-level FAILED ──────────────────────────────────────────
+        conn_state=$(echo "$status_json" | jq -r '.connector.state' 2>/dev/null || echo "")
+        if [ "$conn_state" = "FAILED" ]; then
+          trace=$(echo "$status_json" | jq -r '.connector.trace // ""')
+          if is_transient "$trace"; then
+            log "WARN" "Connector FAILED (transient) — restarting silently | ${connector}"
+          else
+            if ! already_alerted "$connector"; then
+              etype=$(extract_error_type "$trace")
+              detail=$(extract_error_detail "$trace")
+              log "ERROR" "Connector FAILED | type=${etype} | ${connector}"
+              send_slack_alert "$connector" "Connector" "$etype" "$detail"
+              mark_alerted "$connector"
+            else
+              log "WARN" "Connector still FAILED (already alerted) — retrying restart | ${connector}"
+            fi
+          fi
+          restart_connector "$connector"
+          log "INFO" "Connector restarted | ${connector}"
+          continue
+        fi
+
+        # ── Task-level FAILED ───────────────────────────────────────────────
+        failed_tasks=$(echo "$status_json" | jq -r '.tasks[] | select(.state=="FAILED") | .id' 2>/dev/null || true)
+
+        if [ -z "$failed_tasks" ]; then
+          clear_alerted "$connector"
+        fi
+
+        for task_id in $failed_tasks; do
+          trace=$(echo "$status_json" | jq -r ".tasks[] | select(.id==${task_id}) | .trace // \"\"")
+          alert_key="${connector}::${task_id}"
+          if is_transient "$trace"; then
+            log "WARN" "Task ${task_id} FAILED (transient) — restarting silently | ${connector}"
+          else
+            if ! already_alerted "$alert_key"; then
+              etype=$(extract_error_type "$trace")
+              detail=$(extract_error_detail "$trace")
+              log "ERROR" "Task ${task_id} FAILED | type=${etype} | ${connector}"
+              send_slack_alert "$connector" "Task ${task_id}" "$etype" "$detail"
+              mark_alerted "$alert_key"
+            else
+              log "WARN" "Task ${task_id} still FAILED (already alerted) — retrying restart | ${connector}"
+            fi
+          fi
+          restart_task "$connector" "$task_id"
+          log "INFO" "Task ${task_id} restarted | ${connector}"
+        done
+      done
+
+      sleep "${WATCH_INTERVAL}"
+    done
+
+---
+# ============================================================
+# PART 2: Consumer Lag CronJob (every 30 min)
+# Alerts when application consumer groups lag > 50,000
+# Skips all connect-* groups (connector lag = connector failure,
+# already handled by the watcher above)
+# ============================================================
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: kafka-connector-healthcheck
+  name: kafka-consumer-lag-check
   namespace: kafka
 spec:
-  schedule: "*/30 * * * *"  # every 30 min
+  schedule: "*/30 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      activeDeadlineSeconds: 300
+      activeDeadlineSeconds: 120
       template:
         spec:
           containers:
-            - name: connector-checker
+            - name: lag-checker
               image: alpine:3.20
               resources:
                 requests:
@@ -24,10 +280,6 @@ spec:
                   cpu: 200m
                   memory: 128Mi
               env:
-                - name: CONNECT_URL
-                  value: "http://cp-connect.kafka"
-                - name: CONNECT_UI_URL
-                  value: "http://cp-connect-ui.kafka.nestle-prod.api.stackbox.internal/#/cluster/kafka-connect-1/connector"
                 - name: KAFKA_UI_URL
                   value: "http://kafka-ui.kafka"
                 - name: CLUSTER_NAME
@@ -36,8 +288,8 @@ spec:
                   value: "http://kafka-ui.kafka.nestle-prod.api.stackbox.internal/ui/clusters/nestle-prod-kafka/consumer-groups"
                 - name: LAG_THRESHOLD
                   value: "50000"
-                - name: SKIP_GROUPS
-                  value: "connect-configs,connect-offsets,connect-status,connect-cluster"
+                - name: ENVIRONMENT_NAME
+                  value: "Nestle Prod"
                 - name: SLACK_BOT_TOKEN
                   valueFrom:
                     secretKeyRef:
@@ -48,16 +300,14 @@ spec:
                     secretKeyRef:
                       name: slack-secret
                       key: channel_id
-                - name: ENVIRONMENT_NAME
-                  value: "Nestle Prod"
               command:
                 - /bin/sh
                 - -c
                 - |
-                  apk add --no-cache curl jq bash
-                  cp /scripts/check_connectors.sh /tmp/check_connectors.sh
-                  chmod +x /tmp/check_connectors.sh
-                  /tmp/check_connectors.sh
+                  apk add --no-cache curl jq
+                  cp /scripts/consumer-lag-check.sh /tmp/consumer-lag-check.sh
+                  chmod +x /tmp/consumer-lag-check.sh
+                  /tmp/consumer-lag-check.sh
               volumeMounts:
                 - name: script
                   mountPath: /scripts
@@ -65,189 +315,90 @@ spec:
           volumes:
             - name: script
               configMap:
-                name: kafka-connector-check-script
+                name: kafka-consumer-lag-script
                 defaultMode: 0755
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: kafka-connector-check-script
+  name: kafka-consumer-lag-script
   namespace: kafka
 data:
-  check_connectors.sh: |
-    #!/usr/bin/env bash
-    set -euo pipefail
+  consumer-lag-check.sh: |
+    #!/usr/bin/env sh
+    set -e
 
-    # ==== CONFIG ====
-    CONNECT_URL="${CONNECT_URL:-}"
-    CONNECT_UI_URL="${CONNECT_UI_URL:-}"
     KAFKA_UI_URL="${KAFKA_UI_URL:-}"
     CLUSTER_NAME="${CLUSTER_NAME:-}"
     KAFKA_UI_CONSUMER_GROUPS_URL="${KAFKA_UI_CONSUMER_GROUPS_URL:-}"
     LAG_THRESHOLD="${LAG_THRESHOLD:-50000}"
-    SKIP_GROUPS="${SKIP_GROUPS:-connect-configs,connect-offsets,connect-status,connect-cluster}"
+    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
     SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN:-}"
     SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-}"
-    ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-Unknown}"
 
+    log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] [${ENVIRONMENT_NAME}] $*"; }
 
-    log() {
-      echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
-    }
-
-    send_slack() {
-      local msg="$1"
-      local response
-      response=$(curl -s -w "%{http_code}" -o /tmp/slack_response.txt \
-        -X POST "https://slack.com/api/chat.postMessage" \
-        -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d "$msg" || true)
-      local slack_ok
-      slack_ok=$(jq -r '.ok' /tmp/slack_response.txt 2>/dev/null || echo "false")
-      local slack_err
-      slack_err=$(jq -r '.error' /tmp/slack_response.txt 2>/dev/null || echo "")
-      if [[ "$response" == "200" && "$slack_ok" == "true" ]]; then
-        log "    ✅ Slack alert sent."
-      else
-        log "    ⚠️  Slack alert failed (HTTP ${response}): ${slack_err}"
-      fi
-    }
-
-    # ==== VALIDATE ENV ====
-    if [[ -z "$SLACK_BOT_TOKEN" || -z "$SLACK_CHANNEL_ID" ]]; then
-      log "❌ ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set."
+    if [ -z "$SLACK_BOT_TOKEN" ] || [ -z "$SLACK_CHANNEL_ID" ]; then
+      log "ERROR: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID must be set."
       exit 1
     fi
 
-    # ============================================================
-    # CHECK 1: CONNECTOR HEALTH
-    # ============================================================
-    log "===== CHECK 1: Connector Health ====="
+    log "Checking consumer lag (threshold: ${LAG_THRESHOLD})..."
 
-    connectors_json=$(curl -s --insecure "${CONNECT_URL}/connectors" || echo "")
+    groups_json=$(curl -s --fail \
+      "${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/consumer-groups/paged?perPage=1000" \
+      2>/dev/null || echo "")
 
-    if [[ -z "$connectors_json" || "$connectors_json" == "null" ]]; then
-      log "❌ No response from Kafka Connect API."
-    else
-      connectors=$(echo "$connectors_json" | jq -r '.[]' 2>/dev/null || true)
-      if [[ -z "$connectors" ]]; then
-        log "✅ No connectors found."
-      else
-        connector_alert_sent=false
-        for connector in $connectors; do
-          log "  Checking connector: $connector"
-          status_json=$(curl -s --insecure "${CONNECT_URL}/connectors/${connector}/status" || echo "")
-
-          [[ -z "$status_json" || "$status_json" == "null" ]] && log "  ⚠️  Skipping $connector — no status." && continue
-
-          connector_state=$(echo "$status_json" | jq -r '.connector.state' 2>/dev/null || echo "UNKNOWN")
-          log "    State: $connector_state"
-
-          tasks=$(echo "$status_json" | jq -c '.tasks[]' 2>/dev/null || true)
-          while IFS= read -r task; do
-            [[ -z "$task" ]] && continue
-            task_state=$(echo "$task" | jq -r '.state')
-            task_id=$(echo "$task" | jq -r '.id')
-            worker_id=$(echo "$task" | jq -r '.worker_id')
-
-            if [[ "$task_state" == "FAILED" ]]; then
-              log "    ❌ Task $task_id FAILED on $worker_id"
-              trace=$(echo "$task" | jq -r '.trace' | head -n 20)
-              msg=$(jq -n \
-                --arg connector "$connector" \
-                --arg task_id "$task_id" \
-                --arg worker_id "$worker_id" \
-                --arg trace "$trace" \
-                --arg connector_ui_link "${CONNECT_UI_URL}/${connector}" \
-                --arg channel "$SLACK_CHANNEL_ID" \
-                --arg environment "$ENVIRONMENT_NAME" \
-                '{
-                  "channel": $channel,
-                  "text": ":x: *Kafka Connector Task Failed!*",
-                  "attachments": [{
-                    "color": "#ff0000",
-                    "fields": [
-                      {"title": "Connector", "value": ("<" + $connector_ui_link + "|" + $connector + ">"), "short": true},
-                      {"title": "Environment", "value": $environment, "short": true},
-                      {"title": "Task ID", "value": $task_id, "short": true},
-                      {"title": "Worker", "value": $worker_id, "short": false},
-                      {"title": "Error Trace (truncated)", "value": ($trace | .[0:1000]), "short": false}
-                    ]
-                  }]
-                }')
-              send_slack "$msg"
-              connector_alert_sent=true
-            else
-              log "    ✅ Task $task_id is $task_state"
-            fi
-          done <<< "$tasks"
-        done
-
-        [[ "$connector_alert_sent" == "false" ]] && log "✅ All connector tasks are healthy."
-      fi
+    if [ -z "$groups_json" ]; then
+      log "ERROR: No response from Kafka UI API."
+      exit 1
     fi
 
-    # ============================================================
-    # CHECK 2: CONSUMER LAG
-    # ============================================================
-    log "===== CHECK 2: Consumer Lag (threshold: ${LAG_THRESHOLD}) ====="
+    echo "$groups_json" | jq -c '.consumerGroups[]' 2>/dev/null | while IFS= read -r group; do
+      group_id=$(echo "$group" | jq -r '.groupId')
+      lag=$(echo "$group" | jq -r '.consumerLag // 0')
 
-    if [[ -z "$KAFKA_UI_URL" || -z "$CLUSTER_NAME" ]]; then
-      log "⚠️  KAFKA_UI_URL or CLUSTER_NAME not set — skipping consumer lag check."
-    else
-      groups_json=$(curl -s --fail "${KAFKA_UI_URL}/api/clusters/${CLUSTER_NAME}/consumer-groups/paged?perPage=1000" || echo "")
+      # Skip internal Kafka Connect groups — their lag means a connector
+      # is failing, which is already handled by the connector watcher
+      case "$group_id" in
+        connect-*) log "SKIP (connector group): ${group_id}"; continue ;;
+      esac
 
-      if [[ -z "$groups_json" || "$groups_json" == "null" ]]; then
-        log "❌ No response from Kafka UI consumer groups API."
+      # Skip other internal groups
+      case "$group_id" in
+        connect-configs|connect-offsets|connect-status|connect-cluster) continue ;;
+      esac
+
+      if [ "$lag" -gt "$LAG_THRESHOLD" ]; then
+        log "LAG ALERT: ${group_id} is ${lag} messages behind (threshold: ${LAG_THRESHOLD})"
+
+        msg=$(jq -n \
+          --arg channel  "$SLACK_CHANNEL_ID" \
+          --arg env      "$ENVIRONMENT_NAME" \
+          --arg group    "$group_id" \
+          --arg lag      "$lag" \
+          --arg threshold "$LAG_THRESHOLD" \
+          --arg ui_link  "$KAFKA_UI_CONSUMER_GROUPS_URL" \
+          '{
+            "channel": $channel,
+            "text": "⚠️ *Kafka Consumer Lag Alert — " + $env + "*",
+            "attachments": [{
+              "color": "#ff9900",
+              "fields": [
+                {"title": "Consumer Group", "value": ("<" + $ui_link + "|" + $group + ">"), "short": false},
+                {"title": "Environment",    "value": $env,       "short": true},
+                {"title": "Lag",            "value": ($lag + " messages behind"), "short": true},
+                {"title": "Threshold",      "value": $threshold, "short": true}
+              ]
+            }]
+          }')
+
+        curl -s -X POST "https://slack.com/api/chat.postMessage" \
+          -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "$msg" > /dev/null
+        log "Alert sent: ${group_id}"
       else
-        group_count=$(echo "$groups_json" | jq '.consumerGroups | length' 2>/dev/null || echo "0")
-        log "Found ${group_count} consumer groups."
-        lag_alert_sent=false
-
-        while IFS= read -r group; do
-          [[ -z "$group" ]] && continue
-          group_id=$(echo "$group" | jq -r '.groupId')
-          messages_behind=$(echo "$group" | jq -r '.consumerLag // 0')
-
-          skip=false
-          IFS=',' read -ra skip_list <<< "$SKIP_GROUPS"
-          for skip_group in "${skip_list[@]}"; do
-            [[ "$group_id" == "$skip_group" ]] && skip=true && break
-          done
-          [[ "$skip" == "true" ]] && log "  ⏭️  Skipping: ${group_id}" && continue
-
-          log "  Group: ${group_id} | Lag: ${messages_behind}"
-
-          if [[ "$messages_behind" -gt "$LAG_THRESHOLD" ]]; then
-            log "  ⚠️  LAG ALERT: ${group_id} is ${messages_behind} messages behind"
-            msg=$(jq -n \
-              --arg group_id "$group_id" \
-              --arg messages_behind "$messages_behind" \
-              --arg threshold "$LAG_THRESHOLD" \
-              --arg group_ui_link "$KAFKA_UI_CONSUMER_GROUPS_URL" \
-              --arg channel "$SLACK_CHANNEL_ID" \
-              --arg environment "$ENVIRONMENT_NAME" \
-              '{
-                "channel": $channel,
-                "text": ":warning: *Kafka Consumer Lag Alert!*",
-                "attachments": [{
-                  "color": "#ff9900",
-                  "fields": [
-                    {"title": "Consumer Group", "value": ("<" + $group_ui_link + "|" + $group_id + ">"), "short": true},
-                    {"title": "Environment", "value": $environment, "short": true},
-                    {"title": "Lag (messages behind)", "value": $messages_behind, "short": true},
-                    {"title": "Threshold", "value": $threshold, "short": true}
-                  ]
-                }]
-              }')
-            send_slack "$msg"
-            lag_alert_sent=true
-          else
-            log "  ✅ ${group_id} is healthy (lag: ${messages_behind})"
-          fi
-        done < <(echo "$groups_json" | jq -c '.consumerGroups[]')
-
-        [[ "$lag_alert_sent" == "false" ]] && log "✅ All consumer groups are within the lag threshold."
+        log "OK: ${group_id} (lag: ${lag})"
       fi
-    fi
+    done

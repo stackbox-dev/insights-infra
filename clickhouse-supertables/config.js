@@ -289,15 +289,14 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'invoice', table: 'tms_invoice' },
       { namespace: 'public', topic: 'invoiceState', table: 'tms_invoiceState' },
       { namespace: 'public', topic: 'lineItem', table: 'tms_lineItem' },
-      { namespace: 'public', topic: 'node', table: 'tms_node' },
-      { namespace: 'public', topic: 'node_closure', table: 'tms_node_closure' },
       { namespace: 'public', topic: 'planProfile', table: 'tms_planProfile' },
       { namespace: 'public', topic: 'orderUpload', table: 'tms_orderUpload' },
       { namespace: 'public', topic: 'invoiceExtras', table: 'tms_invoiceExtras' },
       { namespace: 'public', topic: 'line_item_state', table: 'tms_line_item_state' },
       { namespace: 'public', topic: 'odometer', table: 'tms_odometer' },
       { namespace: 'public', topic: 'invoice_tray', table: 'tms_invoice_tray' },
-      { namespace: 'public', topic: 'extvehicleevents', table: 'tms_extvehicleevents' }
+      { namespace: 'public', topic: 'extvehicleevents', table: 'tms_extvehicleevents' },
+      { namespace: 'public', topic: 'invoice_location', table: 'tms_invoice_location' }
     ],
     dlqTopic: 'dlq-tms-clickhouse',
     performanceConfig: defaultPerformanceConfig
@@ -308,7 +307,9 @@ const sinkConfigurations = {
     topicMappings: [
       { namespace: 'public', topic: 'node', table: 'backbone_node' },
       { namespace: 'public', topic: 'node_closure', table: 'backbone_node_closure' },
-      { namespace: 'public', topic: 'user_account', table: 'backbone_user_account' }
+      { namespace: 'public', topic: 'user_account', table: 'backbone_user_account' },
+      { namespace: 'public', topic: 'role', table: 'backbone_role' },
+      { namespace: 'public', topic: 'account_role', table: 'backbone_account_role' }
     ],
     dlqTopic: 'dlq-core-clickhouse',
     performanceConfig: defaultPerformanceConfig
