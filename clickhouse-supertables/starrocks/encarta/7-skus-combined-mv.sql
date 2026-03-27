@@ -19,7 +19,7 @@
 --   REFRESH MATERIALIZED VIEW encarta_skus_combined_mv;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS encarta_skus_combined_mv
-REFRESH ASYNC
+REFRESH ASYNC START('2026-03-27 01:00:00') EVERY (INTERVAL 5 MINUTE)
 PROPERTIES (
     "replication_num" = "1"
 )
