@@ -1,0 +1,36 @@
+-- ClickHouse table for WMS Trips
+-- Dimension table for trip information
+-- Source: sbx_uat.wms.public.trip
+
+CREATE TABLE IF NOT EXISTS wms_trips
+(
+    sessionCreatedAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    whId Int64 DEFAULT 0,
+    sessionId String DEFAULT '',
+    id String,
+    createdAt DateTime64(3) DEFAULT toDateTime64('1970-01-01 00:00:00', 3),
+    bbId String DEFAULT '',
+    code String DEFAULT '',
+    type String DEFAULT '',
+    priority Int32 DEFAULT 0,
+    dockdoorId String DEFAULT '',
+    dockdoorCode String DEFAULT '',
+    vehicleId String DEFAULT '',
+    vehicleNo String DEFAULT '',
+    vehicleType String DEFAULT '',
+    deliveryDate Date DEFAULT toDate('1970-01-01'),
+    
+    -- Indexes for common query patterns
+    INDEX idx_whId whId TYPE minmax GRANULARITY 1,
+    INDEX idx_sessionId sessionId TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_code code TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_type type TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_deliveryDate deliveryDate TYPE minmax GRANULARITY 1
+)
+ENGINE = ReplacingMergeTree(createdAt)
+ORDER BY (id)  -- id is globally unique
+SETTINGS index_granularity = 8192,
+         deduplicate_merge_projection_mode = 'drop',
+         min_age_to_force_merge_seconds = 180,
+         storage_policy = 'tiered'
+COMMENT 'WMS Trips dimension table';
