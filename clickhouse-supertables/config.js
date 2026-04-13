@@ -309,7 +309,8 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'node_closure', table: 'backbone_node_closure' },
       { namespace: 'public', topic: 'user_account', table: 'backbone_user_account' },
       { namespace: 'public', topic: 'role', table: 'backbone_role' },
-      { namespace: 'public', topic: 'account_role', table: 'backbone_account_role' }
+      { namespace: 'public', topic: 'account_role', table: 'backbone_account_role' },
+      { namespace: 'public', topic: 'node_location', table: 'backbone_node_location' }
     ],
     dlqTopic: 'dlq-core-clickhouse',
     performanceConfig: defaultPerformanceConfig

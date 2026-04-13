@@ -186,7 +186,8 @@ const starrocksSinkConfigurations = {
     topicMappings: [
       { namespace: 'public', topic: 'pd_pick_item', table: 'wms_pd_pick_item' },
       { namespace: 'public', topic: 'pd_drop_item', table: 'wms_pd_drop_item' },
-      { namespace: 'flink', topic: 'pick_drop_staging', table: 'wms_pick_drop_staging' }
+      { namespace: 'flink', topic: 'pick_drop_staging', table: 'wms_pick_drop_staging' },
+      { namespace: 'flink', topic: 'pick_drop_enriched', table: 'wms_pick_drop_enriched' }
     ],
     dlqTopic: 'dlq-wms-starrocks-pick-drop',
     performanceConfig: starrocksDefaultPerformanceConfig

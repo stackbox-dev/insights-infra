@@ -17,7 +17,12 @@ CREATE TABLE IF NOT EXISTS tms_invoice_tray
     supplierSalesmanId Int64 DEFAULT 0,
     retryUploadId Int32 DEFAULT 0,
     modeOfPayment String DEFAULT '',
-    isTopup Bool DEFAULT false
+    isTopup Bool DEFAULT false,
+    isSelfPickup Bool DEFAULT false,
+    isCourier Bool DEFAULT false,
+    courierId Int32 DEFAULT 0,
+    docketNumber String DEFAULT '',
+    extras String DEFAULT '{}'
 )
 ENGINE = ReplacingMergeTree(updatedAt)
 PARTITION BY toYYYYMM(createdAt)
