@@ -41,6 +41,16 @@ data:
       mode tcp
       option tcp-check
       server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25652 check inter 10s rise 2 fall 3
+
+    frontend samadhan_clickhouse_mysql
+      bind *:25653
+      mode tcp
+      default_backend samadhan_clickhouse_mysql_backend
+
+    backend samadhan_clickhouse_mysql_backend
+      mode tcp
+      option tcp-check
+      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25652 check inter 5s rise 2 fall 3 resolvers kube_dns resolve-prefer ipv4 init-addr none
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -64,6 +74,7 @@ spec:
             - containerPort: 25650
             - containerPort: 25651
             - containerPort: 25652
+            - containerPort: 25653
           volumeMounts:
             - name: config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
@@ -99,5 +110,9 @@ spec:
       targetPort: 25652
       protocol: TCP
       name: clickhouse-mysql
+    - port: 25653
+      targetPort: 25653
+      protocol: TCP
+      name: samadhan-clickhouse-mysql
   selector:
     app: clickhouse-tcp-proxy
