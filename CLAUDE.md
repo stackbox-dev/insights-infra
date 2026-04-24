@@ -113,6 +113,29 @@ LEFT JOIN encarta_skus_combined(node_id = wh_id) sku ON picked_sku_id = sku.sku_
 5. All MV columns must have explicit aliases when using `TO <table>`
 6. Enriched data feeds downstream aggregations and views
 
+## RisingWave Backfill Rules (MANDATORY)
+
+These rules are enforced after 3 OOM events in 1 week (April 2026) caused by CDC snapshot backfills exceeding the 20Gi pod memory limit.
+
+### 1. Always set `streaming_parallelism = 2` AND `source_rate_limit = 200` before any new DDL
+Run both in the same psql session before every `CREATE TABLE`, `CREATE MATERIALIZED VIEW`, or `CREATE SINK`:
+```sql
+SET streaming_parallelism = 2;  -- default is 6; reduces actor count and CH connection spike
+
+-- For materialized views (source_rate_limit in WITH clause):
+CREATE MATERIALIZED VIEW mv_name WITH (source_rate_limit = 200) AS ...
+
+-- For CDC tables and sinks (parallelism setting above covers rate limiting):
+CREATE TABLE ... FROM cdc_source TABLE 'public.my_table';
+CREATE SINK ... FROM mv WITH (connector = 'clickhouse', ...);
+```
+Without these, large table backfills (10M+ rows) spike compute memory and OOM all pods. Default parallelism of 6 means 654+ concurrent sink actors, which overwhelms the ClickHouse 200-query limit on restart.
+
+### 2. Never backfill large JSONB columns via RisingWave CDC
+- JSONB columns with large payloads trigger SIGSEGV in RisingWave v2.8.1 (known bug)
+- Exclude large JSONB columns from CDC source DDL — use VARCHAR DEFAULT '' as placeholder
+- Affected tables confirmed: oms_allocation_run (sub_master, batch_mapping, atp, allocation_data, no_allocation)
+
 ## Testing & Validation
 - Run lint/typecheck after changes: `npm run lint`, `npm run typecheck`
 - Test complete pipeline flow before committing

@@ -215,7 +215,8 @@ const sinkConfigurations = {
       { namespace: 'public', topic: 'storage_zone', table: 'wms_storage_zone' },
       { namespace: 'public', topic: 'storage_bin', table: 'wms_storage_bin' },
       { namespace: 'public', topic: 'storage_bin_dockdoor', table: 'wms_storage_bin_dockdoor' },
-      { namespace: 'public', topic: 'storage_bin_fixed_mapping', table: 'wms_storage_bin_fixed_mapping' }
+      { namespace: 'public', topic: 'storage_bin_fixed_mapping', table: 'wms_storage_bin_fixed_mapping' },
+      { namespace: 'public', topic: 'task_event', table: 'wms_task_event' }
     ],
     dlqTopic: 'dlq-wms-clickhouse-commons',
     performanceConfig: defaultPerformanceConfig
