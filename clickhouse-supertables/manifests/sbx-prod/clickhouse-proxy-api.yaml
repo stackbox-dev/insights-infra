@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickhouse-proxy-api
+  namespace: kafka
+  labels:
+    app: clickhouse-proxy-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse-proxy-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 0%
+  template:
+    metadata:
+      labels:
+        app: clickhouse-proxy-api
+    spec:
+      terminationGracePeriodSeconds: 25
+      containers:
+        - name: clickhouse-proxy-api
+          image: asia-docker.pkg.dev/sbx-ci-cd/public/clickhouse-proxy:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http-port
+              containerPort: 8000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-port
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http-port
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          env:
+            - name: CH_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-proxy-api-credentials
+                  key: host
+            - name: CH_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-proxy-api-credentials
+                  key: port
+            - name: CH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-proxy-api-credentials
+                  key: user
+            - name: CH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-proxy-api-credentials
+                  key: password
+            - name: CH_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-proxy-api-credentials
+                  key: database
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+            limits:
+              memory: 1Gi
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-proxy-api
+  namespace: kafka
+spec:
+  type: ClusterIP
+  ports:
+    - name: http-port
+      port: 80
+      targetPort: http-port
+      protocol: TCP
+  selector:
+    app: clickhouse-proxy-api
