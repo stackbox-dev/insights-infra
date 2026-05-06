@@ -19,8 +19,7 @@ data:
       default_backend clickhouse_native_backend
 
     backend clickhouse_native_backend
-      option tcp-check
-      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25650 check inter 10s rise 2 fall 3
+      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25650
 
     frontend clickhouse_https
       bind *:25651
@@ -29,8 +28,7 @@ data:
 
     backend clickhouse_https_backend
       mode tcp
-      option tcp-check
-      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25651 check inter 10s rise 2 fall 3
+      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25651
 
     frontend clickhouse_mysql
       bind *:25652
@@ -39,8 +37,7 @@ data:
 
     backend clickhouse_mysql_backend
       mode tcp
-      option tcp-check
-      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25652 check inter 10s rise 2 fall 3
+      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25652
 
     frontend samadhan_clickhouse_mysql
       bind *:25653
@@ -49,8 +46,7 @@ data:
 
     backend samadhan_clickhouse_mysql_backend
       mode tcp
-      option tcp-check
-      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25652 check inter 5s rise 2 fall 3 resolvers kube_dns resolve-prefer ipv4 init-addr none
+      server clickhouse samadhan-clickhouse-hul-samadhan.f.aivencloud.com:25652
 ---
 apiVersion: apps/v1
 kind: Deployment
